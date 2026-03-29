@@ -188,6 +188,7 @@ export function getMainPanel() {
           '- 소비/현금흐름: 지출 및 현금흐름 등록/조회',
           '- AI 토론: 포트폴리오/소비 데이터 기반 의견 정리',
           '- 트렌드: 시장/종목/이슈 아이디어 탐색',
+          '- 데이터 센터: 로그 분석/시스템 개선안 제안',
           '- 설정: 모드/응답 성향/기본 옵션 설정',
           '',
           '메인 메뉴로 이동: `🔙 메인으로` 버튼'
@@ -200,9 +201,12 @@ export function getMainPanel() {
       new ButtonBuilder().setCustomId('panel:main:finance').setLabel('💸 소비/현금흐름').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId('panel:main:ai').setLabel('🧠 AI 토론').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId('panel:main:trend').setLabel('🔥 트렌드').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId('panel:main:data_center').setLabel('🗄 데이터 센터').setStyle(ButtonStyle.Secondary)
+    );
+    const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setCustomId('panel:main:settings').setLabel('⚙️ 설정').setStyle(ButtonStyle.Secondary)
     );
-    return { embeds: [embed], components: [row] };
+    return { embeds: [embed], components: [row, row2] };
 }
 
 /** 1차: 일반계좌 중심 · 전체 합산 · 매매 · 더보기(고급) */
@@ -272,7 +276,7 @@ export function getFinancePanel() {
 }
 
 export function getAIPanel() {
-    const embed = new EmbedBuilder().setTitle("🧠 AI 투자 회의").setDescription("Ray / JYP / Simons / Drucker가\n현재 상태를 기반으로 전략을 도출합니다.").setColor('#9b59b6');
+    const embed = new EmbedBuilder().setTitle("🧠 AI 투자 회의").setDescription("Ray / Hindenburg / Simons / Drucker / CIO가\n현재 상태를 기반으로 전략을 도출합니다.").setColor('#9b59b6');
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setCustomId('panel:ai:full').setLabel('📊 종합 진단').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId('panel:ai:risk').setLabel('⚠️ 리스크 점검').setStyle(ButtonStyle.Danger),
@@ -284,6 +288,19 @@ export function getAIPanel() {
       new ButtonBuilder().setCustomId('panel:main:reinstall').setLabel('🔙 메인으로').setStyle(ButtonStyle.Secondary)
     );
     return { embeds: [embed], components: [row, row2] };
+}
+
+export function getDataCenterPanel() {
+    const embed = new EmbedBuilder()
+      .setTitle('🗄 데이터 센터')
+      .setDescription('Peter Thiel 페르소나가 운영 로그를 분석해\n문제 원인과 시스템 개선안을 제안합니다.')
+      .setColor('#5865f2');
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId('panel:data:daily_logs').setLabel('📅 하루치 로그 분석').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('panel:data:improvement').setLabel('🛠 시스템 개선안 제안').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('panel:main:reinstall').setLabel('🔙 메인으로').setStyle(ButtonStyle.Secondary)
+    );
+    return { embeds: [embed], components: [row] };
 }
 
 export function getTrendPanel() {

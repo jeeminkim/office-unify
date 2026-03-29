@@ -1,18 +1,14 @@
-import { createClient } from '@supabase/supabase-js';
 import { logger } from './logger';
-import type { AnalysisGenerationTrace, PersonaKey } from './analysisTypes';
+import type { PersonaKey } from './analysisTypes';
 import { loadPersonaMemory } from './personaMemoryService';
-import { extractClaimsFromResponse, saveClaims, saveClaimOutcomeAuditSkeleton } from './claimLedgerService';
+import { saveClaims, saveClaimOutcomeAuditSkeleton } from './claimLedgerService';
 import type { PersonaMemory } from './analysisTypes';
 import { buildPersonaEvidenceBundle } from './analysisContextService';
-
-const supabase = createClient(
-  process.env.SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-);
+import { extractClaimsByContract } from './src/contracts/claimContract';
+import { insertGenerationTraceExtendedOrBase } from './src/repositories/generationTraceRepository';
+import { dbPersistFallbackResult } from './src/contracts/fallbackPolicy';
 
 function hashString(input: string): string {
-  // Small deterministic hash without importing extra libs beyond Node.
   let h = 0;
   for (let i = 0; i < input.length; i++) {
     h = (h * 31 + input.charCodeAt(i)) >>> 0;
@@ -34,7 +30,7 @@ async function saveGenerationTraceBestEffort(params: {
   estimatedCostUsd?: number | null;
 }): Promise<void> {
   try {
-    const traceRowBase: any = {
+    const traceRowBase = {
       discord_user_id: params.discordUserId,
       chat_history_id: params.chatHistoryId,
       analysis_type: params.analysisType,
@@ -47,35 +43,29 @@ async function saveGenerationTraceBestEffort(params: {
       token_hint_in: null,
       token_hint_out: null
     };
-    const traceRowExtended: any = {
+    const traceRowExtended = {
       ...traceRowBase,
       provider_name: params.providerName ?? null,
       model_name: params.modelName ?? null,
       estimated_cost_usd: params.estimatedCostUsd ?? null
     };
-
-    let { error } = await supabase.from('analysis_generation_trace').insert(traceRowExtended);
-    if (error) {
-      logger.warn('TRACE', 'analysis_generation_trace extended insert failed; fallback to base columns', {
-        message: error.message
-      });
-      const retry = await supabase.from('analysis_generation_trace').insert(traceRowBase);
-      error = retry.error || null;
-      if (error) throw error;
-    }
-    logger.info('TRACE', 'analysis_generation_trace stored', {
-      discordUserId: params.discordUserId,
-      analysisType: params.analysisType,
+    await insertGenerationTraceExtendedOrBase({
+      extended: traceRowExtended as any,
+      base: traceRowBase as any
+    });
+    logger.info('PHASE1_CHECK', 'trace_saved', {
       personaName: params.personaName,
-      providerName: params.providerName ?? null,
-      modelName: params.modelName ?? null
+      analysisType: params.analysisType,
+      chatHistoryId: params.chatHistoryId
     });
   } catch (e: any) {
+    const fb = dbPersistFallbackResult(true, e?.message || String(e));
     logger.warn('TRACE', 'analysis_generation_trace save failed', {
       discordUserId: params.discordUserId,
       analysisType: params.analysisType,
       personaName: params.personaName,
-      message: e?.message || String(e)
+      message: e?.message || String(e),
+      fallbackContract: fb
     });
   }
 }
@@ -88,7 +78,6 @@ export async function persistAnalysisArtifacts(params: {
   personaName: string;
   responseText: string;
   baseContext?: any;
-  // best-effort
   memorySnapshot?: PersonaMemory;
   providerName?: string;
   modelName?: string;
@@ -105,22 +94,16 @@ export async function persistAnalysisArtifacts(params: {
     chatHistoryId
   });
 
-  let claims;
-  try {
-    claims = extractClaimsFromResponse({
-      responseText,
-      analysisType,
-      personaName
-    });
-  } catch (e: any) {
-    claims = extractClaimsFromResponse({
-      responseText,
-      analysisType,
-      personaName
-    });
+  const extraction = extractClaimsByContract({
+    responseText,
+    analysisType,
+    personaName
+  });
+  const claims = extraction.claims;
+  if (extraction.fallbackUsed) {
+    logger.info('CLAIMS', 'extraction contract: single-claim fallback path', { personaName, analysisType });
   }
 
-  // Save trace first (so operators can see generation even if claims insert fails)
   const inputContextHash = hashString(
     `${analysisType}|${personaName}|${chatHistoryId ?? 'null'}|${String(responseText || '').slice(0, 220)}`
   );
@@ -152,8 +135,17 @@ export async function persistAnalysisArtifacts(params: {
     personaName,
     claims
   });
+  logger.info('PHASE1_CHECK', 'claim_count', {
+    savedCount: saved.savedCount,
+    personaName,
+    analysisType,
+    chatHistoryId
+  });
+  if (saved.savedCount === 0 && claims.length > 0) {
+    const fb = dbPersistFallbackResult(true, 'analysis_claims insert returned empty');
+    logger.warn('PIPELINE', 'claims persist empty', { personaName, analysisType, fallbackContract: fb });
+  }
 
-  // Audit skeleton best-effort
   if (saved.savedClaimIds.length) {
     await Promise.all(
       saved.savedClaimIds.slice(0, 12).map(cid => saveClaimOutcomeAuditSkeleton({ discordUserId, claimId: cid }))
@@ -206,4 +198,3 @@ export async function runAnalysisPipeline(params: {
     });
   }
 }
-

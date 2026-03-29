@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { logger } from './logger';
 import type { ClaimType, EvidenceScope, PersonaMemory } from './analysisTypes';
 import type { AnalysisClaim, AnalysisGenerationTrace } from './analysisTypes';
+import { insertAnalysisClaimRows } from './src/repositories/claimRepository';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
@@ -103,12 +104,7 @@ function toOpinionSummary(text: string, maxLen = 220): string {
   return s.length <= maxLen ? s : s.slice(0, maxLen) + '…';
 }
 
-export function extractClaimsFromResponse(params: {
-  responseText: string;
-  analysisType: string;
-  personaName: string;
-  maxClaims?: number;
-}): Array<{
+export type ExtractedClaimRow = {
   claim_order: number;
   claim_type: ClaimType;
   claim_text: string;
@@ -121,7 +117,15 @@ export function extractClaimsFromResponse(params: {
   has_numeric_anchor: boolean;
   is_actionable: boolean;
   is_downside_focused: boolean;
-}> {
+};
+
+/** 휴리스틱 라인 파싱 실패 시 전체 응답을 단일 claim으로 감싸는 경로를 `usedSingleClaimFallback`으로 표시 */
+export function extractClaimsWithFallbackMeta(params: {
+  responseText: string;
+  analysisType: string;
+  personaName: string;
+  maxClaims?: number;
+}): { claims: ExtractedClaimRow[]; usedSingleClaimFallback: boolean } {
   const { responseText, analysisType, personaName } = params;
   const maxClaims = params.maxClaims ?? 12;
 
@@ -167,7 +171,7 @@ export function extractClaimsFromResponse(params: {
       analysisType,
       claimCount: claims.length
     });
-    return claims;
+    return { claims, usedSingleClaimFallback: false };
   } catch (e: any) {
     logger.warn('CLAIMS', 'claim extraction fallback used', {
       analysisType,
@@ -177,23 +181,35 @@ export function extractClaimsFromResponse(params: {
     const text = String(responseText || '');
     const claim_type = inferClaimType(text, analysisType);
     const evidence_scope = inferEvidenceScope(text);
-    return [
-      {
-        claim_order: 1,
-        claim_type,
-        claim_text: text,
-        claim_summary: toOpinionSummary(text, 220),
-        evidence_scope,
-        evidence_refs: null,
-        confidence_score: 0.35,
-        novelty_score: 0.25,
-        usefulness_score: 0.3,
-        has_numeric_anchor: detectHasNumericAnchor(text),
-        is_actionable: detectActionable(text),
-        is_downside_focused: detectDownsideFocused(text)
-      }
-    ];
+    return {
+      claims: [
+        {
+          claim_order: 1,
+          claim_type,
+          claim_text: text,
+          claim_summary: toOpinionSummary(text, 220),
+          evidence_scope,
+          evidence_refs: null,
+          confidence_score: 0.35,
+          novelty_score: 0.25,
+          usefulness_score: 0.3,
+          has_numeric_anchor: detectHasNumericAnchor(text),
+          is_actionable: detectActionable(text),
+          is_downside_focused: detectDownsideFocused(text)
+        }
+      ],
+      usedSingleClaimFallback: true
+    };
   }
+}
+
+export function extractClaimsFromResponse(params: {
+  responseText: string;
+  analysisType: string;
+  personaName: string;
+  maxClaims?: number;
+}): ExtractedClaimRow[] {
+  return extractClaimsWithFallbackMeta(params).claims;
 }
 
 export async function saveClaims(params: {
@@ -201,7 +217,7 @@ export async function saveClaims(params: {
   chatHistoryId: number | null;
   analysisType: string;
   personaName: string;
-  claims: ReturnType<typeof extractClaimsFromResponse>;
+  claims: ExtractedClaimRow[];
 }): Promise<{ savedCount: number; savedClaimIds: string[] }> {
   const { discordUserId, chatHistoryId, analysisType, personaName, claims } = params;
 
@@ -227,9 +243,8 @@ export async function saveClaims(params: {
       is_downside_focused: c.is_downside_focused
     }));
 
-    const { data, error } = await supabase.from('analysis_claims').insert(rows).select('id');
+    const { ids, error } = await insertAnalysisClaimRows(rows);
     if (error) throw error;
-    const ids = (data || []).map((d: any) => String(d.id));
     logger.info('CLAIMS', 'claims saved', { discordUserId, analysisType, personaName, savedCount: ids.length });
     return { savedCount: ids.length, savedClaimIds: ids };
   } catch (e: any) {
@@ -240,6 +255,51 @@ export async function saveClaims(params: {
       message: e?.message || String(e)
     });
     return { savedCount: 0, savedClaimIds: [] };
+  }
+}
+
+// Minimal wrapper for Phase 1 loop integration requirements.
+export async function saveClaimFeedback(params: {
+  discordUserId: string;
+  claimId: string;
+  feedbackType: string;
+  feedbackNote?: string | null;
+}): Promise<{ saved: boolean; duplicate: boolean }> {
+  try {
+    const { error } = await supabase.from('claim_feedback').insert({
+      discord_user_id: params.discordUserId,
+      claim_id: params.claimId,
+      feedback_type: params.feedbackType,
+      feedback_note: params.feedbackNote ?? null
+    });
+    if (error) {
+      const isUniqueViolation =
+        error.code === '23505' ||
+        /duplicate key value|unique/i.test(String(error.message || ''));
+      if (isUniqueViolation) {
+        logger.warn('FEEDBACK', 'claim feedback duplicate ignored', {
+          discordUserId: params.discordUserId,
+          claimId: params.claimId,
+          feedbackType: params.feedbackType
+        });
+        return { saved: false, duplicate: true };
+      }
+      throw error;
+    }
+    logger.info('FEEDBACK', 'claim feedback saved', {
+      discordUserId: params.discordUserId,
+      claimId: params.claimId,
+      feedbackType: params.feedbackType
+    });
+    return { saved: true, duplicate: false };
+  } catch (e: any) {
+    logger.warn('FEEDBACK', 'claim feedback save failed', {
+      discordUserId: params.discordUserId,
+      claimId: params.claimId,
+      feedbackType: params.feedbackType,
+      message: e?.message || String(e)
+    });
+    return { saved: false, duplicate: false };
   }
 }
 

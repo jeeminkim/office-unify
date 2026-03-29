@@ -12,7 +12,8 @@
     "forceConsistentCasingInFileNames": true
   },
   "include": [
-    "*.ts"
+    "*.ts",
+    "**/*.ts"
   ],
   "exclude": [
     "dist",

@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { logger } from './logger';
 import type { FeedbackType } from './analysisTypes';
 import { refreshPersonaMemoryFromFeedback } from './personaMemoryService';
-import { resolveClaimMappingForFeedback } from './claimLedgerService';
+import { resolveClaimMappingForFeedback, saveClaimFeedback } from './claimLedgerService';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
@@ -103,37 +103,26 @@ export async function ingestPersonaFeedback(params: {
           candidateCount: mapped.candidateCount
         };
       }
-      const { error } = await supabase.from('claim_feedback').insert({
-        discord_user_id: discordUserId,
-        claim_id: mapped.bestClaimId,
-        feedback_type: feedbackType,
-        feedback_note: params.feedbackNote ?? null
+      const saveResult = await saveClaimFeedback({
+        discordUserId,
+        claimId: mapped.bestClaimId,
+        feedbackType,
+        feedbackNote: params.feedbackNote ?? null
       });
-      if (error) {
-        const isUniqueViolation =
-          error.code === '23505' ||
-          /duplicate key value|unique/i.test(String(error.message || ''));
-        if (isUniqueViolation) {
-          logger.warn('FEEDBACK', 'claim_feedback unique violation treated as duplicate', {
-            discordUserId,
-            analysisType,
-            personaName,
-            chatHistoryId,
-            claimId: mapped.bestClaimId,
-            feedbackType
-          });
-          await refreshPersonaMemoryFromFeedback(discordUserId, personaName).catch(() => {});
-          return {
-            mappedCount: 1,
-            fallbackLegacyOnly: false,
-            duplicate: true,
-            bestClaimId: mapped.bestClaimId,
-            mappingMethod: mapped.mappingMethod,
-            mappingScore: mapped.mappingScore,
-            candidateCount: mapped.candidateCount
-          };
-        }
-        throw error;
+      if (!saveResult.saved && saveResult.duplicate) {
+        await refreshPersonaMemoryFromFeedback(discordUserId, personaName).catch(() => {});
+        return {
+          mappedCount: 1,
+          fallbackLegacyOnly: false,
+          duplicate: true,
+          bestClaimId: mapped.bestClaimId,
+          mappingMethod: mapped.mappingMethod,
+          mappingScore: mapped.mappingScore,
+          candidateCount: mapped.candidateCount
+        };
+      }
+      if (!saveResult.saved) {
+        throw new Error('claim_feedback save failed');
       }
       logger.info('FEEDBACK', 'claim_feedback inserted', {
         discordUserId,

@@ -1,6 +1,8 @@
 import * as dotenv from 'dotenv';
 import { logger } from './logger';
 import { generateGeminiResponse } from './geminiLlmService';
+import { generateWithPersonaProvider } from './llmProviderService';
+import type { ProviderGenerationResult } from './analysisTypes';
 
 dotenv.config();
 
@@ -86,10 +88,41 @@ export function trendTopicFromCustomId(customId: string): TrendTopicKind | null 
 }
 
 export async function generateTrendSpecialistResponse(topic: TrendTopicKind, userQuery: string): Promise<string> {
+  return generateTrendSpecialistResponseWithProvider(topic, userQuery, undefined);
+}
+
+function asGeminiResult(text: string): ProviderGenerationResult {
+  return { text, provider: 'gemini', model: 'gemini-2.5-flash' };
+}
+
+export async function generateTrendSpecialistResponseWithProvider(topic: TrendTopicKind, userQuery: string, discordUserId?: string): Promise<string> {
   const cfg = TREND_TOPIC_CONFIG[topic];
   const contents = `${cfg.systemPrompt}\n\n[질문/요청]\n${userQuery}`;
 
   try {
+    if (topic === 'hot' && discordUserId) {
+      const result = await generateWithPersonaProvider({
+        discordUserId,
+        personaKey: 'HOT_TREND',
+        personaName: cfg.agentLabel,
+        prompt: contents,
+        fallbackToGemini: async () => {
+          const g = await generateGeminiResponse({
+            model: 'gemini-2.5-flash',
+            prompt: contents
+          });
+          return asGeminiResult(g.text || '');
+        }
+      });
+      logger.info('LLM_PROVIDER', 'provider selected for Jeon Hyunmoo', {
+        personaName: cfg.agentLabel,
+        provider: result.provider,
+        model: result.model,
+        fallbackApplied: result.provider !== 'openai',
+        fallbackReason: result.provider !== 'openai' ? 'openai_unavailable_or_guard' : null
+      });
+      return result.text || '';
+    }
     const response = await generateGeminiResponse({
       model: 'gemini-2.5-flash',
       prompt: contents

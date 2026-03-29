@@ -1,4 +1,4 @@
-export type PersonaKey = 'RAY' | 'HINDENBURG' | 'JYP' | 'SIMONS' | 'DRUCKER' | 'CIO' | 'TREND' | 'OPEN_TOPIC';
+export type PersonaKey = 'RAY' | 'HINDENBURG' | 'JYP' | 'SIMONS' | 'DRUCKER' | 'CIO' | 'TREND' | 'OPEN_TOPIC' | 'THIEL' | 'HOT_TREND';
 
 export type FeedbackType = 'TRUSTED' | 'ADOPTED' | 'BOOKMARKED' | 'DISLIKED' | 'REJECTED';
 
@@ -88,6 +88,15 @@ export type ProviderModelConfig = {
   model: string;
 };
 
+/** OpenAI가 1차로 선택됐으나 Gemini 응답으로 대체된 경우만 의미 있다. */
+export type OpenAiToGeminiFallbackReason = 'openai_api_key_missing' | 'budget_guard' | 'openai_error';
+
+export type ProviderGenerationMeta = {
+  configured_provider: LlmProvider;
+  openai_fallback_applied: boolean;
+  openai_fallback_reason?: OpenAiToGeminiFallbackReason;
+};
+
 export type ProviderGenerationResult = {
   text: string;
   provider: LlmProvider;
@@ -98,6 +107,7 @@ export type ProviderGenerationResult = {
     total_tokens?: number;
   };
   estimated_cost_usd?: number;
+  generation_meta?: ProviderGenerationMeta;
 };
 
 export type UsageTrackingRow = {

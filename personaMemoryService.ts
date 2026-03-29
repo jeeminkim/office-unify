@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { logger } from './logger';
 import type { PersonaMemory, FeedbackType } from './analysisTypes';
+import { selectPersonaMemoryRow, upsertPersonaMemoryRow } from './src/repositories/personaMemoryRepository';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
@@ -90,23 +91,37 @@ function emptyPersonaMemory(discordUserId: string, personaName: string): Persona
 
 export async function loadPersonaMemory(discordUserId: string, personaName: string): Promise<PersonaMemory> {
   try {
-    const { data, error } = await supabase
-      .from('persona_memory')
-      .select('*')
-      .eq('discord_user_id', discordUserId)
-      .eq('persona_name', personaName)
-      .maybeSingle();
-
-    if (error) throw error;
-    if (!data) return emptyPersonaMemory(discordUserId, personaName);
+    const data = await selectPersonaMemoryRow(discordUserId, personaName);
+    if (!data) {
+      logger.info('PHASE1_CHECK', 'memory_loaded', {
+        discordUserId,
+        personaName,
+        hasRow: false,
+        memory_version: null
+      });
+      return emptyPersonaMemory(discordUserId, personaName);
+    }
 
     logger.info('MEMORY', 'persona memory loaded', { discordUserId, personaName, hasRow: true });
+    logger.info('PHASE1_CHECK', 'memory_loaded', {
+      discordUserId,
+      personaName,
+      hasRow: true,
+      memory_version: (data as PersonaMemory).memory_version ?? null
+    });
     return data as PersonaMemory;
   } catch (e: any) {
     logger.warn('MEMORY', 'persona memory load failed, fallback used', {
       discordUserId,
       personaName,
       message: e?.message || String(e)
+    });
+    logger.info('PHASE1_CHECK', 'memory_loaded', {
+      discordUserId,
+      personaName,
+      hasRow: false,
+      memory_version: null,
+      error: true
     });
     return emptyPersonaMemory(discordUserId, personaName);
   }
@@ -128,11 +143,7 @@ export async function upsertPersonaMemory(input: PersonaMemory): Promise<void> {
       updated_at: new Date().toISOString()
     };
 
-    const { error } = await supabase
-      .from('persona_memory')
-      .upsert(payload, { onConflict: 'discord_user_id,persona_name' });
-
-    if (error) throw error;
+    await upsertPersonaMemoryRow(payload);
     logger.info('MEMORY', 'persona memory upserted', {
       discordUserId: input.discord_user_id,
       personaName: input.persona_name

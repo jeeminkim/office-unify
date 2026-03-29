@@ -7,14 +7,18 @@
   "scripts": {
     "dev": "ts-node index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "check:schema-contract": "ts-node scripts/check-schema-contract.ts",
+    "check:phase1-structure": "node -r ./scripts/setDummySupabaseEnv.cjs -r ts-node/register scripts/phase1-structure-self-check.ts",
+    "check:runtime-e2e": "ts-node scripts/runtime-e2e-check.ts",
+    "check:decision-engine": "ts-node scripts/decision-engine-self-check.ts"
   },
   "dependencies": {
     "@google/genai": "^1.16.0",
     "@supabase/supabase-js": "^2.56.0",
     "discord.js": "^14.22.1",
     "dotenv": "^17.3.1",
-    "openai": "^6.33.0"
+    "openai": "^6.5.0"
   },
   "devDependencies": {
     "@types/node": "^22.18.0",

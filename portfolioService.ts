@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { logger } from './logger';
-import { getLatestQuote, mergeFailureBreakdown } from './quoteService';
+import { getLatestQuote, mergeFailureBreakdown, type QuotePriceSource } from './quoteService';
 import { getUsdKrwRate } from './fxService';
 import { normalizePortfolioInstrument } from './instrumentRegistry';
 import { inferUsAvgIsKrwPerShare, resolvePurchaseCurrency } from './portfolioCost';
@@ -74,6 +74,12 @@ function round2(v: number): number {
   return Math.round(v * 100) / 100;
 }
 
+export function isKrwQuotePathForUs(source?: string, currency?: string): boolean {
+  const c = String(currency || '').toUpperCase();
+  if (c === 'KRW') return true;
+  return source === 'live_krw' || source === 'fallback_krw' || source === 'snapshot_krw' || source === 'purchase_basis_krw';
+}
+
 function normalizeMarket(value: any): 'KR' | 'US' {
   const m = String(value || '').toUpperCase();
   return m === 'US' ? 'US' : 'KR';
@@ -127,6 +133,16 @@ async function computePositionForRow(
   const avg = Number(row.avg_purchase_price || 0);
   if (!Number.isFinite(quantity) || quantity <= 0) return null;
 
+  const rowCurrentPrice = Number(row.current_price || 0);
+  const fallbackPriceCurrency: 'KRW' | 'USD' =
+    market === 'US' && (String(row.currency || '').toUpperCase() === 'KRW' || rowCurrentPrice >= 100000)
+      ? 'KRW'
+      : currency;
+  const fallbackPriceSource: QuotePriceSource =
+    fallbackPriceCurrency === 'KRW'
+      ? (market === 'US' ? 'snapshot_krw' : 'fallback_krw')
+      : 'fallback_usd';
+
   const q = await getLatestQuote(
     {
       symbol: normalized.symbol,
@@ -135,8 +151,9 @@ async function computePositionForRow(
       currency,
       displayName: normalized.displayName
     },
-    Number(row.current_price || 0),
-    currency
+    rowCurrentPrice,
+    fallbackPriceCurrency,
+    fallbackPriceSource
   );
   if (quoteStats) {
     quoteStats.total += 1;
@@ -214,11 +231,22 @@ async function computePositionForRow(
     cbNative = avg * quantity;
     cbKrw = cbNative;
   } else {
+    const qCurrency = String(q.currency || 'USD').toUpperCase();
+    const source = q.priceSource || (qCurrency === 'KRW' ? 'fallback_krw' : 'fallback_usd');
+    const isKrwPricePath = isKrwQuotePathForUs(source, qCurrency);
+
     fxApplied = fxForUs;
-    currentPriceUsd = price;
-    marketValueUsd = price * quantity;
-    mvNative = price * quantity;
-    mvKrw = mvNative * fxForUs;
+    if (isKrwPricePath) {
+      mvKrw = price * quantity;
+      mvNative = mvKrw / fxForUs;
+      currentPriceUsd = price / fxForUs;
+      marketValueUsd = mvNative;
+    } else {
+      currentPriceUsd = price;
+      marketValueUsd = price * quantity;
+      mvNative = price * quantity;
+      mvKrw = mvNative * fxForUs;
+    }
 
     if (purchaseCurrency === 'KRW') {
       cbKrw = avg * quantity;
@@ -241,13 +269,42 @@ async function computePositionForRow(
 
     logger.info('PORTFOLIO', 'us asset valuation computed', {
       symbol: normalized.symbol,
+      quote_price_source: source,
+      quote_price_currency: qCurrency,
       purchase_currency: purchaseCurrency,
       current_price_usd: currentPriceUsd,
       market_value_usd: marketValueUsd,
       usdkrw_rate: fxForUs,
       market_value_krw: mvKrw,
+      fx_applied_for_quote: !isKrwPricePath,
       cost_basis_krw: cbKrw
     });
+    logger.info('PORTFOLIO', 'valuation fallback currency path', {
+      symbol: normalized.symbol,
+      market,
+      fallbackPrice: rowCurrentPrice,
+      fallbackPriceCurrency,
+      liveOrFallbackSource: source,
+      fxApplied: !isKrwPricePath,
+      finalMarketValueKrw: round2(mvKrw)
+    });
+  }
+
+  if (market === 'US' && q.degraded && cbKrw > 0 && mvKrw > cbKrw * 20) {
+    logger.warn('PORTFOLIO', 'abnormal valuation guard', {
+      symbol: normalized.symbol,
+      market,
+      current_price: price,
+      avg_purchase_price: avg,
+      quantity,
+      computed_market_value_krw: round2(mvKrw),
+      reason: 'degraded_quote_over_20x_cost_basis'
+    });
+    // conservative fallback to avoid outlier distortion
+    mvKrw = cbKrw;
+    mvNative = cbNative;
+    marketValueUsd = market === 'US' ? cbNative : null;
+    currentPriceUsd = quantity > 0 ? cbNative / quantity : currentPriceUsd;
   }
 
   const pnl = mvKrw - cbKrw;
@@ -448,6 +505,16 @@ export async function buildPortfolioSnapshot(
     },
     positions: sorted
   };
+
+  const abnormalHeavy = sorted.filter(p => p.market === 'US' && p.weight_pct >= 95);
+  if (abnormalHeavy.length > 0) {
+    logger.warn('PORTFOLIO', 'snapshot sanity guard triggered', {
+      discordUserId,
+      abnormalSymbols: abnormalHeavy.map(p => p.symbol),
+      weights: abnormalHeavy.map(p => p.weight_pct),
+      reason: 'us_single_asset_over_95pct'
+    });
+  }
 
   if (quoteStats.failed > 0 || quoteStats.degraded > 0) {
     const statusBreakdownTotal = mergeFailureBreakdown(quoteStats.breakdowns);

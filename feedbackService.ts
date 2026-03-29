@@ -1,13 +1,12 @@
-import { createClient } from '@supabase/supabase-js';
 import { logger } from './logger';
 import { aggregateProfileFromFeedbackHistory } from './profileService';
+import type { FeedbackType } from './analysisTypes';
+import {
+  insertAnalysisFeedbackHistoryRow,
+  selectRecentFeedbackHistoryRows
+} from './src/repositories/feedbackRepository';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-);
-
-export type FeedbackType = 'TRUSTED' | 'ADOPTED' | 'BOOKMARKED' | 'DISLIKED' | 'REJECTED';
+export type { FeedbackType };
 
 export async function saveAnalysisFeedbackHistory(params: {
   discordUserId: string;
@@ -54,23 +53,20 @@ export async function saveAnalysisFeedbackHistory(params: {
       mapping_score: mappingScore ?? null
     };
 
-    // Harmless idempotency guard for repeated button clicks
+    // Harmless idempotency guard for repeated button clicks (정책은 서비스 계층)
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-    const { data: recentDup, error: dupErr } = await supabase
-      .from('analysis_feedback_history')
-      .select('id,created_at')
-      .eq('discord_user_id', discordUserId)
-      .eq('chat_history_id', chatHistoryId)
-      .eq('persona_name', personaName)
-      .eq('feedback_type', feedbackType)
-      .gte('created_at', tenMinutesAgo)
-      .order('created_at', { ascending: false })
-      .limit(1);
-    if (dupErr) {
+    const dupCheck = await selectRecentFeedbackHistoryRows({
+      discordUserId,
+      chatHistoryId,
+      personaName,
+      feedbackType,
+      createdAfterIso: tenMinutesAgo
+    });
+    if (dupCheck.error) {
       logger.warn('PROFILE', 'feedback duplicate check failed; continue insert', {
-        message: dupErr.message
+        message: dupCheck.error.message
       });
-    } else if ((recentDup || []).length > 0) {
+    } else if (dupCheck.rows.length > 0) {
       logger.warn('PROFILE', 'feedback duplicate ignored', {
         discordUserId,
         chatHistoryId,
@@ -80,8 +76,8 @@ export async function saveAnalysisFeedbackHistory(params: {
       return { saved: false, duplicate: true };
     }
 
-    const { error } = await supabase.from('analysis_feedback_history').insert(payload);
-    if (error) throw error;
+    const ins = await insertAnalysisFeedbackHistoryRow(payload);
+    if (ins.error) throw new Error(ins.error.message);
 
     logger.info('PROFILE', 'feedback stored', {
       discordUserId,

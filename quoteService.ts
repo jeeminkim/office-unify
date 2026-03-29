@@ -8,12 +8,15 @@ export type QuoteRequest = {
   displayName?: string | null;
 };
 
-type QuoteResult = {
+export type QuotePriceSource = 'live_usd' | 'live_krw' | 'fallback_usd' | 'fallback_krw' | 'snapshot_krw' | 'purchase_basis_krw';
+
+export type QuoteResult = {
   price: number | null;
   currency: string;
   degraded: boolean;
   failedCandidates: number;
   finalSource?: 'live' | 'cache' | 'fallback';
+  priceSource?: QuotePriceSource;
   failureBreakdown?: QuoteFailureBreakdown;
   attempts?: QuoteAttemptMeta[];
   traceId?: string;
@@ -158,7 +161,12 @@ async function fetchYahooPrice(yahooSymbol: string): Promise<{ price: number; cu
   return { price, currency: currency || 'USD' };
 }
 
-export async function getLatestQuote(req: QuoteRequest, fallbackPrice?: number | null, fallbackCurrency?: string): Promise<QuoteResult> {
+export async function getLatestQuote(
+  req: QuoteRequest,
+  fallbackPrice?: number | null,
+  fallbackCurrency?: string,
+  fallbackPriceSource?: QuotePriceSource
+): Promise<QuoteResult> {
   const { symbol, quoteSymbol, market } = req;
   const candidates = buildCandidates(symbol, quoteSymbol, market);
   const traceId = newQuoteTraceId(symbol);
@@ -199,6 +207,7 @@ export async function getLatestQuote(req: QuoteRequest, fallbackPrice?: number |
         degraded: false,
         failedCandidates,
         finalSource: 'cache',
+        priceSource: cached.currency === 'KRW' ? 'live_krw' : 'live_usd',
         failureBreakdown,
         attempts,
         traceId
@@ -256,6 +265,7 @@ export async function getLatestQuote(req: QuoteRequest, fallbackPrice?: number |
           degraded: false,
           failedCandidates,
           finalSource: 'live',
+          priceSource: fetched.currency === 'KRW' ? 'live_krw' : 'live_usd',
           failureBreakdown,
           attempts,
           traceId
@@ -337,6 +347,7 @@ export async function getLatestQuote(req: QuoteRequest, fallbackPrice?: number |
       degraded: true,
       failedCandidates,
       finalSource: 'fallback',
+      priceSource: fallbackPriceSource || (((fallbackCurrency || '').toUpperCase() === 'KRW' ? 'fallback_krw' : 'fallback_usd')),
       failureBreakdown,
       attempts,
       traceId
@@ -370,6 +381,7 @@ export async function getLatestQuote(req: QuoteRequest, fallbackPrice?: number |
     degraded: true,
     failedCandidates,
     finalSource: 'fallback',
+    priceSource: fallbackPriceSource || (((fallbackCurrency || '').toUpperCase() === 'KRW' ? 'fallback_krw' : 'fallback_usd')),
     failureBreakdown,
     attempts,
     traceId

@@ -1,10 +1,46 @@
 import { logger } from './logger';
-import type { LlmProvider, PersonaKey, ProviderGenerationResult, ProviderModelConfig } from './analysisTypes';
+import type {
+  LlmProvider,
+  OpenAiToGeminiFallbackReason,
+  PersonaKey,
+  ProviderGenerationResult,
+  ProviderGenerationMeta,
+  ProviderModelConfig
+} from './analysisTypes';
 import { generateOpenAiResponse } from './openAiLlmService';
 import { canUseOpenAiThisMonth, estimateOpenAiCost, recordApiUsage } from './usageTrackingService';
 
 function fallbackEnabled(): boolean {
   return (process.env.OPENAI_FALLBACK_TO_GEMINI || 'on').toLowerCase() !== 'off';
+}
+
+function withGeminiPrimaryMeta(result: ProviderGenerationResult): ProviderGenerationResult {
+  const meta: ProviderGenerationMeta = {
+    configured_provider: 'gemini',
+    openai_fallback_applied: false
+  };
+  return { ...result, generation_meta: meta };
+}
+
+function withOpenAiPrimaryMeta(result: ProviderGenerationResult): ProviderGenerationResult {
+  const meta: ProviderGenerationMeta = {
+    configured_provider: 'openai',
+    openai_fallback_applied: false
+  };
+  return { ...result, generation_meta: meta };
+}
+
+async function withOpenAiFallbackMeta(
+  resultPromise: Promise<ProviderGenerationResult>,
+  reason: OpenAiToGeminiFallbackReason
+): Promise<ProviderGenerationResult> {
+  const r = await resultPromise;
+  const meta: ProviderGenerationMeta = {
+    configured_provider: 'openai',
+    openai_fallback_applied: true,
+    openai_fallback_reason: reason
+  };
+  return { ...r, generation_meta: meta };
 }
 
 function personaSystemPrompt(personaKey: PersonaKey): string {
@@ -14,6 +50,8 @@ function personaSystemPrompt(personaKey: PersonaKey): string {
   if (personaKey === 'SIMONS') {
     return '# JAMES_SIMONS: 데이터/확률 기반 분석가. 가능한 범위에서 확률/구간을 제시하고 근거를 간결히 설명.';
   }
+  if (personaKey === 'THIEL') return '# PETER_THIEL: 운영 안정성/시스템 구조/재발방지 중심으로 문제를 구조화하고 실행안을 제시.';
+  if (personaKey === 'HOT_TREND') return '# HOT_TREND_ANALYST: 빠른 변화의 배경/지속성/리스크를 간결하게 분석.';
   return '간결하고 구조적으로 답변.';
 }
 
@@ -30,6 +68,20 @@ export function getPersonaModelConfig(personaKey: PersonaKey): ProviderModelConf
       personaKey,
       provider: 'openai',
       model: process.env.OPENAI_MODEL_SIMONS || 'gpt-5-mini'
+    };
+  }
+  if (personaKey === 'THIEL') {
+    return {
+      personaKey,
+      provider: 'openai',
+      model: process.env.OPENAI_MODEL_THIEL || 'gpt-5-mini'
+    };
+  }
+  if (personaKey === 'HOT_TREND') {
+    return {
+      personaKey,
+      provider: 'openai',
+      model: process.env.OPENAI_MODEL_HOT_TREND || 'gpt-5-mini'
     };
   }
   return {
@@ -56,7 +108,8 @@ export async function generateWithPersonaProvider(params: {
   });
 
   if (config.provider !== 'openai') {
-    return params.fallbackToGemini();
+    const r = await params.fallbackToGemini();
+    return withGeminiPrimaryMeta(r);
   }
 
   if (!process.env.OPENAI_API_KEY) {
@@ -67,7 +120,11 @@ export async function generateWithPersonaProvider(params: {
       model: config.model,
       fallbackReason: 'openai_api_key_missing'
     });
-    return params.fallbackToGemini();
+    logger.info('PHASE1_CHECK', 'fallback_triggered', {
+      reason: 'openai_api_key_missing',
+      personaKey: params.personaKey
+    });
+    return withOpenAiFallbackMeta(params.fallbackToGemini(), 'openai_api_key_missing');
   }
 
   const budgetGuard = await canUseOpenAiThisMonth({
@@ -89,7 +146,12 @@ export async function generateWithPersonaProvider(params: {
         model: config.model,
         fallbackReason: budgetGuard.reason || 'budget_guard'
       });
-      return params.fallbackToGemini();
+      logger.info('PHASE1_CHECK', 'fallback_triggered', {
+        reason: 'budget_guard',
+        detail: budgetGuard.reason || null,
+        personaKey: params.personaKey
+      });
+      return withOpenAiFallbackMeta(params.fallbackToGemini(), 'budget_guard');
     }
     throw new Error(`OpenAI usage rejected: ${budgetGuard.reason || 'budget_guard'}`);
   }
@@ -120,7 +182,7 @@ export async function generateWithPersonaProvider(params: {
       estimated_cost_usd: estimatedCostUsd
     });
 
-    return openaiResult;
+    return withOpenAiPrimaryMeta(openaiResult);
   } catch (e: any) {
     logger.warn('LLM_PROVIDER', 'openai failed', {
       personaKey: params.personaKey,
@@ -135,7 +197,11 @@ export async function generateWithPersonaProvider(params: {
         personaName: params.personaName,
         model: config.model
       });
-      return params.fallbackToGemini();
+      logger.info('PHASE1_CHECK', 'fallback_triggered', {
+        reason: 'openai_error',
+        personaKey: params.personaKey
+      });
+      return withOpenAiFallbackMeta(params.fallbackToGemini(), 'openai_error');
     }
     throw e;
   }
