@@ -58,6 +58,13 @@
 - [ ] 클릭 직후 **후속 채널 메시지**가 반드시 오는지(그림자 리밸 / CIO 요약 / 다음 질문). `DECISION_EXECUTION_STARTED` / `DECISION_EXECUTION_COMPLETED` 로그. **자동 매매·trade_history 미변경** 확인.
 - [ ] 선택지 추출 실패 시에도 최소 **예 / 아니오** 버튼이 붙는지 확인(`extractDecisionOptions` fallback)
 
+## 5f. Follow-up 질문(비-decision)
+- [ ] `docs/sql/followup_snapshots.sql` 적용 후 `followup_snapshots` insert 가능
+- [ ] `isDecisionPrompt`가 **거짓**이고 질문이 감지되면 버튼/스트링 셀렉트/`답변 입력` 중 하나가 붙는지 확인(질문만으로 끝나지 않음)
+- [ ] `followup:select|*` / `followup:menu|*` / `modal:followup:*` 클릭·제출 후 **후속 분석**(포트폴리오/오픈 토픽/트렌드)이 실행되는지 확인 — dead-end 없음
+- [ ] 로그 `FOLLOWUP_PROMPT_DETECTED`, `FOLLOWUP_SELECTED` 또는 `FOLLOWUP_INPUT_SUBMITTED`, `FOLLOWUP_EXECUTION_COMPLETED`
+- [ ] 페르소나 응답에 기술 기호가 있을 때 **쉬운 설명** 보강 및 문장이 **완결** 형태로 끝나는지 확인(`postProcessPersonaOutputForDiscord` / `ensureCompleteResponse`)
+
 ## 5b. 피드백 소프트 보정 (포트폴리오 토론)
 - [ ] `FEEDBACK_CALIBRATION` / `applied` 로그 및 `safetyFloorTriggered` 동작(RAY/HINDENBURG downside)
 - [ ] `persona_memory.confidence_calibration` 필드 누적(피드백·claim_feedback 반영 후)

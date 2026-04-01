@@ -207,6 +207,21 @@ KR 종목은 조회 시 **`quote_symbol` 보정**(예: KOSPI→`.KS`, KOSDAQ→`
 - **처리**: `interactionCreate`에서 `decision:select|` → `handleDecisionButtonInteraction` — **ephemeral 아님**(선택 완료가 채널에 보임). 로그: `DECISION` 스코프 `DECISION_PROMPT detected`(파이프라인 persist), `DECISION_OPTIONS extracted` / `DECISION_SELECTED`(브로드캐스트·클릭).
 - **배치**: `broadcastAgentResponse` 첫 청크에 `[NO_DATA 행] → [의사결정 행] → [피드백 행]` 순으로 합친다.
 
+## Follow-up interaction buttons (Discord)
+
+- **목적**: 응답 본문에 질문이 있으면 반드시 상호작용 컴포넌트를 붙여 “질문만 남는” 상황을 막는다.
+- **감지/분류**: `followupPromptService.ts`가 질문을 `CHOICE` / `NEXT_ACTION` / `FREE_INPUT`으로 분류한다.
+- **컴포넌트 규칙**: 선택지 3개 이하는 버튼, 4개 이상은 String Select, 자유입력은 `답변 입력` 버튼 후 모달(`modal:followup:{snapshotUuid}`)로 받는다.
+- **스냅샷 저장**: 브로드캐스트 시 `followup_snapshots`에 옵션/타입을 저장하고 `customId`는 `followup:select|{snapshotUuid}|{idx}` / `followup:menu|{snapshotUuid}` / `followup:input|{snapshotUuid}`를 사용한다(본문 재파싱 최소화).
+- **선택/입력 후 실행**: `handleFollowup*` 경로에서 즉시 후속 분석을 실행한다(포트폴리오 토론/오픈 토픽/트렌드). **dead-end 없음**, **자동 매매 없음**.
+- **로그**: `FOLLOWUP_PROMPT_DETECTED` / `FOLLOWUP_SELECTED` / `FOLLOWUP_INPUT_SUBMITTED` / `FOLLOWUP_EXECUTION_COMPLETED`.
+
+## Persona 응답 후처리 규칙
+
+- `analysisFormatting.ts`의 정규화 단계에서 `postProcessPersonaOutputForDiscord`를 적용한다.
+- 기술 지표·기호가 감지되면 **전문 분석 유지 + 쉬운 설명(2~3문장) + 의미 요약**을 자동 보강한다.
+- `ensureCompleteResponse`로 `마무리(한 줄)` placeholder, `...` 같은 미완결 문장을 정리하고 결론형 문장으로 마감한다.
+
 ### Feedback → 의사결정 소프트 보정 (포트폴리오 5인 토론)
 
 - **목적**: 저장된 피드백·claim 메타로 **claim 가중(소폭)** 및 CIO 종합 시 **우선순위/모니터링 서술**만 보정. **NO_DATA 게이트·시세/밸류에이션 가드·Phase2 veto·GO/HOLD 결론 자체를 뒤집지 않음.**

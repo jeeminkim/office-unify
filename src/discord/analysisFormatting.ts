@@ -1,6 +1,7 @@
 import { logger } from '../../logger';
 import type { PersonaKey } from '../../analysisTypes';
 import type { ProviderGenerationResult } from '../../analysisTypes';
+import { postProcessPersonaOutputForDiscord } from './personaResponsePostProcess';
 
 export function detectFinancialIntent(query: string): boolean {
   return /(포트폴리오|비중|리스크|손익|평단|리밸런싱|투자 전략|종합 진단|현금버퍼|월 투자여력|자산배분)/i.test(query);
@@ -51,7 +52,7 @@ export function normalizeProviderOutputForDiscord(params: { text: string; provid
     originalLength: String(params.text || '').length,
     normalizedLength: t.length
   });
-  return t;
+  return postProcessPersonaOutputForDiscord(t);
 }
 
 export function personaKeyToPersonaName(personaKey: PersonaKey): string {

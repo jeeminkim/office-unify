@@ -46,6 +46,8 @@
 ## 2026-03-28
 
 ### Added
+- **Follow-up 질문 UX**: `docs/sql/followup_snapshots.sql`, `src/repositories/followupRepository.ts`, `followupPromptService.ts` — 질문 감지 시 `followup_snapshots` 저장 후 버튼/스트링 셀렉트/모달(`followup:select|*`, `followup:menu|*`, `followup:input|*`, `modal:followup:*`). 선택·입력 후 포트폴리오/오픈 토픽/트렌드로 이어짐. 로그 `FOLLOWUP_*`.
+- **페르소나 응답 후처리**: `src/discord/personaResponsePostProcess.ts` — 기술 기호 시 쉬운 설명 보강, `ensureCompleteResponse`로 완결성 보정. `analysisFormatting.ts` 정규화 경로에서 적용.
 - **Control Panel 관측성**: `logs/control-panel/control-panel.log_YYYYMMDD` 전용(`controlPanelLog.ts`), `state/control-panel-state.json` 요약, `stopPipeline.ts` 다단계 중지(graceful→검증→Windows `/F` 자동 fallback), `CONTROL_PANEL *` 이벤트(동일 실패 10초 dedupe). UI는 상태판·로그 경로 안내만(기본 raw tail 제거)
 - **시세 다단계 fallback**: `quoteService.ts` — Yahoo quote → chart 일봉(EOD) → DB/스냅샷; 종목별 `resolved_quote_symbol`, `price_source_kind`, `price_asof`, `market_state`, `fallback_reason`; `QUOTE_RESOLUTION` 로그(`current_success`, `eod_fallback_used`, `cache_fallback_used`, `symbol_corrected`)
 - **포트폴리오 가격 표시**: `portfolioService.ts` / `portfolioUx.ts` — 요약 `price_basis_hint`, `partial_quote_warning`; KR 장 마감 후 종가 안정화
@@ -69,6 +71,7 @@
 - **Windows Control Panel 중지**: `stopPipeline.ts`·`stopSafety.ts`·`stopErrorNormalize.ts` — `child_sigterm` 우선, 1.5s/4s/8s `post_stop_verification`, 안전 조건에서만 `taskkill /F /T` 자동; `stopPhase`·stderr 정규화; `postStopVerify.ts` 제거
 
 ### Docs
+- `README.md`, `docs/SYSTEM_ARCHITECTURE.md`, `docs/DATABASE_SCHEMA.md`, `docs/OPERATIONS_RUNBOOK.md`, `docs/TEST_CHECKLIST.md` — follow-up 흐름·스냅샷·검증 항목.
 - `README.md`, `docs/SYSTEM_ARCHITECTURE.md`, `docs/OPERATIONS_RUNBOOK.md`, `docs/TEST_CHECKLIST.md` — 피드백 `chat_history_ref`·의사결정 버튼 흐름·`DECISION` 로그 운영 반영
 - `README.md`, `docs/SYSTEM_ARCHITECTURE.md`, `docs/DATABASE_SCHEMA.md`, `docs/OPERATIONS_RUNBOOK.md`, `docs/TEST_CHECKLIST.md` — Phase 3 + 로깅/컨트롤 패널 운영 절차 반영
 - Quote 다단계·KR EOD·후속 네비게이션·`QUOTE_RESOLUTION`/`post_response_navigation` 운영 검증: `README.md`, `SYSTEM_ARCHITECTURE.md`, `OPERATIONS_RUNBOOK.md`, `TEST_CHECKLIST.md`

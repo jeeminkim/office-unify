@@ -14,10 +14,14 @@
   - Phase 2.5: `docs/sql/phase2_5_advisory_execution.sql` (`rebalance_plans`, `rebalance_plan_items`, `claim_outcome_audit` 확장 컬럼)
   - Phase 3: `docs/sql/phase3_finance_instrument_integrity.sql` — `expenses` 할부 컬럼, `cashflow.flow_type` 레거시 정규화·CHECK(NOT VALID), `instrument_registration_candidates`, `portfolio`/`trade_history` KR·US 메타 CHECK(NOT VALID)
   - Discord 의사결정 UX: `docs/sql/decision_history.sql` — `decision_snapshots`(버튼 옵션 스냅샷), `decision_history`(사용자 선택 영구 저장, `chat_history_ref` TEXT)
+  - Follow-up 질문 UX: `docs/sql/followup_snapshots.sql` — `followup_snapshots`(CHOICE / NEXT_ACTION / FREE_INPUT 옵션 스냅샷)
 
 ### Discord 의사결정 UX (`docs/sql/decision_history.sql`)
 - **`decision_snapshots`**: 브로드캐스트 시점 버튼 옵션 `JSONB`(customId에 UUID만 넣고 라벨은 DB에서 복원).
 - **`decision_history`**: 사용자 클릭 `selected_option`, `option_index`, `decision_context`(options·persona·topic·snapshot_id 등). `chat_history_ref` TEXT — integer id 문자열, UUID FK 강제 없음.
+
+### Follow-up 질문 UX (`docs/sql/followup_snapshots.sql`)
+- **`followup_snapshots`**: `prompt_type`(CHOICE / NEXT_ACTION / FREE_INPUT), `options` `JSONB`, `discord_user_id`, `chat_history_ref`, `analysis_type`, `persona_name`, `created_at`. 버튼/셀렉트 `customId`에 UUID만 넣고 라벨은 DB에서 복원(본문 재파싱 최소화).
 
 ## 핵심 테이블(기존)
 
