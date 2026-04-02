@@ -25,7 +25,20 @@ export function savePanelState(channelId: string, messageId: string) {
             updatedAt: Date.now()
         }
     };
-    fs.writeFileSync(STATE_FILE, JSON.stringify(nextState, null, 2));
+    const payload = JSON.stringify(nextState, null, 2);
+    const writeOnce = () => fs.writeFileSync(STATE_FILE, payload);
+    try {
+        writeOnce();
+    } catch (e: any) {
+        logger.warn('PANEL', 'state file write failed; retrying once', { message: e?.message || String(e) });
+        try {
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            writeOnce();
+        } catch (e2: any) {
+            logger.error('PANEL', 'state file write failed permanently', { message: e2?.message || String(e2) });
+            return;
+        }
+    }
     logger.info('PANEL', 'state file updated', { channelId, messageId });
 }
 
@@ -67,29 +80,44 @@ export async function ensureMainPanelOnBoot(client: Client, defaultChannelId?: s
 }
 
 export async function restoreOrBuildMainPanel(client: Client, defaultChannelId?: string): Promise<Message | null> {
-    logger.info('PANEL', 'restore start requested');
+    logger.info('PANEL', 'PANEL restore start');
     updateHealth(s => {
         s.panels.restoreAttempted = true;
         s.panels.lastPanelAction = 'restore_start';
         s.panels.panelErrorReason = null;
+        s.panels.lastPanelRestoreResult = null;
+        s.panels.panelRestoreFallbackUsed = false;
+        s.panels.panelRecreated = false;
     });
 
     const state = loadPanelState();
+    const envFallback = process.env.DISCORD_MAIN_PANEL_CHANNEL_ID || process.env.DEFAULT_CHANNEL_ID;
+    const fallbackUsed = !state?.channelId && !!(defaultChannelId || envFallback);
     logger.info('BOOT', 'main panel state loaded', {
         hasState: !!state,
         channelId: state?.channelId || null,
-        messageId: state?.messageId || null
+        messageId: state?.messageId || null,
+        envFallbackConfigured: !!envFallback
     });
-    const targetChannelId = state?.channelId || defaultChannelId;
+    const targetChannelId = state?.channelId || defaultChannelId || envFallback;
 
     if (!targetChannelId) {
-        logger.warn('PANEL', 'No channelId in state.json, and no default Channel passed. Cannot restore.');
+        logger.warn('PANEL', 'PANEL restore failed: no channel (state empty and no DISCORD_MAIN_PANEL_CHANNEL_ID / DEFAULT_CHANNEL_ID)');
         updateHealth(s => {
             s.panels.restoreSucceeded = false;
             s.panels.lastPanelAction = 'skip_no_channel';
             s.panels.panelErrorReason = 'NO_STATE_AND_NO_CALLER_CHANNEL';
+            s.panels.lastPanelRestoreResult = 'failed';
         });
+        logger.error('PANEL', 'PANEL restore failed', { reason: 'NO_CHANNEL' });
         return null;
+    }
+
+    if (fallbackUsed) {
+        logger.info('PANEL', 'PANEL restore fallback_channel_used', { channelId: targetChannelId });
+        updateHealth(s => {
+            s.panels.panelRestoreFallbackUsed = true;
+        });
     }
 
     logger.info('PANEL', `Channel lookup for ${targetChannelId} started...`);
@@ -102,7 +130,9 @@ export async function restoreOrBuildMainPanel(client: Client, defaultChannelId?:
             s.panels.lastPanelAction = 'fallback_failed';
             s.panels.panelErrorReason = 'CHANNEL_FETCH_FAILED';
             s.discord.targetChannelResolved = false;
+            s.panels.lastPanelRestoreResult = 'failed';
         });
+        logger.error('PANEL', 'PANEL restore failed', { reason: 'CHANNEL_FETCH_FAILED', channelId: targetChannelId });
         return null;
     }
 
@@ -127,10 +157,14 @@ export async function restoreOrBuildMainPanel(client: Client, defaultChannelId?:
                     messageId: editedMsg.id
                 });
                 logger.info('BOOT', 'main panel restore success', { messageId: editedMsg.id });
+                logger.info('PANEL', 'PANEL restore success', { mode: 'edit', messageId: editedMsg.id, fallbackUsed });
                 updateHealth(s => {
                     s.panels.restoreSucceeded = true;
                     s.panels.mainPanelMessageId = editedMsg.id;
                     s.panels.lastPanelAction = 'panel_restored';
+                    s.panels.lastPanelRestoreResult = 'success';
+                    s.panels.panelRecreated = false;
+                    s.panels.lastPanelRestoreAt = new Date().toISOString();
                 });
                 return editedMsg;
             }
@@ -158,11 +192,16 @@ export async function restoreOrBuildMainPanel(client: Client, defaultChannelId?:
             messageId: newMsg.id
         });
         logger.info('BOOT', 'main panel missing, recreated', { messageId: newMsg.id });
+        logger.info('PANEL', 'PANEL restore recreated', { messageId: newMsg.id, channelId: channel.id });
+        logger.info('PANEL', 'PANEL restore success', { mode: 'recreated', messageId: newMsg.id, fallbackUsed });
         updateHealth(s => {
             s.panels.restoreSucceeded = true;
             s.panels.mainPanelMessageId = newMsg.id;
             s.panels.lastPanelAction = 'panel_recreated';
             s.panels.panelErrorReason = null;
+            s.panels.lastPanelRestoreResult = 'success';
+            s.panels.panelRecreated = true;
+            s.panels.lastPanelRestoreAt = new Date().toISOString();
         });
         return newMsg;
     }
@@ -170,7 +209,9 @@ export async function restoreOrBuildMainPanel(client: Client, defaultChannelId?:
     updateHealth(s => {
         s.panels.restoreSucceeded = false;
         s.panels.lastPanelAction = 'recreate_completely_failed';
+        s.panels.lastPanelRestoreResult = 'failed';
     });
+    logger.error('PANEL', 'PANEL restore failed', { reason: 'SEND_MESSAGE_FAILED' });
     return null;
 }
 
@@ -345,6 +386,8 @@ export function getDataCenterPanel() {
         [
           'Peter Thiel 페르소나가 운영 로그를 분석해 문제 원인과 시스템 개선안을 제안합니다.',
           '',
+          '**⚙ 시스템 상태 점검**: 서버 `logs`를 읽기 전용으로 스캔해 상태·조치안을 제시합니다(자동 매매·DB 변경 없음).',
+          '',
           'Phase 2.5: 위원 성과·claim 감사·대기 중인 리밸런싱(그림자) 계획 조회.'
         ].join('\n')
       )
@@ -359,7 +402,12 @@ export function getDataCenterPanel() {
       new ButtonBuilder().setCustomId('panel:data:rebalance_view').setLabel('📐 리밸런싱 계획 보기').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId('panel:main:reinstall').setLabel('🔙 메인으로').setStyle(ButtonStyle.Secondary)
     );
-    return { embeds: [embed], components: [row, row2] };
+    const rowSys = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId('panel:system:check').setLabel('⚙️ 시스템 상태 점검').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('panel:system:detail').setLabel('📋 상세 로그 요약').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('panel:system:actions').setLabel('🛠 조치 방법').setStyle(ButtonStyle.Secondary)
+    );
+    return { embeds: [embed], components: [row, row2, rowSys] };
 }
 
 export function getTrendPanel() {

@@ -13,6 +13,16 @@ function usdAmount(n: number | null | undefined): string {
   return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 }
 
+function formatQuoteMetaLine(p: PortfolioPositionSnapshot): string {
+  const kind = p.quote_price_source_kind || '—';
+  const asof = p.quote_price_asof
+    ? new Date(p.quote_price_asof).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })
+    : '—';
+  const stale = p.quote_is_stale ? ' · ⚠️지연(stale)' : '';
+  const fail = p.quote_request_failure_reason ? ` · 실패유형:${p.quote_request_failure_reason}` : '';
+  return `· 시세출처: **${kind}** · 기준시각(KST): ${asof}${stale}${fail}`;
+}
+
 /** Discord 응답용 — 미국주식 USD + KRW 카드 */
 function formatUsPositionBlock(p: PortfolioPositionSnapshot, i: number): string {
   const label = p.display_name || p.symbol || p.quote_symbol || 'UNKNOWN';
@@ -22,6 +32,7 @@ function formatUsPositionBlock(p: PortfolioPositionSnapshot, i: number): string 
     `**${i + 1}. ${label}** (\`${code}\`)`,
     `· 수량: **${p.quantity}**주`,
     `· 현재가: **${usdAmount(p.current_price_usd ?? p.current_price)} USD**/주`,
+    formatQuoteMetaLine(p),
     `· 평가액: **${usdAmount(p.market_value_usd)} USD**`,
     `· 환율: **${fx}**`,
     `· 평가액(원화): **${krw(p.market_value_krw)}**`,
@@ -38,6 +49,7 @@ function formatKrPositionBlock(p: PortfolioPositionSnapshot, i: number): string 
     `**${i + 1}. ${label}** (\`${code}\`)`,
     `· 수량: **${p.quantity}** · 평단: **${p.avg_purchase_price}** (${p.purchase_currency}/주)`,
     `· 현재가: **${p.current_price}** ${p.price_currency}`,
+    formatQuoteMetaLine(p),
     `· 평가액: **${krw(p.market_value_krw)}** · 손익: **${krw(p.pnl_krw)}** (${p.return_pct}%) · 비중 ${p.weight_pct}%`
   ].join('\n');
 }
@@ -127,9 +139,11 @@ export function buildPortfolioDiscordMessage(
   });
 
   const body = ['───', '**보유 종목**', '', ...posLines.map(x => `${x}\n`)].join('\n');
-  const metaBits = [snapshot.summary.price_basis_hint, snapshot.summary.partial_quote_warning].filter(
-    (x): x is string => !!x
-  );
+  const metaBits = [
+    snapshot.summary.price_basis_hint,
+    snapshot.summary.partial_quote_warning,
+    snapshot.summary.quote_quality_note
+  ].filter((x): x is string => !!x);
   const metaBlock = metaBits.length ? `\n\n${metaBits.join('\n')}` : '';
   const quoteWarn =
     snapshot.summary.degraded_quote_mode || (snapshot.summary.quote_failure_count || 0) > 0

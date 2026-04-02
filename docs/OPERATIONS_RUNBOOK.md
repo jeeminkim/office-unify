@@ -137,10 +137,25 @@ pm2 restart ai-office
 ### 6.6 Quote 다단계 fallback · KR 장 마감 후 · 후속 네비게이션 UX
 
 **Quote**
-1. `logs/quote/quote.log_*` 에서 `QUOTE_RESOLUTION` 이벤트로 어떤 단계를 탔는지 확인한다.
+1. `logs/quote/quote.log_*` 에서 `QUOTE_RESOLUTION` 이벤트로 어떤 단계를 탔는지 확인한다. **401 다발** 시 `yahoo_v7_http_error` / `yahoo_chart_http_error` 와 `status`·`classifiedReason`으로 원인 분리.
 2. **한국장 종료 후** KR 종목: `eod_fallback_used` 또는 `current_success`(지연)가 섞일 수 있으나, 사용자 메시지에는 **가격 기준 힌트**(KST·종가/실시간 여부)가 표시된다.
-3. 일부 종목만 실패 시: 포트폴리오 전체가 비정상 평가로 붕괴하지 않아야 하며, 본문에 **일부 종목 fallback** 요약이 있을 수 있다. `degraded_quote_mode`는 스냅샷 요약으로 유지.
+3. 일부 종목만 실패 시: 포트폴리오 전체가 비정상 평가로 붕괴하지 않아야 하며, 본문에 **일부 종목 fallback** 요약이 있을 수 있다. `quote_quality_degraded_summary`(WARN)와 `degraded_quote_mode`로 요약.
 4. `symbol_corrected` 가 나오면 저장된 `quote_symbol`과 후보 심볼이 달랐음을 의미한다 — 등록 데이터 오류 가능성 점검.
+5. **주간 스케줄러**: “매시간 체크·스킵”은 기본 `DEBUG`로만 남음 — `office-ops`에서 반복 스킵 노이즈를 줄이려면 `LOG_DEBUG=1` 시 `office-debug`에서 확인.
+
+### 6.1.1 메인 패널 복구 · `office-health.json`
+1. `DISCORD_MAIN_PANEL_CHANNEL_ID`(또는 `DEFAULT_CHANNEL_ID`) 설정 시 `state/discord-panel.json`에 채널이 없어도 **폴백 채널**로 패널 재생성 시도.
+2. 로그: `PANEL restore start` / `PANEL restore fallback_channel_used` / `PANEL restore success` / `PANEL restore recreated` / `PANEL restore failed`.
+3. `logs/office-health.json`의 `panels.lastPanelRestoreResult`, `panelRestoreFallbackUsed`, `panelRecreated` 확인.
+
+### 6.1.2 Follow-up / Decision 관측성
+1. 브로드캐스트 시 `DECISION_SNAPSHOT_SAVED`, `DECISION_COMPONENT_ATTACHED`, `FOLLOWUP_SNAPSHOT_SAVED`, `FOLLOWUP_COMPONENT_ATTACHED`, 스킵 시 `*_COMPONENT_SKIPPED`(사유), 행 초과 시 `UI_COMPONENT_POLICY`.
+2. `healthState.ux`(lastFollowup*, lastDecision*)로 최근 이벤트 시각 요약.
+
+### 6.1.3 System operator — 로그 기반 점검 (Discord)
+1. 데이터 센터 패널에서 **⚙ 시스템 상태 점검** — `logAnalysisService`가 최근 로그를 스캔해 상태·조치안을 표시(자동 매매·DB 변경 없음).
+2. **상세 로그 요약** / **조치 방법**은 동일 분석 결과의 보기 전환. 민감 정보가 포함될 수 있으면 에페메럴·관리 채널에서만 사용 권장.
+3. 코드: `logAnalysisService.ts`, 버튼 `panel:system:check|detail|actions` — `DATA_CENTER` `system_log_analysis` 로그.
 
 **Post-response navigation**
 1. 포트폴리오 조회/계좌 선택 직후, AI 토론·트렌드·데이터 센터·오픈 토픽 완료 직후 **추가 메시지**에 메인 메뉴 버튼이 보이는지 확인한다.

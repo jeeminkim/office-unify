@@ -60,6 +60,12 @@ import { decideOrchestratorRoute, logOrchestratorDecision } from './orchestrator
 import { routeEarlyButtonInteraction } from './src/interactions/interactionRouter';
 import { runDataCenterAppService } from './src/application/runDataCenterAppService';
 import { splitDiscordMessage, chooseInteractionRoute } from './discordResponseUtils';
+import {
+    analyzeLogs,
+    generateSystemReport,
+    generateDetailView,
+    generateActionsView
+} from './logAnalysisService';
 import { generateGeminiResponse } from './geminiLlmService';
 import type { PersonaKey } from './analysisTypes';
 import { insertChatHistoryWithLegacyFallback } from './src/repositories/chatHistoryRepository';
@@ -694,14 +700,17 @@ async function runWeeklyReportSchedulerCheck() {
         }
 
         const lastReportDate = data && data.length > 0 && data[0].created_at ? new Date(data[0].created_at) : null;
-        logger.info('SCHEDULER', 'weekly report check', {
+        logger.debug('SCHEDULER', 'weekly report check', {
             now: now.toISOString(),
             targetFriday: targetFriday.toISOString(),
             lastReportDate: lastReportDate ? lastReportDate.toISOString() : null
         });
 
         if (!shouldGenerateWeeklyReport(now, targetFriday, lastReportDate)) {
-            logger.warn('SCHEDULER', 'weekly report skipped');
+            logger.debug('SCHEDULER', 'weekly report skipped (not due yet)', {
+                targetFriday: targetFriday.toISOString(),
+                lastReportDate: lastReportDate ? lastReportDate.toISOString() : null
+            });
             return;
         }
 
@@ -897,6 +906,40 @@ function isTrendQueryCheck(query: string): boolean {
 
 const DISCORD_CONTENT_MAX = 2000;
 const DISCORD_BODY_CHUNK = 1800;
+/** Discord 메시지당 ActionRow 상한(버튼/셀렉트 행 합산) */
+const DISCORD_COMPONENT_ROW_LIMIT = 5;
+
+function prioritizeDiscordComponentRows(
+    decisionRows: ActionRowBuilder<ButtonBuilder>[],
+    followupRows: ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>[],
+    feedbackRow: ActionRowBuilder<ButtonBuilder> | null | undefined
+): { rows: ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>[]; dropped: string[] } {
+    const ordered: ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>[] = [
+        ...decisionRows,
+        ...followupRows,
+        ...(feedbackRow ? [feedbackRow as ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>] : [])
+    ];
+    if (ordered.length <= DISCORD_COMPONENT_ROW_LIMIT) {
+        return { rows: ordered, dropped: [] };
+    }
+    const dropped: string[] = [];
+    const d = [...decisionRows];
+    let budget = DISCORD_COMPONENT_ROW_LIMIT - d.length;
+    const maxFollow = Math.min(followupRows.length, Math.max(0, budget));
+    const fTake = followupRows.slice(0, maxFollow);
+    if (followupRows.length > fTake.length) {
+        dropped.push('followup_overflow');
+    }
+    budget -= fTake.length;
+    const fbTake =
+        feedbackRow && budget > 0
+            ? [feedbackRow as ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>]
+            : [];
+    if (!fbTake.length && feedbackRow) {
+        dropped.push('feedback');
+    }
+    return { rows: [...d, ...fTake, ...fbTake], dropped };
+}
 
 async function sendPostNavigationReply(sourceInteraction: Interaction | Message, highlight: QuickNavHighlight) {
     try {
@@ -937,11 +980,13 @@ async function broadcastAgentResponse(
     decisionCtx?: { chatHistoryId: number; analysisType: string; personaKey?: PersonaKey } | null
 ) {
     let finalContent = content;
-    let components: ActionRowBuilder<ButtonBuilder>[] = [];
+    let noDataBodyNote = '';
 
     if (finalContent.includes('[REASON: NO_DATA]')) {
         finalContent = finalContent.replace(/\[REASON: NO_DATA\]/g, '').trim();
-        components = [getNoDataButtons()];
+        noDataBodyNote =
+            '\n\n⚠️ **NO_DATA** — 포트폴리오·소비·현금흐름 데이터가 부족합니다. 메인 패널에서 종목 등록·소비·현금흐름 입력 후 다시 시도해 주세요. _(버튼 행은 decision/follow-up 우선순위로 생략될 수 있음)_';
+        logger.info('UI', 'NO_DATA inlined to body (no NO_DATA button row in broadcast)');
     }
 
     const decisionRows: ActionRowBuilder<ButtonBuilder>[] = [];
@@ -957,8 +1002,21 @@ async function broadcastAgentResponse(
         });
         if (snap?.id) {
             decisionRows.push(buildDecisionButtonsRow(snap.id, opts));
+            logger.info('DECISION', 'DECISION_SNAPSHOT_SAVED', {
+                snapshot_id: snap.id,
+                chat_history_id: decisionCtx.chatHistoryId,
+                option_count: opts.length
+            });
+            logger.info('DECISION', 'DECISION_COMPONENT_ATTACHED', { rows: decisionRows.length });
+            updateHealth(s => {
+                s.ux.lastDecisionSnapshotSavedAt = new Date().toISOString();
+                s.ux.lastDecisionAttached = true;
+            });
         } else {
-            logger.warn('DECISION', 'decision_snapshots insert failed; decision buttons omitted');
+            logger.warn('DECISION', 'DECISION_COMPONENT_SKIPPED', { reason: 'snapshot_insert_failed' });
+            updateHealth(s => {
+                s.ux.lastDecisionAttached = false;
+            });
         }
     }
 
@@ -976,10 +1034,39 @@ async function broadcastAgentResponse(
             });
             if (ins?.id) {
                 followupRows.push(...buildFollowupComponentRows(ins.id, fu.promptType, fu.options));
+                logger.info('FOLLOWUP', 'FOLLOWUP_SNAPSHOT_SAVED', {
+                    snapshot_id: ins.id,
+                    prompt_type: fu.promptType,
+                    option_count: fu.options.length
+                });
+                logger.info('FOLLOWUP', 'FOLLOWUP_COMPONENT_ATTACHED', { rows: followupRows.length });
+                updateHealth(s => {
+                    s.ux.lastFollowupDetectedAt = new Date().toISOString();
+                    s.ux.lastFollowupType = fu.promptType;
+                    s.ux.lastFollowupAttached = true;
+                });
             } else {
-                logger.warn('FOLLOWUP', 'followup_snapshots insert failed; follow-up UI omitted');
+                logger.warn('FOLLOWUP', 'FOLLOWUP_COMPONENT_SKIPPED', { reason: 'snapshot_insert_failed' });
+                updateHealth(s => {
+                    s.ux.lastFollowupAttached = false;
+                });
             }
+        } else {
+            logger.info('FOLLOWUP', 'FOLLOWUP_COMPONENT_SKIPPED', { reason: 'heuristic_not_matched' });
         }
+    }
+
+    const prioritized = prioritizeDiscordComponentRows(decisionRows, followupRows, feedbackRow);
+    if (prioritized.dropped.length) {
+        logger.warn('UI', 'UI_COMPONENT_POLICY', {
+            dropped: prioritized.dropped,
+            decision_rows: decisionRows.length,
+            followup_rows: followupRows.length,
+            had_feedback: !!feedbackRow
+        });
+        updateHealth(s => {
+            s.ux.lastUiComponentPolicy = prioritized.dropped.join(',');
+        });
     }
 
     const originalLen = finalContent.length;
@@ -995,6 +1082,14 @@ async function broadcastAgentResponse(
     if (bodyChunks.length > 1) {
         logger.info('DISCORD', 'long response chunked', { parts: bodyChunks.length, agentName });
     }
+    if (bodyChunks.length > 1 && (decisionRows.length > 0 || followupRows.length > 0 || !!feedbackRow)) {
+        logger.info('UI', 'interactive_components_on_first_chunk_only', {
+            parts: bodyChunks.length,
+            has_decision: decisionRows.length > 0,
+            has_followup: followupRows.length > 0,
+            has_feedback: !!feedbackRow
+        });
+    }
 
     const sendParts = async (useWebhook: boolean) => {
         for (let i = 0; i < bodyChunks.length; i++) {
@@ -1003,20 +1098,17 @@ async function broadcastAgentResponse(
                     ? `## ${agentName}\n`
                     : `## ${agentName} (${i + 1}/${bodyChunks.length})\n`;
             let piece = header + bodyChunks[i];
+            if (i === 0 && noDataBodyNote) {
+                piece += noDataBodyNote;
+            }
             if (i === 0 && feedbackRow) {
                 piece += '\n\n_이 분석이 유용했나요? 아래 버튼(👍 신뢰 / ✅ 채택 / 📌 저장 / 👎 별로)으로 바로 평가해 주세요._';
             }
             if (piece.length > DISCORD_CONTENT_MAX) {
                 piece = piece.slice(0, DISCORD_CONTENT_MAX - 1) + '…';
             }
-            const componentsToSend = i === 0
-                ? [
-                    ...(components.length ? components : []),
-                    ...decisionRows,
-                    ...followupRows,
-                    ...(feedbackRow ? [feedbackRow] : [])
-                  ]
-                : undefined;
+            const componentsToSend =
+                i === 0 ? prioritized.rows : undefined;
 
             const hasInteractiveComponents = !!(componentsToSend && componentsToSend.length);
             const useWebhookForThisPart = useWebhook && !hasInteractiveComponents;
@@ -1579,6 +1671,9 @@ async function runFollowupContinuation(
         label: label.slice(0, 200),
         analysis_type: snap.analysis_type
     });
+    updateHealth(s => {
+        s.ux.lastFollowupSelectedAt = new Date().toISOString();
+    });
     logger.info('FOLLOWUP', 'FOLLOWUP_EXECUTION_STARTED', {
         user_id: userId,
         execution_type: 'followup',
@@ -1803,6 +1898,9 @@ async function handleDecisionButtonInteraction(interaction: any): Promise<void> 
         selectedOption,
         optionIndex: optIndex,
         options: options.slice(0, 4)
+    });
+    updateHealth(s => {
+        s.ux.lastDecisionSelectedAt = new Date().toISOString();
     });
 
     const decisionContext: Record<string, unknown> = {
@@ -2198,6 +2296,29 @@ client.on('interactionCreate', async (interaction: Interaction) => {
                 }
                 const txt = renderPlanItemsText(items, plan.plan_header, plan.fx_usdkrw);
                 await safeEditReply(interaction, txt.slice(0, 1990), 'panel:data:rebalance_view');
+                return;
+            }
+
+            if (cid === 'panel:system:check' || cid === 'panel:system:detail' || cid === 'panel:system:actions') {
+                await safeDeferReply(interaction, { flags: 64 });
+                const r = analyzeLogs();
+                const raw =
+                    cid === 'panel:system:check'
+                        ? generateSystemReport(r)
+                        : cid === 'panel:system:detail'
+                          ? generateDetailView(r)
+                          : generateActionsView(r);
+                logger.info('DATA_CENTER', 'system_log_analysis', {
+                    customId: cid,
+                    status: r.systemStatus,
+                    issueCount: r.issues.length,
+                    warnCount: r.warnings.length
+                });
+                const chunks = splitDiscordMessage(raw, 1800);
+                await safeEditReply(interaction, chunks[0] || '_내용 없음_', `panel:system:${cid}`);
+                for (let i = 1; i < chunks.length; i++) {
+                    await interaction.followUp({ content: chunks[i], ephemeral: true }).catch(() => {});
+                }
                 return;
             }
 

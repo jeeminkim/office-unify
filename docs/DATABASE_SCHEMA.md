@@ -3,6 +3,8 @@
 ## 목적
 - 운영에 중요한 테이블 구조와 관계를 코드 관점으로 정리한다.
 - `schema.sql`/migration 파일과 실제 운영 DB가 다를 수 있으므로, 확인 필요 항목을 분리한다.
+- 런타임 **상태 파일**(DB 아님): `logs/office-health.json` — 패널 복구(`panels.*`), Discord UX 요약(`ux.*`, follow-up/decision 최근 시각). 스키마 마이그레이션 대상은 아님.
+- **로그 분석(`logAnalysisService`)**: DB 테이블 없이 `logs/` 파일을 읽어 진단만 수행. `system_health_history` 등 영구 저장은 미구현(최소 수정 원칙).
 
 ## 기준 파일
 - 기본 스키마: `schema.sql`

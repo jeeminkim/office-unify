@@ -180,10 +180,30 @@ export const healthState = {
     OPENAI_API_KEY: !!process.env.OPENAI_API_KEY
   },
   discord: { loginAttempted: false, ready: false, botTag: null as string | null, guildCount: 0, targetChannelResolved: false, lastError: null as string | null },
-  panels: { restoreAttempted: false, restoreSucceeded: false, mainPanelMessageId: null as string | null, lastPanelAction: null as string | null, panelErrorReason: null as string | null },
+  panels: {
+    restoreAttempted: false,
+    restoreSucceeded: false,
+    mainPanelMessageId: null as string | null,
+    lastPanelAction: null as string | null,
+    panelErrorReason: null as string | null,
+    lastPanelRestoreResult: null as 'success' | 'failed' | null,
+    panelRestoreFallbackUsed: false,
+    panelRecreated: false,
+    lastPanelRestoreAt: null as string | null
+  },
   interactions: { lastInteractionAt: null as string | null, lastInteractionType: null as string | null, lastCustomId: null as string | null },
   ai: { lastRoute: null as string | null, lastNoDataTriggered: false },
-  db: { lastContextError: null as string | null }
+  db: { lastContextError: null as string | null },
+  ux: {
+    lastFollowupDetectedAt: null as string | null,
+    lastFollowupType: null as string | null,
+    lastFollowupAttached: null as boolean | null,
+    lastFollowupSelectedAt: null as string | null,
+    lastDecisionSnapshotSavedAt: null as string | null,
+    lastDecisionAttached: null as boolean | null,
+    lastDecisionSelectedAt: null as string | null,
+    lastUiComponentPolicy: null as string | null
+  }
 };
 
 export function updateHealth(patchFn: (state: typeof healthState) => void) {

@@ -178,10 +178,16 @@
   - 메시지 2000자 초과 시 chunking
   - interaction route 실패 시 channel send fallback
 - Quote (다단계, 종목 단위):
-  - 1차 Yahoo **quote** → 2차 Yahoo **chart 일봉** 최근 유효 종가(EOD), 특히 **KR 장 마감 후** 종가 안정화
-  - 3차 DB 스냅샷/포트폴리오 행 fallback — 0/NaN/비정상 가격은 valuation 오염 방지
-  - `price_source_kind` / `QuotePriceSource`(`eod_krw` 등)로 환산 경로 분리; 스냅샷 `degraded_quote_mode`와 병행
-  - 이상치 guard로 과대평가 차단(기존 유지)
+  - 1차 Yahoo **`v7/finance/quote`** (브라우저형 `User-Agent` 등 헤더) → 실패 시 `QUOTE_RESOLUTION`에 `yahoo_v7_http_error`(status·401 등 분리)
+  - 2차 **`v8/finance/chart`** 일봉 EOD → 실패 시 `yahoo_chart_http_error`
+  - 3차 짧은 **메모리 TTL 캐시** → 4차 포트폴리오 행 **마지막 유효가** — 0/NaN·비정상 가격은 valuation 오염 방지·guard 유지
+  - `QuoteResult.request_failure_reason` / `is_stale`, `dominantFailureReason`으로 운영·AI 스냅샷에 지연 시세 명시 가능
+  - `price_source_kind` / `QuotePriceSource`로 환산 경로 분리; `degraded_quote_mode`는 “실시간 호가가 아닌 값 혼입” 의미에 맞춤
+- Discord 분석 브로드캐스트(`broadcastAgentResponse`):
+  - 컴포넌트 행 우선순위: **decision → follow-up → feedback** (최대 5행), 초과 시 `UI_COMPONENT_POLICY` 로그
+  - **NO_DATA**는 가능하면 **본문**에 안내(버튼 행 대신)하여 행 절약
+- `logs/office-health.json`: `panels.*`(패널 복구·폴백 채널), `ux.*`(follow-up/decision 최근 이벤트 시각)
+- **System operator (로컬)**: `logAnalysisService.ts` — `logs/daily/office-{error,ops,runtime}_*`, `logs/quote/quote.log_*`, `logs/interaction/interaction.log_*`, `logs/control-panel/control-panel.log_*`, `office-health.json`을 읽기 전용으로 집계·패턴 매칭. Discord `panel:system:check|detail|actions`로 Peter Thiel 스타일 진단 리포트 출력(LLM 호출 없음, 30초 캐시).
 - DB:
   - 일부 insert 확장 컬럼 실패 시 base 컬럼 fallback insert(`analysis_generation_trace`, `generationTraceRepository`)
   - `chat_history` insert 확장 컬럼 실패 시 레거시 컬럼만 재시도(`chatHistoryRepository.insertChatHistoryWithLegacyFallback`)
@@ -206,7 +212,7 @@
 - 비동기 후처리 경계:
   - claim/trace/memory 반영 실패는 사용자 응답 실패로 전파하지 않음(best-effort)
 - 상태 파일 경계:
-  - 패널 메시지 복구용 `state/discord-panel.json`
+  - 패널 메시지 복구용 `state/discord-panel.json` — 채널 미기록 시 `DISCORD_MAIN_PANEL_CHANNEL_ID` / `DEFAULT_CHANNEL_ID`로 폴백 후 재생성(`PANEL restore *` 로그)
 
 ## 확인 필요
 - 레포 `schema.sql`의 `chat_history.id` 표기와 운영 DB가 다를 수 있으므로, 배포 DB에서 실제 타입을 주기적으로 확인한다(코드 계약은 `integer`/`number`).

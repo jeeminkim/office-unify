@@ -65,6 +65,20 @@
 - [ ] 로그 `FOLLOWUP_PROMPT_DETECTED`, `FOLLOWUP_SELECTED` 또는 `FOLLOWUP_INPUT_SUBMITTED`, `FOLLOWUP_EXECUTION_COMPLETED`
 - [ ] 페르소나 응답에 기술 기호가 있을 때 **쉬운 설명** 보강 및 문장이 **완결** 형태로 끝나는지 확인(`postProcessPersonaOutputForDiscord` / `ensureCompleteResponse`)
 
+## 5g. 운영 안정화 (quote / 패널 / 로그 / 컴포넌트)
+- [ ] Yahoo 401 시 `yahoo_v7_http_error` / `yahoo_chart_http_error` 구조화 로그 및 종목별 `request_failure_reason`·`is_stale` 메타
+- [ ] 포트폴리오 메시지에 종목별 시세 출처·기준시각·stale 한 줄 표시
+- [ ] `DISCORD_MAIN_PANEL_CHANNEL_ID` 설정 후 state 비어 있어도 부팅 시 패널 복구·`PANEL restore *` 로그
+- [ ] 주간 리포트 스케줄러 idle 구간은 `office-ops`에 과도한 check/skip이 없음(기본 DEBUG)
+- [ ] `DECISION_SNAPSHOT_SAVED` / `FOLLOWUP_SNAPSHOT_SAVED` / `UI_COMPONENT_POLICY`(행 초과 시) 로그
+- [ ] `logs/office-health.json` `ux`·`panels` 필드 갱신
+
+## 5h. System operator (로그 분석)
+- [ ] 데이터 센터 **⚙ 시스템 상태 점검** 클릭 시 Peter Thiel 톤 리포트·`DATA_CENTER` `system_log_analysis` 로그
+- [ ] **상세 로그 요약** / **조치 방법** 버튼 동작, 긴 응답 시 follow-up 청크
+- [ ] `logAnalysisService`가 시세·패널·UX·ERROR 패턴을 반영한 `HEALTHY`/`DEGRADED`/`CRITICAL` 판정
+- [ ] 자동 조치 없음(읽기 전용 + 30초 캐시)
+
 ## 5b. 피드백 소프트 보정 (포트폴리오 토론)
 - [ ] `FEEDBACK_CALIBRATION` / `applied` 로그 및 `safetyFloorTriggered` 동작(RAY/HINDENBURG downside)
 - [ ] `persona_memory.confidence_calibration` 필드 누적(피드백·claim_feedback 반영 후)

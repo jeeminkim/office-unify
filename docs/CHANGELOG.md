@@ -35,6 +35,22 @@
 - ...
 ```
 
+## 2026-04-01
+
+### Added
+- **System operator (로그 분석)**: `logAnalysisService.ts` — `logs/` 읽기 전용 스캔·패턴 분류·Peter Thiel 스타일 리포트(`generateSystemReport` 등). Discord 데이터 센터 `panel:system:check|detail|actions`, 30초 캐시. 자동 매매·DB·kill 없음.
+
+### Changed
+- **Quote 안정화**: `quoteService.ts` — Yahoo JSON 요청에 브라우저형 헤더; `yahoo_v7_http_error` / `yahoo_chart_http_error` 로그; `dominantFailureReason`, `QuoteResult.request_failure_reason` / `is_stale`; EOD·DB fallback 라벨 정리.
+- **포트폴리오 표시**: `portfolioService.ts` / `portfolioUx.ts` — 종목별 시세 출처·기준시각·stale·실패유형 한 줄; `quote_quality_note`·`quote_quality_degraded_summary` 로그.
+- **메인 패널**: `panelManager.ts` — `DISCORD_MAIN_PANEL_CHANNEL_ID` / `DEFAULT_CHANNEL_ID` 폴백 채널; state 저장 재시도; `PANEL restore *` 로그; `logger.ts` health `panels.*` 확장.
+- **스케줄러**: `index.ts` 주간 리포트 매시간 check/skip → `logger.debug` (ops 노이즈 감소).
+- **Discord UX 관측성**: `index.ts` — `prioritizeDiscordComponentRows`(5행), NO_DATA 본문 우선, `DECISION_*` / `FOLLOWUP_*` 스냅샷·부착·스킵 로그, `UI_COMPONENT_POLICY`/`healthState.ux`.
+- **토론 입력**: `runPortfolioDebateAppService.ts` — `[QUOTE_QUALITY]` 블록(지연 시세 시).
+
+### Docs
+- `README.md`, `docs/SYSTEM_ARCHITECTURE.md`, `docs/OPERATIONS_RUNBOOK.md`, `docs/TEST_CHECKLIST.md`, `docs/DATABASE_SCHEMA.md` — system operator·로그 분석·DB 비저장 정책 반영.
+
 ## 2026-03-30
 
 ### Added

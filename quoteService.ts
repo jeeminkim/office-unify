@@ -38,6 +38,10 @@ export type QuoteResult = {
   price_asof?: string | null;
   market_state?: 'open' | 'closed' | 'unknown';
   fallback_reason?: string | null;
+  /** Yahoo live 경로 실패 시 지배적 HTTP/네트워크 분류(보조) */
+  request_failure_reason?: QuoteFailureReason | null;
+  /** live·단기 캐시가 아닌 종가/DB/스냅샷 등 지연 가격 여부 */
+  is_stale?: boolean;
 };
 
 export type QuoteFailureReason =
@@ -131,6 +135,22 @@ function addFailureBreakdown(target: QuoteFailureBreakdown, reason: QuoteFailure
   else target.unknownError = (target.unknownError || 0) + 1;
 }
 
+/** 여러 후보 시도 후 가장 많이 발생한 실패 유형(운영·AI 컨텍스트용) */
+export function dominantFailureReason(b: QuoteFailureBreakdown): QuoteFailureReason | null {
+  const pairs: [QuoteFailureReason, number][] = [
+    ['unauthorized_401', b.unauthorized401 || 0],
+    ['forbidden_403', b.forbidden403 || 0],
+    ['not_found_404', b.notFound404 || 0],
+    ['rate_limited_429', b.rateLimited429 || 0],
+    ['server_error_5xx', b.serverError5xx || 0],
+    ['timeout', b.timeout || 0],
+    ['network_error', b.networkError || 0],
+    ['unknown_error', b.unknownError || 0]
+  ];
+  pairs.sort((a, b) => b[1] - a[1]);
+  return pairs[0][1] > 0 ? pairs[0][0] : null;
+}
+
 export function mergeFailureBreakdown(list: QuoteFailureBreakdown[]): QuoteFailureBreakdown {
   const out: QuoteFailureBreakdown = {};
   for (const b of list) {
@@ -202,13 +222,45 @@ export function getKrMarketSession(): 'open' | 'closed' {
   return 'closed';
 }
 
+/** Yahoo Finance JSON API — 브라우저에 가까운 헤더로 401·차단 완화 시도 */
+const YAHOO_JSON_HEADERS: Record<string, string> = {
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  Accept: 'application/json,text/plain,*/*',
+  'Accept-Language': 'en-US,en;q=0.9',
+  'Cache-Control': 'no-cache',
+  Pragma: 'no-cache'
+};
+
+async function yahooJsonGet(url: string): Promise<{ ok: boolean; status: number; json: any }> {
+  const res = await fetch(url, { headers: YAHOO_JSON_HEADERS });
+  const status = res.status;
+  let json: any = null;
+  try {
+    json = await res.json();
+  } catch {
+    json = null;
+  }
+  return { ok: res.ok, status, json };
+}
+
 async function fetchYahooChartLastDailyClose(
-  yahooSymbol: string
+  yahooSymbol: string,
+  traceId?: string
 ): Promise<{ price: number; currency: string; tsSec: number } | null> {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?range=5d&interval=1d`;
-  const res = await fetch(url);
-  if (!res.ok) return null;
-  const json: any = await res.json();
+  const { ok, status, json } = await yahooJsonGet(url);
+  if (!ok) {
+    const classified = classifyByStatus(status);
+    logger.info('QUOTE_RESOLUTION', 'yahoo_chart_http_error', {
+      traceId: traceId || null,
+      endpoint: 'v8_chart',
+      symbol: yahooSymbol,
+      status,
+      classifiedReason: classified
+    });
+    return null;
+  }
   const result = json?.chart?.result?.[0];
   if (!result) return null;
   const closes = result?.indicators?.quote?.[0]?.close as number[] | undefined;
@@ -225,11 +277,20 @@ async function fetchYahooChartLastDailyClose(
   return null;
 }
 
-async function fetchYahooPrice(yahooSymbol: string): Promise<{ price: number; currency: string } | null> {
+async function fetchYahooPrice(yahooSymbol: string, traceId: string): Promise<{ price: number; currency: string } | null> {
   const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(yahooSymbol)}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const json: any = await res.json();
+  const { ok, status, json } = await yahooJsonGet(url);
+  if (!ok) {
+    const classified = classifyByStatus(status);
+    logger.info('QUOTE_RESOLUTION', 'yahoo_v7_http_error', {
+      traceId,
+      endpoint: 'v7_quote',
+      symbol: yahooSymbol,
+      status,
+      classifiedReason: classified
+    });
+    throw new Error(`HTTP ${status}`);
+  }
   const item = json?.quoteResponse?.result?.[0];
   const price = Number(item?.regularMarketPrice);
   const currency = String(item?.currency || '').toUpperCase();
@@ -310,7 +371,9 @@ export async function getLatestQuote(
         price_source_kind: 'cache',
         price_asof: new Date(cached.fetchedAtMs).toISOString(),
         market_state: krSession === 'unknown' ? 'unknown' : krSession,
-        fallback_reason: null
+        fallback_reason: null,
+        request_failure_reason: null,
+        is_stale: false
       };
       logger.info('QUOTE', 'quote request completed', {
         traceId,
@@ -333,7 +396,7 @@ export async function getLatestQuote(
     const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(candidate)}`;
     const requestStarted = Date.now();
     try {
-      const fetched = await fetchYahooPrice(candidate);
+      const fetched = await fetchYahooPrice(candidate, traceId);
       if (fetched) {
         quoteCache.set(cacheKey, { ...fetched, fetchedAtMs: now });
         const latencyMs = Date.now() - requestStarted;
@@ -388,7 +451,9 @@ export async function getLatestQuote(
           price_source_kind: 'live',
           price_asof: new Date().toISOString(),
           market_state: krSession === 'unknown' ? 'unknown' : krSession,
-          fallback_reason: null
+          fallback_reason: null,
+          request_failure_reason: null,
+          is_stale: false
         };
         logger.info('QUOTE', 'quote request completed', {
           traceId,
@@ -462,7 +527,7 @@ export async function getLatestQuote(
     const candidate = candidates[i];
     const cacheKey = `${market}:${candidate}`;
     try {
-      const eod = await fetchYahooChartLastDailyClose(candidate);
+      const eod = await fetchYahooChartLastDailyClose(candidate, traceId);
       if (eod && Number.isFinite(eod.price) && eod.price > 0) {
         quoteCache.set(cacheKey, { price: eod.price, currency: eod.currency, fetchedAtMs: now });
         attempts.push({
@@ -490,6 +555,7 @@ export async function getLatestQuote(
         const asof =
           eod.tsSec > 0 ? new Date(eod.tsSec * 1000).toISOString() : new Date().toISOString();
         const ps: QuotePriceSource = eod.currency === 'KRW' ? 'eod_krw' : 'eod_usd';
+        const domLive = dominantFailureReason(failureBreakdown);
         return {
           price: eod.price,
           currency: eod.currency,
@@ -504,7 +570,9 @@ export async function getLatestQuote(
           price_source_kind: 'eod',
           price_asof: asof,
           market_state: krSession === 'unknown' ? 'unknown' : krSession,
-          fallback_reason: 'yahoo_chart_1d'
+          fallback_reason: 'live_failed_then_yahoo_chart_eod',
+          request_failure_reason: domLive,
+          is_stale: true
         };
       }
     } catch {
@@ -515,6 +583,7 @@ export async function getLatestQuote(
   const fallback = Number(fallbackPrice);
   if (Number.isFinite(fallback) && fallback > 0) {
     const fc = (fallbackCurrency || (market === 'US' ? 'USD' : 'KRW')).toUpperCase();
+    const domLive = dominantFailureReason(failureBreakdown);
     const result: QuoteResult = {
       price: fallback,
       currency: fc,
@@ -530,7 +599,9 @@ export async function getLatestQuote(
       price_source_kind: 'fallback',
       price_asof: null,
       market_state: krSession === 'unknown' ? 'unknown' : krSession,
-      fallback_reason: 'portfolio_row_snapshot'
+      fallback_reason: 'fallback_2_db_or_row_last_known',
+      request_failure_reason: domLive,
+      is_stale: true
     };
     logger.info('QUOTE_RESOLUTION', 'cache_fallback_used', {
       traceId,
@@ -561,6 +632,7 @@ export async function getLatestQuote(
     });
     return result;
   }
+  const domLive = dominantFailureReason(failureBreakdown);
   const result: QuoteResult = {
     price: null,
     currency: (fallbackCurrency || (market === 'US' ? 'USD' : 'KRW')).toUpperCase(),
@@ -575,7 +647,9 @@ export async function getLatestQuote(
     price_source_kind: 'fallback',
     price_asof: null,
     market_state: krSession === 'unknown' ? 'unknown' : krSession,
-    fallback_reason: 'all_sources_failed'
+    fallback_reason: 'all_sources_failed',
+    request_failure_reason: domLive,
+    is_stale: true
   };
   logger.warn('QUOTE', 'quote request degraded', {
     traceId,

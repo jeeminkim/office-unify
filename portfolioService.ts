@@ -3,8 +3,10 @@ import { logger } from './logger';
 import {
   getLatestQuote,
   mergeFailureBreakdown,
+  dominantFailureReason,
   type QuotePriceSource,
-  type PriceSourceKind
+  type PriceSourceKind,
+  type QuoteFailureReason
 } from './quoteService';
 import { getUsdKrwRate } from './fxService';
 import { normalizePortfolioInstrument } from './instrumentRegistry';
@@ -56,6 +58,8 @@ export type PortfolioPositionSnapshot = {
   quote_price_asof?: string | null;
   quote_market_state?: 'open' | 'closed' | 'unknown';
   quote_fallback_reason?: string | null;
+  quote_is_stale?: boolean;
+  quote_request_failure_reason?: QuoteFailureReason | null;
   /** 전체 합산(scope ALL) 시 동일 심볼·다계좌 분해 */
   account_breakdown?: AccountBreakdownEntry[];
 };
@@ -80,6 +84,9 @@ export type PortfolioSnapshot = {
     /** 요약 한 줄: 가격 기준 시각 등 */
     price_basis_hint?: string;
     partial_quote_warning?: string;
+    stale_quote_position_count?: number;
+    quote_dominant_failure?: QuoteFailureReason | null;
+    quote_quality_note?: string;
   };
   positions: PortfolioPositionSnapshot[];
 };
@@ -360,7 +367,9 @@ async function computePositionForRow(
     quote_price_source_kind: q.price_source_kind,
     quote_price_asof: q.price_asof ?? null,
     quote_market_state: q.market_state,
-    quote_fallback_reason: q.fallback_reason ?? null
+    quote_fallback_reason: q.fallback_reason ?? null,
+    quote_is_stale: q.is_stale === true,
+    quote_request_failure_reason: q.request_failure_reason ?? null
   };
 }
 
@@ -428,7 +437,10 @@ function mergePositionsBySymbol(
       market_value_usd: base.market === 'US' ? round2(mvUsd) : null,
       current_price_usd: base.market === 'US' ? base.current_price_usd : null,
       account_breakdown: breakdown,
-      account_id: null
+      account_id: null,
+      quote_is_stale: group.some(g => g.quote_is_stale),
+      quote_request_failure_reason:
+        group.map(g => g.quote_request_failure_reason).find(Boolean) ?? null
     });
   }
   return out;
@@ -522,16 +534,29 @@ export async function buildPortfolioSnapshot(
   }
   const eodN = sorted.filter(p => p.quote_price_source_kind === 'eod').length;
   const fbN = sorted.filter(p => p.quote_price_source_kind === 'fallback').length;
+  const staleN = sorted.filter(p => p.quote_is_stale).length;
+  const statusBreakdownTotal = mergeFailureBreakdown(quoteStats.breakdowns);
+  const quoteDominantFailure = dominantFailureReason(statusBreakdownTotal);
   const partialLines: string[] = [];
   if (eodN > 0) {
     partialLines.push(
-      `· Yahoo 일봉 종가(최근 5거래일) 사용: **${eodN}**종목 (장 마감 후 등 안정 조회)`
+      `· **fallback-1**: Yahoo 일봉 종가(EOD) — **${eodN}**종목 (실시간 호가 실패 시)`
     );
   }
   if (fbN > 0) {
-    partialLines.push(`· 실시간/차트 실패 후 **저장 스냅샷·매수가** 기준: **${fbN}**종목`);
+    partialLines.push(`· **fallback-2/3**: DB·행에 저장된 **마지막 유효가·매수가** 기준 — **${fbN}**종목`);
+  }
+  if (staleN > 0) {
+    partialLines.push(`· **지연 가격(stale)**: **${staleN}**종목 — 실시간 시세가 아닐 수 있음`);
+  }
+  if (quoteDominantFailure) {
+    partialLines.push(`· 실시간 조회 실패 유형(다수): **${quoteDominantFailure}**`);
   }
   const partial_quote_warning = partialLines.length > 0 ? partialLines.join('\n') : undefined;
+  const quote_quality_note =
+    staleN > 0 || quoteStats.degraded > 0
+      ? `일부 종목은 EOD·캐시·DB 스냅샷 등 지연 가격이 포함될 수 있습니다. 위원회·리스크 판단 시 시세 시점을 고려하세요.`
+      : undefined;
 
   const snapshot: PortfolioSnapshot = {
     meta: {
@@ -550,7 +575,10 @@ export async function buildPortfolioSnapshot(
       quote_failure_count: quoteStats.failed,
       degraded_quote_mode: quoteStats.degraded > 0,
       price_basis_hint,
-      partial_quote_warning
+      partial_quote_warning,
+      stale_quote_position_count: staleN,
+      quote_dominant_failure: quoteDominantFailure,
+      quote_quality_note
     },
     positions: sorted
   };
@@ -579,9 +607,11 @@ export async function buildPortfolioSnapshot(
       top_failed_symbols: topFailedSymbols,
       status_breakdown_total: statusBreakdownTotal
     });
-    logger.warn('QUOTE', 'degraded quote mode used', {
+    logger.warn('QUOTE', 'quote_quality_degraded_summary', {
       discordUserId,
       degradedCount: quoteStats.degraded,
+      staleCount: staleN,
+      dominant_failure: quoteDominantFailure,
       row_quote_details: quoteStats.rowDetails.slice(0, 20)
     });
   }

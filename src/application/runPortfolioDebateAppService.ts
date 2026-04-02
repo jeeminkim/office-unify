@@ -136,7 +136,10 @@ export async function runPortfolioDebateAppService(params: {
       usWeightPct: snapshot.summary.us_weight_pct
     });
     const modePrompt = `[USER_MODE]\n${mode}\nSAFE=보수적, BALANCED=중립, AGGRESSIVE=공격적 기준을 답변 강도에 반영하라.`;
-    const snapshotPrompt = `[PORTFOLIO_SNAPSHOT]\n${JSON.stringify(snapshot, null, 2)}\n위 스냅샷을 기준으로만 자산배분/리스크/리밸런싱을 논의하라.`;
+    const quoteQualityBlock = snapshot.summary.quote_quality_note
+      ? `\n[QUOTE_QUALITY]\n${snapshot.summary.quote_quality_note}\n`
+      : '';
+    const snapshotPrompt = `[PORTFOLIO_SNAPSHOT]\n${JSON.stringify(snapshot, null, 2)}${quoteQualityBlock}\n위 스냅샷을 기준으로만 자산배분/리스크/리밸런싱을 논의하라. 시세가 stale/EOD/DB 기반이면 그 한계를 서술에 반영하라.`;
     const partialScope =
       hasPortfolio && !anchorState.hasLifestyle
         ? [

@@ -222,6 +222,29 @@ KR 종목은 조회 시 **`quote_symbol` 보정**(예: KOSPI→`.KS`, KOSDAQ→`
 - 기술 지표·기호가 감지되면 **전문 분석 유지 + 쉬운 설명(2~3문장) + 의미 요약**을 자동 보강한다.
 - `ensureCompleteResponse`로 `마무리(한 줄)` placeholder, `...` 같은 미완결 문장을 정리하고 결론형 문장으로 마감한다.
 
+## Quote fallback & 운영 표시
+
+- **계층**: (1) Yahoo `v7/finance/quote` 실시간·지연 호가 → (2) `v8/finance/chart` 일봉 EOD → (3) 메모리 TTL 캐시(짧음) → (4) 포트폴리오 행에 저장된 **마지막 유효가**(fallback) — `abnormal valuation guard` 유지.
+- **401 등 실패**: 브라우저에 가까운 `User-Agent` 등 헤더로 호출; 실패 유형은 `QUOTE_RESOLUTION`의 `yahoo_v7_http_error` / `yahoo_chart_http_error` 및 종목별 `failureBreakdown`으로 구분.
+- **표시**: 종목 블록에 시세 출처(`live`/`eod`/`cache`/`fallback`)·기준시각·`stale`·실패 유형 요약. `degraded_quote_mode`는 “실시간 호가가 아닌 값이 섞임”에 가깝게 쓰인다.
+
+## 메인 패널 복구
+
+- `state/discord-panel.json`에 채널이 없으면 환경변수 **`DISCORD_MAIN_PANEL_CHANNEL_ID`** 또는 **`DEFAULT_CHANNEL_ID`** 로 폴백 후 메시지 재생성.
+- 로그: `PANEL restore start` / `PANEL restore fallback_channel_used` / `PANEL restore success` / `PANEL restore recreated` / `PANEL restore failed`.
+- `logs/office-health.json`의 `panels.lastPanelRestoreResult`, `panelRestoreFallbackUsed`, `panelRecreated` 참고.
+
+## 스케줄러·관측 로그
+
+- 주간 리포트 **매시간 체크·스킵**은 기본적으로 `logger.debug` (조건 미충족) — `office-ops` 노이즈 감소. 실제 생성·오류는 기존 INFO/WARN/ERROR 유지.
+- Follow-up / Decision: `DECISION_SNAPSHOT_SAVED`, `DECISION_COMPONENT_ATTACHED`, `FOLLOWUP_SNAPSHOT_SAVED`, `FOLLOWUP_COMPONENT_ATTACHED`, 스킵 시 `*_COMPONENT_SKIPPED`(사유), Discord 행 초과 시 `UI_COMPONENT_POLICY`. `healthState.ux`에 최근 이벤트 시각 요약.
+
+## System operator (Peter Thiel) — 로그 분석
+
+- **`logAnalysisService.ts`**: `logs/` 하위 일별·카테고리 로그와 `office-health.json`을 **읽기 전용**으로 스캔(최근 약 30분 윈도·파일 꼬리). 시세·패널·스케줄러·인터랙션·ERROR 패턴을 분류해 `HEALTHY` / `DEGRADED` / `CRITICAL` 판정.
+- **Discord**: 데이터 센터 패널 **`⚙️ 시스템 상태 점검`** (`panel:system:check`) — Peter Thiel 톤의 운영 리포트. **`📋 상세 로그 요약`**, **`🛠 조치 방법`**은 같은 분석 결과의 다른 뷰.
+- **자동 조치 없음** (kill·DB 쓰기 금지). 권고·설명만 제공. 결과는 **30초 캐시**로 디스크 부하 완화.
+
 ### Feedback → 의사결정 소프트 보정 (포트폴리오 5인 토론)
 
 - **목적**: 저장된 피드백·claim 메타로 **claim 가중(소폭)** 및 CIO 종합 시 **우선순위/모니터링 서술**만 보정. **NO_DATA 게이트·시세/밸류에이션 가드·Phase2 veto·GO/HOLD 결론 자체를 뒤집지 않음.**

@@ -1,4 +1,4 @@
-import { classifyQuoteError, mergeFailureBreakdown } from './quoteService';
+import { classifyQuoteError, mergeFailureBreakdown, dominantFailureReason } from './quoteService';
 
 function assertCondition(cond: boolean, message: string) {
   if (!cond) throw new Error(message);
@@ -25,6 +25,7 @@ function runBreakdownMergeChecks() {
   assertCondition((merged.rateLimited429 || 0) === 3, '429 merge failed');
   assertCondition((merged.networkError || 0) === 2, 'network merge failed');
   assertCondition((merged.notFound404 || 0) === 4, '404 merge failed');
+  assertCondition(dominantFailureReason({ unauthorized401: 5, rateLimited429: 2 }) === 'unauthorized_401', 'dominant failed');
 }
 
 function runBackwardCompatibilityChecks() {
