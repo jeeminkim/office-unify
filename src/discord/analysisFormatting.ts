@@ -40,8 +40,7 @@ export function normalizeProviderOutputForDiscord(params: { text: string; provid
     t = '응답 생성이 불안정하여 핵심 요약으로 대체합니다. 잠시 후 다시 시도해 주세요.';
   }
   if (t.length < 40) {
-    logger.warn('UX', 'too short provider response handled', { provider, personaKey, length: t.length });
-    t = `${t}\n\n- 위 응답이 너무 짧아 핵심 요약이 제한될 수 있습니다.`;
+    logger.warn('UX', 'too short provider response', { provider, personaKey, length: t.length });
   }
   if (t.length > 2600 && !t.startsWith('##')) {
     t = `## 핵심 요약\n${t.slice(0, 500)}\n\n## 상세 내용\n${t}`;

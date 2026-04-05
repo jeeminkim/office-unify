@@ -51,12 +51,15 @@ import type { AgentGenCaps, ProviderGenerationResult } from '../../analysisTypes
 import { getModelForTask } from '../../llmProviderService';
 import {
   buildPortfolioBaseContext,
+  buildPortfolioFastPersonaPromptBundle,
   buildPersonaContext,
+  buildPersonaReasoningStructureBlock,
   buildTaskPrompt,
   compressPersonaOutputsForCio,
   estimateTokensApprox,
   truncateUtf8Chars
 } from './promptCompressionPortfolio';
+import { buildPortfolioQualityRetryAppend, portfolioPersonaMeetsQualityFloor } from './portfolioPersonaQualityGuard';
 
 const PORTFOLIO_SEGMENT_META: Partial<Record<PersonaKey, { agentName: string; avatarUrl: string }>> = {
   RAY: {
@@ -83,7 +86,28 @@ const PORTFOLIO_SEGMENT_META: Partial<Record<PersonaKey, { agentName: string; av
 
 const GEM_PERSONA_CAPS: AgentGenCaps = { maxOutputTokens: 480, temperature: 0.35 };
 const GEM_CIO_CAPS: AgentGenCaps = { maxOutputTokens: 290, temperature: 0.28 };
+/** fast 경로: 구조·근거 유지용으로 출력 상한만 소폭 상향 */
+const GEM_FAST_PERSONA_CAPS: AgentGenCaps = { maxOutputTokens: 720, temperature: 0.35 };
+const GEM_FAST_CIO_CAPS: AgentGenCaps = { maxOutputTokens: 520, temperature: 0.28 };
 const OPENAI_PERSONA_CAPS = { maxOutputTokens: 450, temperature: 0.35 };
+
+async function runWithPortfolioQualityRetry<T>(params: {
+  personaKey: PersonaKey;
+  basePrompt: string;
+  maxAttempts?: number;
+  invoke: (fullPrompt: string) => Promise<T>;
+  getText: (result: T) => string;
+}): Promise<T> {
+  const max = params.maxAttempts ?? 3;
+  let last = await params.invoke(params.basePrompt);
+  if (portfolioPersonaMeetsQualityFloor(params.personaKey, params.getText(last))) return last;
+  for (let a = 1; a < max; a++) {
+    const p = `${params.basePrompt}${buildPortfolioQualityRetryAppend(params.personaKey, a - 1)}`;
+    last = await params.invoke(p);
+    if (portfolioPersonaMeetsQualityFloor(params.personaKey, params.getText(last))) return last;
+  }
+  return last;
+}
 
 export type PortfolioDebateSegment = {
   key: PersonaKey;
@@ -173,7 +197,8 @@ async function preparePortfolioFastCommittee(params: {
     partialScopeBlock: params.partialScopeFast || undefined,
     profileOneLiner: profileOneLiner || undefined,
     quoteQualityBlock: quoteQualityPlain || undefined,
-    compressionMode: 'aggressive_compressed'
+    compressionMode: 'aggressive_compressed',
+    fastModeQualityFloor: true
   });
   const compressedBase = `${compressedBaseCore}\n[ADVISORY_ONLY] 자동 주문·자동 매매 없음. 조언·정보 목적.`;
   const memDir = (k: (typeof keys)[number]) => {
@@ -315,15 +340,22 @@ export async function runPortfolioDebateAppService(params: {
         partialScopeBlock: partialScopeFast || undefined,
         profileOneLiner: undefined,
         quoteQualityBlock: snapshot.summary.quote_quality_note || undefined,
-        compressionMode: 'aggressive_compressed'
+        compressionMode: 'aggressive_compressed',
+        fastModeQualityFloor: true
       });
-      const prompt = `${buildTaskPrompt('retry_summary')}\n[FAST_SUMMARY_ONLY]\n${partialSeg ? `[PRIOR_PARTIAL]\n${partialSeg}` : ''}${compressed}`;
+      const shortCioBase = `${buildTaskPrompt('cio_fast_executive')}\n${buildPersonaReasoningStructureBlock('CIO')}\n[FAST_CIO_ONLY]\n${partialSeg ? `[PRIOR_PARTIAL]\n${partialSeg}` : ''}${compressed}`;
       assertActiveExecution(ex, 'portfolio:short:pre_llm');
-      const raw = await generateGeminiResponse({
-        model: getModelForTask('RETRY_LIGHT'),
-        prompt,
-        maxOutputTokens: 240,
-        temperature: 0.35
+      const raw = await runWithPortfolioQualityRetry({
+        personaKey: 'CIO',
+        basePrompt: shortCioBase,
+        invoke: async p =>
+          generateGeminiResponse({
+            model: getModelForTask('RETRY_LIGHT'),
+            prompt: p,
+            maxOutputTokens: 560,
+            temperature: 0.35
+          }),
+        getText: r => r.text || ''
       });
       assertActiveExecution(ex, 'portfolio:short:post_llm');
       const summaryText = normalizeProviderOutputForDiscord({
@@ -435,7 +467,8 @@ export async function runPortfolioDebateAppService(params: {
         await cb({ key, agentName: m.agentName, avatarUrl: m.avatarUrl, text });
       };
 
-      const runNote = '[RETRY_SUMMARY_COMMITTEE]\n리스크 1인 + COO + CIO. 간결 bullet.\n';
+      const runNote =
+        '[RETRY_SUMMARY_COMMITTEE]\n리스크 1인 + COO + CIO. **사고 구조는 full과 동일**, 입력 컨텍스트만 압축.\n';
       let rayRes = SK('Ray Dalio (PB)');
       let hindenburgGen: ProviderGenerationResult = {
         text: SK('HINDENBURG_ANALYST'),
@@ -449,10 +482,15 @@ export async function runPortfolioDebateAppService(params: {
           personaKey: 'RAY',
           personaBiasDirective: '',
           memoryDirective: memDir('RAY'),
-          compressionMode: 'aggressive_compressed'
-        })}\n\n${buildTaskPrompt('persona_brevity')}`;
+          compressionMode: 'standard_compressed'
+        })}\n\n${buildPortfolioFastPersonaPromptBundle('RAY')}`;
         assertActiveExecution(ex, 'portfolio:retry:pre_ray');
-        const rayResRaw = await ray.analyze(rq, false, GEM_PERSONA_CAPS);
+        const rayResRaw = await runWithPortfolioQualityRetry({
+          personaKey: 'RAY',
+          basePrompt: rq,
+          invoke: p => ray.analyze(p, false, GEM_FAST_PERSONA_CAPS),
+          getText: (x: string) => x
+        });
         assertActiveExecution(ex, 'portfolio:retry:post_ray');
         rayRes = normalizeProviderOutputForDiscord({ text: rayResRaw, provider: 'gemini', personaKey: 'RAY' });
         collectPartialResult(ex, 'Ray Dalio (PB)', rayRes);
@@ -465,20 +503,27 @@ export async function runPortfolioDebateAppService(params: {
           personaKey: 'HINDENBURG',
           personaBiasDirective: '',
           memoryDirective: memDir('HINDENBURG'),
-          compressionMode: 'aggressive_compressed'
-        })}\n\n${buildTaskPrompt('persona_brevity')}`;
+          compressionMode: 'standard_compressed'
+        })}\n\n${buildPortfolioFastPersonaPromptBundle('HINDENBURG')}`;
         assertActiveExecution(ex, 'portfolio:retry:pre_hindenburg');
-        hindenburgGen = await generateWithPersonaProvider({
-          discordUserId: userId,
+        hindenburgGen = await runWithPortfolioQualityRetry({
           personaKey: 'HINDENBURG',
-          personaName: personaKeyToPersonaName('HINDENBURG'),
-          prompt: hq,
-          aiExecution: ex ?? undefined,
-          taskType: 'PERSONA_ANALYSIS',
-          generation: OPENAI_PERSONA_CAPS,
-          parallel_execution_used: false,
-          compressed_prompt_used: true,
-          fallbackToGemini: async () => asGeminiResult(await hindenburg.analyze(hq, false, GEM_PERSONA_CAPS))
+          basePrompt: hq,
+          invoke: prompt =>
+            generateWithPersonaProvider({
+              discordUserId: userId,
+              personaKey: 'HINDENBURG',
+              personaName: personaKeyToPersonaName('HINDENBURG'),
+              prompt,
+              aiExecution: ex ?? undefined,
+              taskType: 'PERSONA_ANALYSIS',
+              generation: OPENAI_PERSONA_CAPS,
+              parallel_execution_used: false,
+              compressed_prompt_used: true,
+              fallbackToGemini: async () =>
+                asGeminiResult(await hindenburg.analyze(prompt, false, GEM_FAST_PERSONA_CAPS))
+            }),
+          getText: g => g.text
         });
         assertActiveExecution(ex, 'portfolio:retry:post_hindenburg');
         hindenburgRes = normalizeProviderOutputForDiscord({
@@ -496,12 +541,17 @@ export async function runPortfolioDebateAppService(params: {
 
       let druckerRes = SK('Peter Drucker (COO)');
       if (committeePlan.runDrucker) {
-        const druckerCombinedLog = `${buildTaskPrompt('persona_brevity')}\n${compressPersonaOutputsForCio(
+        const druckerCombinedLog = `${buildPortfolioFastPersonaPromptBundle('DRUCKER')}\n${compressPersonaOutputsForCio(
           riskPeers.length ? riskPeers : [{ label: 'Risk', text: rayRes }],
           340
         )}${memDir('DRUCKER') ? `\n\n[MEMORY]\n${truncateUtf8Chars(memDir('DRUCKER'), 700)}` : ''}`;
         assertActiveExecution(ex, 'portfolio:retry:pre_drucker');
-        const druckerResRaw = await drucker.summarizeAndGenerateActions(false, druckerCombinedLog, GEM_PERSONA_CAPS);
+        const druckerResRaw = await runWithPortfolioQualityRetry({
+          personaKey: 'DRUCKER',
+          basePrompt: druckerCombinedLog,
+          invoke: p => drucker.summarizeAndGenerateActions(false, p, GEM_FAST_PERSONA_CAPS),
+          getText: (x: string) => x
+        });
         assertActiveExecution(ex, 'portfolio:retry:post_drucker');
         druckerRes = normalizeProviderOutputForDiscord({ text: druckerResRaw, provider: 'gemini', personaKey: 'DRUCKER' });
         collectPartialResult(ex, 'Peter Drucker (COO)', druckerRes);
@@ -511,11 +561,13 @@ export async function runPortfolioDebateAppService(params: {
       const cioPeers = [...riskPeers, { label: 'Drucker', text: druckerRes }];
       const tCioRetry = Date.now();
       assertActiveExecution(ex, 'portfolio:retry:pre_cio');
-      const cioResRaw = await cio.decide(
-        false,
-        `${buildTaskPrompt('persona_brevity')}\n[RETRY_SUMMARY_CIO]\n${compressPersonaOutputsForCio(cioPeers, 900)}${memDir('CIO') ? `\n\n[MEMORY]\n${truncateUtf8Chars(memDir('CIO'), 500)}` : ''}`,
-        GEM_CIO_CAPS
-      );
+      const cioBaseRetry = `${buildTaskPrompt('cio')}\n${buildPersonaReasoningStructureBlock('CIO')}\n[RETRY_SUMMARY_CIO]\n${compressPersonaOutputsForCio(cioPeers, 900)}${memDir('CIO') ? `\n\n[MEMORY]\n${truncateUtf8Chars(memDir('CIO'), 500)}` : ''}`;
+      const cioResRaw = await runWithPortfolioQualityRetry({
+        personaKey: 'CIO',
+        basePrompt: cioBaseRetry,
+        invoke: p => cio.decide(false, p, GEM_FAST_CIO_CAPS),
+        getText: (x: string) => x
+      });
       assertActiveExecution(ex, 'portfolio:retry:post_cio');
       const cioRes = normalizeProviderOutputForDiscord({ text: cioResRaw, provider: 'gemini', personaKey: 'CIO' });
       collectPartialResult(ex, 'Stanley Druckenmiller (CIO)', cioRes);
@@ -682,7 +734,8 @@ export async function runPortfolioDebateAppService(params: {
         await cb({ key, agentName: m.agentName, avatarUrl: m.avatarUrl, text });
       };
 
-      const lightNote = '[LIGHT_COMMITTEE_RETRY]\n가중치 기반 리스크 1인 + CIO. 핵심 bullet.\n';
+      const lightNote =
+        '[LIGHT_COMMITTEE_RETRY]\n가중치 기반 리스크 1인 + CIO. **사고 구조는 full과 동일**, 컨텍스트만 압축.\n';
       let rayRes = SK('Ray Dalio (PB)');
       let hindenburgGenLight: ProviderGenerationResult = {
         text: SK('HINDENBURG_ANALYST'),
@@ -696,10 +749,15 @@ export async function runPortfolioDebateAppService(params: {
           personaKey: 'RAY',
           personaBiasDirective: '',
           memoryDirective: memDir('RAY'),
-          compressionMode: 'aggressive_compressed'
-        })}\n\n${buildTaskPrompt('persona_brevity')}`;
+          compressionMode: 'standard_compressed'
+        })}\n\n${buildPortfolioFastPersonaPromptBundle('RAY')}`;
         assertActiveExecution(ex, 'portfolio:light:pre_ray');
-        const rayResRaw = await ray.analyze(rayQuery, false, GEM_PERSONA_CAPS);
+        const rayResRaw = await runWithPortfolioQualityRetry({
+          personaKey: 'RAY',
+          basePrompt: rayQuery,
+          invoke: p => ray.analyze(p, false, GEM_FAST_PERSONA_CAPS),
+          getText: (x: string) => x
+        });
         assertActiveExecution(ex, 'portfolio:light:post_ray');
         rayRes = normalizeProviderOutputForDiscord({ text: rayResRaw, provider: 'gemini', personaKey: 'RAY' });
         collectPartialResult(ex, 'Ray Dalio (PB)', rayRes);
@@ -712,20 +770,27 @@ export async function runPortfolioDebateAppService(params: {
           personaKey: 'HINDENBURG',
           personaBiasDirective: '',
           memoryDirective: memDir('HINDENBURG'),
-          compressionMode: 'aggressive_compressed'
-        })}\n\n${buildTaskPrompt('persona_brevity')}`;
+          compressionMode: 'standard_compressed'
+        })}\n\n${buildPortfolioFastPersonaPromptBundle('HINDENBURG')}`;
         assertActiveExecution(ex, 'portfolio:light:pre_hindenburg');
-        hindenburgGenLight = await generateWithPersonaProvider({
-          discordUserId: userId,
+        hindenburgGenLight = await runWithPortfolioQualityRetry({
           personaKey: 'HINDENBURG',
-          personaName: personaKeyToPersonaName('HINDENBURG'),
-          prompt: hq,
-          aiExecution: ex ?? undefined,
-          taskType: 'PERSONA_ANALYSIS',
-          generation: OPENAI_PERSONA_CAPS,
-          parallel_execution_used: false,
-          compressed_prompt_used: true,
-          fallbackToGemini: async () => asGeminiResult(await hindenburg.analyze(hq, false, GEM_PERSONA_CAPS))
+          basePrompt: hq,
+          invoke: prompt =>
+            generateWithPersonaProvider({
+              discordUserId: userId,
+              personaKey: 'HINDENBURG',
+              personaName: personaKeyToPersonaName('HINDENBURG'),
+              prompt,
+              aiExecution: ex ?? undefined,
+              taskType: 'PERSONA_ANALYSIS',
+              generation: OPENAI_PERSONA_CAPS,
+              parallel_execution_used: false,
+              compressed_prompt_used: true,
+              fallbackToGemini: async () =>
+                asGeminiResult(await hindenburg.analyze(prompt, false, GEM_FAST_PERSONA_CAPS))
+            }),
+          getText: g => g.text
         });
         assertActiveExecution(ex, 'portfolio:light:post_hindenburg');
         hindenburgRes = normalizeProviderOutputForDiscord({
@@ -742,14 +807,16 @@ export async function runPortfolioDebateAppService(params: {
       if (committeePlan.runHindenburg) riskPeersLight.push({ label: 'Hindenburg', text: hindenburgRes });
 
       const tCioLight = Date.now();
-      const cioResRaw = await cio.decide(
-        false,
-        `${buildTaskPrompt('persona_brevity')}\n[LIGHT_PATH]\n${compressPersonaOutputsForCio(
-          riskPeersLight.length ? riskPeersLight : [{ label: 'Risk', text: rayRes }],
-          900
-        )}${memDir('CIO') ? `\n\n[MEMORY]\n${truncateUtf8Chars(memDir('CIO'), 500)}` : ''}`,
-        GEM_CIO_CAPS
-      );
+      const cioBaseLight = `${buildTaskPrompt('cio')}\n${buildPersonaReasoningStructureBlock('CIO')}\n[LIGHT_PATH]\n${compressPersonaOutputsForCio(
+        riskPeersLight.length ? riskPeersLight : [{ label: 'Risk', text: rayRes }],
+        900
+      )}${memDir('CIO') ? `\n\n[MEMORY]\n${truncateUtf8Chars(memDir('CIO'), 500)}` : ''}`;
+      const cioResRaw = await runWithPortfolioQualityRetry({
+        personaKey: 'CIO',
+        basePrompt: cioBaseLight,
+        invoke: p => cio.decide(false, p, GEM_FAST_CIO_CAPS),
+        getText: (x: string) => x
+      });
       assertActiveExecution(ex, 'portfolio:light:post_cio');
       const cioRes = normalizeProviderOutputForDiscord({ text: cioResRaw, provider: 'gemini', personaKey: 'CIO' });
       collectPartialResult(ex, 'Stanley Druckenmiller (CIO)', cioRes);
