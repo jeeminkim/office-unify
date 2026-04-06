@@ -46,6 +46,16 @@
 ### Docs
 - 문서 canonical 체계 보호를 위한 `npm run docs:check` 추가 (`scripts/docs-check.ts`). `docs/DOCUMENTATION_POLICY.md` § 문서 린트 참고.
 
+## 2026-03-28 — portfolio quality & OpenAI compat
+
+### Changed
+- **프롬프트 압축 3단계**: `full_quality_priority`(포트폴리오 full 위원회)·`standard_compressed`(light_summary)·`aggressive_compressed`(retry_summary·short_summary 등); `runPortfolioDebateAppService.ts`·`preparePortfolioFastCommittee`·`promptCompressionPortfolio.ts`.
+- **품질 floor·관측**: `portfolioPersonaQualityGuard.ts` hybrid 판정·`AI_PERF` `portfolio_persona_quality`; 경로별 `qualityMeta`·`getModelActuallyUsed`(`runPortfolioDebateAppService.ts`). Gemini/OpenAI 출력 상한 상향(`GEM_*`·`OPENAI_PERSONA_CAPS`).
+- **OpenAI**: `buildOpenAiResponsesRequestBody` 단일 진입·`OPENAI_REQUEST_BODY_COMPAT_FINAL`; `openAiModelCapabilities` 모델 id 정규화.
+
+### Docs
+- `docs/ARCHITECTURE.md`, `docs/ANALYSIS_PIPELINE.md`, `docs/OPERATIONS.md`, `docs/TROUBLESHOOTING.md`, `README.md`(한 줄) — 압축 모드·품질 재생성·로그 필드·OpenAI 순서.
+
 ## 2026-03-28
 
 ### Added

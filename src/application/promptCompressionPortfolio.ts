@@ -1,9 +1,10 @@
 import type { PersonaKey } from '../../analysisTypes';
 import type { PortfolioSnapshot } from '../../portfolioService';
 
-/** 기본 위원 경로는 standard, timeout 재시도·짧은 트렌드 등은 aggressive */
-export type CompressedPromptMode = 'standard_compressed' | 'aggressive_compressed';
+/** full 위원회는 품질 우선, light는 standard, retry/short·FAST는 aggressive */
+export type CompressedPromptMode = 'full_quality_priority' | 'standard_compressed' | 'aggressive_compressed';
 
+const TOP_HOLDINGS_FULL = 22;
 const TOP_HOLDINGS_STANDARD = 18;
 const TOP_HOLDINGS_AGGRESSIVE = 10;
 
@@ -50,6 +51,34 @@ export function buildFastModeContextFloor(snapshot: PortfolioSnapshot): string {
   ].join('\n');
 }
 
+/** full_quality_priority: 상위 5종·KR/US·리스크·이벤트를 fast floor보다 풍부하게 */
+export function buildFullQualityContextFloor(snapshot: PortfolioSnapshot): string {
+  const s = snapshot.summary;
+  const top5 = [...snapshot.positions].sort((a, b) => b.weight_pct - a.weight_pct).slice(0, 5);
+  const lines = top5.map(
+    (p, i) =>
+      `${i + 1}) ${p.symbol} ${p.market} 비중${p.weight_pct.toFixed(1)}% 평가~${Math.round(p.market_value_krw / 1e6)}백만원 수익률${typeof p.return_pct === 'number' ? p.return_pct.toFixed(1) : 'n/a'}%`
+  );
+  const riskHint = `집중도(top3합) ${s.top3_weight_pct.toFixed(1)}% | 포트폴리오 누적수익률 ${s.total_return_pct.toFixed(2)}% | 총손익(원) 약 ${Math.round(s.total_pnl_krw)}${s.quote_failure_count ? ` | 시세조회실패 ${s.quote_failure_count}건` : ''}`;
+  const eventLine = truncateUtf8Chars(
+    String(
+      s.quote_quality_note ||
+        s.partial_quote_warning ||
+        s.price_basis_hint ||
+        '(스냅샷 시점 기준 별도 이벤트 메모 없음)'
+    ).replace(/\s+/g, ' '),
+    400
+  );
+  return [
+    '[FULL_QUALITY_CONTEXT_FLOOR — 상위 보유·지역·리스크·데이터 한 줄 풍부 유지; 역할 사고 구조는 변경 없음]',
+    '[TOP_HOLDINGS_TOP5]',
+    lines.length ? lines.join('\n') : '(보유 없음)',
+    `[REGION_WEIGHT] KR ${s.domestic_weight_pct.toFixed(1)}% / US ${s.us_weight_pct.toFixed(1)}%`,
+    `[RISK_OR_VOL_HINT] ${riskHint}`,
+    `[RECENT_OR_DATA] ${eventLine}`
+  ].join('\n');
+}
+
 export function buildPortfolioBaseContext(opts: {
   mode: string;
   userQuery: string;
@@ -65,18 +94,24 @@ export function buildPortfolioBaseContext(opts: {
 }): string {
   const { snapshot, userQuery, mode } = opts;
   const aggressive = opts.compressionMode === 'aggressive_compressed';
-  const topN = aggressive ? TOP_HOLDINGS_AGGRESSIVE : TOP_HOLDINGS_STANDARD;
-  const profileMax = aggressive ? 280 : 420;
-  const quoteMax = aggressive ? 200 : 320;
-  const userQMax = aggressive ? 1200 : 2000;
+  const fullQuality = opts.compressionMode === 'full_quality_priority';
+  const topN = aggressive ? TOP_HOLDINGS_AGGRESSIVE : fullQuality ? TOP_HOLDINGS_FULL : TOP_HOLDINGS_STANDARD;
+  const profileMax = aggressive ? 280 : fullQuality ? 480 : 420;
+  const quoteMax = aggressive ? 200 : fullQuality ? 400 : 320;
+  const userQMax = aggressive ? 1200 : fullQuality ? 2600 : 2000;
   const s = snapshot.summary;
   const positions = [...snapshot.positions].sort((a, b) => b.weight_pct - a.weight_pct).slice(0, topN);
   const posLines = positions.map(
     p =>
       `${p.symbol}|${p.market}|w${p.weight_pct.toFixed(1)}%|mvKRW~${Math.round(p.market_value_krw)}|px${p.current_price}${p.currency === 'USD' ? 'USD' : ''}`
   );
+  const modeTag = aggressive
+    ? 'aggressive'
+    : fullQuality
+      ? 'full_quality_priority'
+      : 'standard';
   const parts = [
-    aggressive ? '[BASE_CONTEXT — compressed:aggressive]' : '[BASE_CONTEXT — compressed:standard]',
+    `[BASE_CONTEXT — compressed:${modeTag}]`,
     `[USER_MODE] ${mode}`,
     opts.profileOneLiner ? `[PROFILE] ${truncateUtf8Chars(opts.profileOneLiner, profileMax)}` : '',
     `[PORTFOLIO_SUM] n=${s.position_count} mvKRW=${Math.round(s.total_market_value_krw)} pnlKRW=${Math.round(s.total_pnl_krw)} ret%=${s.total_return_pct.toFixed(2)} top3w%=${s.top3_weight_pct.toFixed(1)} KR%=${s.domestic_weight_pct.toFixed(1)} US%=${s.us_weight_pct.toFixed(1)}`,
@@ -88,7 +123,8 @@ export function buildPortfolioBaseContext(opts: {
     posLines.length ? posLines.join('\n') : '(none)',
     opts.partialScopeBlock ? `\n${opts.partialScopeBlock}` : '',
     opts.styleDirectiveBlock ? `\n${opts.styleDirectiveBlock}` : '',
-    opts.fastModeQualityFloor ? `\n${buildFastModeContextFloor(snapshot)}` : '',
+    fullQuality ? `\n${buildFullQualityContextFloor(snapshot)}` : '',
+    opts.fastModeQualityFloor && !fullQuality ? `\n${buildFastModeContextFloor(snapshot)}` : '',
     `[USER_QUESTION]\n${truncateUtf8Chars(userQuery, userQMax)}`,
     '[ANCHOR_RULE] 위 수치·스냅샷만 앵커. 없는 현금흐름/지출은 단정 금지.'
   ];
@@ -115,7 +151,10 @@ export function buildPersonaContext(opts: {
               ? '[PERSONA] CIO — 최종 GO/HOLD/NO'
               : `[PERSONA] ${opts.personaKey}`;
   const bias = opts.personaBiasDirective || '';
-  const memMax = opts.compressionMode === 'aggressive_compressed' ? 650 : 1100;
+  const memMax =
+    opts.compressionMode === 'aggressive_compressed' ? 650
+    : opts.compressionMode === 'full_quality_priority' ? 1300
+    : 1100;
   const mem = opts.memoryDirective ? truncateUtf8Chars(opts.memoryDirective, memMax) : '';
   return [role, bias, mem ? `[MEMORY]\n${mem}` : ''].filter(Boolean).join('\n');
 }
@@ -150,7 +189,7 @@ export function buildPortfolioFastPersonaPromptBundle(personaKey: PersonaKey): s
   const struct = buildPersonaReasoningStructureBlock(personaKey);
   const base =
     '[TASK — full 동등 사고 구조]\n' +
-    '**최소 4문장 이상**, **근거(수치·비중·스냅샷·시그널) 2개 이상** 포함, **판단·방향**을 명시.\n' +
+    '**최소 5문장(또는 동등 길이의 bullet)** 이상, **근거(수치·비중·스냅샷·시그널) 2개 이상** 포함, **판단·방향**을 명시.\n' +
     '장황한 서두는 피하되, 위 [REASONING_STRUCTURE] 단계를 생략하지 말 것.';
   return struct ? `${base}\n${struct}` : base;
 }

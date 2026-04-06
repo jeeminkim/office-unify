@@ -16,9 +16,14 @@ const DEFAULT_CAPS: OpenAiModelCapabilities = {
   supportsReasoningEffort: false
 };
 
-/** 정규화: 비교용 소문자 문자열(env에 버전 접미사가 붙어도 prefix로 판별) */
+/**
+ * 정규화: provider 접두사 제거 후 소문자 — `openai/gpt-5-mini` 등도 gpt-5* 로 인식.
+ */
 export function normalizeOpenAiModelId(model: string): string {
-  return String(model || '').trim().toLowerCase();
+  let m = String(model || '').trim().toLowerCase();
+  const slash = m.lastIndexOf('/');
+  if (slash >= 0) m = m.slice(slash + 1);
+  return m;
 }
 
 function capsForNormalizedId(norm: string): OpenAiModelCapabilities {

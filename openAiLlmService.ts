@@ -18,7 +18,8 @@ function openAiErrorSuggestsParamRejection(e: any): boolean {
   );
 }
 
-function buildResponsesCreateBody(params: {
+/** 단일 진입점: `responses.create` 직전 body는 항상 이 함수 결과만 사용한다. */
+export function buildOpenAiResponsesRequestBody(params: {
   model: string;
   input: unknown;
   maxOutputTokens?: number;
@@ -169,7 +170,7 @@ export async function generateOpenAiResponse(params: {
     throw new AiExecutionAbortedError('aborted before openai request');
   }
 
-  const { body: createBody, preRemovedParams, capabilityFlags } = buildResponsesCreateBody({
+  const { body: createBody, preRemovedParams, capabilityFlags } = buildOpenAiResponsesRequestBody({
     model: params.model,
     input,
     maxOutputTokens: params.maxOutputTokens,
@@ -199,6 +200,17 @@ export async function generateOpenAiResponse(params: {
     });
   }
 
+  logger.info('OPENAI', 'OPENAI_REQUEST_BODY_COMPAT_FINAL', {
+    traceId,
+    model: params.model,
+    personaKey: params.personaKey ?? null,
+    analysisType: params.analysisType ?? null,
+    payloadKeys: Object.keys(createBody),
+    hasTemperature: Object.prototype.hasOwnProperty.call(createBody, 'temperature'),
+    hasMaxOutputTokens: Object.prototype.hasOwnProperty.call(createBody, 'max_output_tokens'),
+    phase: 'primary'
+  });
+
   let response: any;
   try {
     response = await client.responses.create(createBody as any);
@@ -226,6 +238,16 @@ export async function generateOpenAiResponse(params: {
         firstError: errMsg.slice(0, 400)
       });
       try {
+        logger.info('OPENAI', 'OPENAI_REQUEST_BODY_COMPAT_FINAL', {
+          traceId,
+          model: params.model,
+          personaKey: params.personaKey ?? null,
+          analysisType: params.analysisType ?? null,
+          payloadKeys: Object.keys(compatBody),
+          hasTemperature: false,
+          hasMaxOutputTokens: false,
+          phase: 'compat_minimal'
+        });
         response = await client.responses.create(compatBody as any);
         logger.info('OPENAI', 'OPENAI_COMPAT_RETRY_SUCCEEDED', {
           traceId,

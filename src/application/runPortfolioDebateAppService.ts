@@ -48,7 +48,7 @@ import { assertActiveExecution } from '../discord/aiExecution/aiExecutionAbort';
 import { collectPartialResult } from '../discord/aiExecution/aiExecutionHelpers';
 import { generateGeminiResponse } from '../../geminiLlmService';
 import type { AgentGenCaps, ProviderGenerationResult } from '../../analysisTypes';
-import { getModelForTask } from '../../llmProviderService';
+import { getModelForTask, getPersonaModelConfig } from '../../llmProviderService';
 import {
   buildPortfolioBaseContext,
   buildPortfolioFastPersonaPromptBundle,
@@ -57,7 +57,8 @@ import {
   buildTaskPrompt,
   compressPersonaOutputsForCio,
   estimateTokensApprox,
-  truncateUtf8Chars
+  truncateUtf8Chars,
+  type CompressedPromptMode
 } from './promptCompressionPortfolio';
 import { runPortfolioPersonaWithQualityRetry } from './portfolioPersonaQualityGuard';
 
@@ -84,12 +85,12 @@ const PORTFOLIO_SEGMENT_META: Partial<Record<PersonaKey, { agentName: string; av
   }
 };
 
-const GEM_PERSONA_CAPS: AgentGenCaps = { maxOutputTokens: 480, temperature: 0.35 };
-const GEM_CIO_CAPS: AgentGenCaps = { maxOutputTokens: 290, temperature: 0.28 };
+const GEM_PERSONA_CAPS: AgentGenCaps = { maxOutputTokens: 768, temperature: 0.35 };
+const GEM_CIO_CAPS: AgentGenCaps = { maxOutputTokens: 420, temperature: 0.28 };
 /** fast 경로: 구조·근거 유지용으로 출력 상한만 소폭 상향 */
-const GEM_FAST_PERSONA_CAPS: AgentGenCaps = { maxOutputTokens: 720, temperature: 0.35 };
-const GEM_FAST_CIO_CAPS: AgentGenCaps = { maxOutputTokens: 520, temperature: 0.28 };
-const OPENAI_PERSONA_CAPS = { maxOutputTokens: 450, temperature: 0.35 };
+const GEM_FAST_PERSONA_CAPS: AgentGenCaps = { maxOutputTokens: 896, temperature: 0.35 };
+const GEM_FAST_CIO_CAPS: AgentGenCaps = { maxOutputTokens: 640, temperature: 0.28 };
+const OPENAI_PERSONA_CAPS = { maxOutputTokens: 600, temperature: 0.35 };
 
 export type PortfolioDebateSegment = {
   key: PersonaKey;
@@ -179,7 +180,7 @@ async function preparePortfolioFastCommittee(params: {
     partialScopeBlock: params.partialScopeFast || undefined,
     profileOneLiner: profileOneLiner || undefined,
     quoteQualityBlock: quoteQualityPlain || undefined,
-    compressionMode: 'aggressive_compressed',
+    compressionMode: params.runMode === 'light' ? 'standard_compressed' : 'aggressive_compressed',
     fastModeQualityFloor: true
   });
   const compressedBase = `${compressedBaseCore}\n[ADVISORY_ONLY] 자동 주문·자동 매매 없음. 조언·정보 목적.`;
@@ -327,17 +328,23 @@ export async function runPortfolioDebateAppService(params: {
       });
       const shortCioBase = `${buildTaskPrompt('cio_fast_executive')}\n${buildPersonaReasoningStructureBlock('CIO')}\n[FAST_CIO_ONLY]\n${partialSeg ? `[PRIOR_PARTIAL]\n${partialSeg}` : ''}${compressed}`;
       assertActiveExecution(ex, 'portfolio:short:pre_llm');
-      const raw = await runPortfolioPersonaWithQualityRetry({
+      const raw = await runPortfolioPersonaWithQualityRetry<ProviderGenerationResult>({
         personaKey: 'CIO',
         basePrompt: shortCioBase,
         analysisType,
         runMode: 'short_summary',
         executionId: ex?.executionId ?? null,
+        qualityMeta: {
+          compressionMode: 'aggressive_compressed',
+          maxOutputTokens: 640,
+          modelRequested: getModelForTask('RETRY_LIGHT')
+        },
+        getModelActuallyUsed: r => r.model,
         invoke: async p =>
           generateGeminiResponse({
             model: getModelForTask('RETRY_LIGHT'),
             prompt: p,
-            maxOutputTokens: 560,
+            maxOutputTokens: 640,
             temperature: 0.35
           }),
         getText: r => r.text || ''
@@ -454,6 +461,7 @@ export async function runPortfolioDebateAppService(params: {
 
       const runNote =
         '[RETRY_SUMMARY_COMMITTEE]\n리스크 1인 + COO + CIO. **사고 구조는 full과 동일**, 입력 컨텍스트만 압축.\n';
+      const RETRY_PERSONA_CM: CompressedPromptMode = 'aggressive_compressed';
       let rayRes = SK('Ray Dalio (PB)');
       let hindenburgGen: ProviderGenerationResult = {
         text: SK('HINDENBURG_ANALYST'),
@@ -467,7 +475,7 @@ export async function runPortfolioDebateAppService(params: {
           personaKey: 'RAY',
           personaBiasDirective: '',
           memoryDirective: memDir('RAY'),
-          compressionMode: 'standard_compressed'
+          compressionMode: RETRY_PERSONA_CM
         })}\n\n${buildPortfolioFastPersonaPromptBundle('RAY')}`;
         assertActiveExecution(ex, 'portfolio:retry:pre_ray');
         const rayResRaw = await runPortfolioPersonaWithQualityRetry({
@@ -476,6 +484,12 @@ export async function runPortfolioDebateAppService(params: {
           analysisType,
           runMode: 'retry_summary',
           executionId: ex?.executionId ?? null,
+          qualityMeta: {
+            compressionMode: RETRY_PERSONA_CM,
+            maxOutputTokens: GEM_FAST_PERSONA_CAPS.maxOutputTokens,
+            modelRequested: 'gemini-2.5-flash'
+          },
+          getModelActuallyUsed: () => 'gemini-2.5-flash',
           invoke: p => ray.analyze(p, false, GEM_FAST_PERSONA_CAPS),
           getText: (x: string) => x
         });
@@ -491,7 +505,7 @@ export async function runPortfolioDebateAppService(params: {
           personaKey: 'HINDENBURG',
           personaBiasDirective: '',
           memoryDirective: memDir('HINDENBURG'),
-          compressionMode: 'standard_compressed'
+          compressionMode: RETRY_PERSONA_CM
         })}\n\n${buildPortfolioFastPersonaPromptBundle('HINDENBURG')}`;
         assertActiveExecution(ex, 'portfolio:retry:pre_hindenburg');
         hindenburgGen = await runPortfolioPersonaWithQualityRetry({
@@ -500,6 +514,12 @@ export async function runPortfolioDebateAppService(params: {
           analysisType,
           runMode: 'retry_summary',
           executionId: ex?.executionId ?? null,
+          qualityMeta: {
+            compressionMode: RETRY_PERSONA_CM,
+            maxOutputTokens: OPENAI_PERSONA_CAPS.maxOutputTokens,
+            modelRequested: getPersonaModelConfig('HINDENBURG').model
+          },
+          getModelActuallyUsed: g => g.model,
           invoke: prompt =>
             generateWithPersonaProvider({
               discordUserId: userId,
@@ -544,6 +564,12 @@ export async function runPortfolioDebateAppService(params: {
           analysisType,
           runMode: 'retry_summary',
           executionId: ex?.executionId ?? null,
+          qualityMeta: {
+            compressionMode: RETRY_PERSONA_CM,
+            maxOutputTokens: GEM_FAST_PERSONA_CAPS.maxOutputTokens,
+            modelRequested: 'gemini-2.5-flash'
+          },
+          getModelActuallyUsed: () => 'gemini-2.5-flash',
           invoke: p => drucker.summarizeAndGenerateActions(false, p, GEM_FAST_PERSONA_CAPS),
           getText: (x: string) => x
         });
@@ -563,6 +589,12 @@ export async function runPortfolioDebateAppService(params: {
         analysisType,
         runMode: 'retry_summary',
         executionId: ex?.executionId ?? null,
+        qualityMeta: {
+          compressionMode: RETRY_PERSONA_CM,
+          maxOutputTokens: GEM_FAST_CIO_CAPS.maxOutputTokens,
+          modelRequested: 'gemini-2.5-flash'
+        },
+        getModelActuallyUsed: () => 'gemini-2.5-flash',
         invoke: p => cio.decide(false, p, GEM_FAST_CIO_CAPS),
         getText: (x: string) => x
       });
@@ -734,6 +766,7 @@ export async function runPortfolioDebateAppService(params: {
 
       const lightNote =
         '[LIGHT_COMMITTEE_RETRY]\n가중치 기반 리스크 1인 + CIO. **사고 구조는 full과 동일**, 컨텍스트만 압축.\n';
+      const LIGHT_PERSONA_CM: CompressedPromptMode = 'standard_compressed';
       let rayRes = SK('Ray Dalio (PB)');
       let hindenburgGenLight: ProviderGenerationResult = {
         text: SK('HINDENBURG_ANALYST'),
@@ -747,7 +780,7 @@ export async function runPortfolioDebateAppService(params: {
           personaKey: 'RAY',
           personaBiasDirective: '',
           memoryDirective: memDir('RAY'),
-          compressionMode: 'standard_compressed'
+          compressionMode: LIGHT_PERSONA_CM
         })}\n\n${buildPortfolioFastPersonaPromptBundle('RAY')}`;
         assertActiveExecution(ex, 'portfolio:light:pre_ray');
         const rayResRaw = await runPortfolioPersonaWithQualityRetry({
@@ -756,6 +789,12 @@ export async function runPortfolioDebateAppService(params: {
           analysisType,
           runMode: 'light',
           executionId: ex?.executionId ?? null,
+          qualityMeta: {
+            compressionMode: LIGHT_PERSONA_CM,
+            maxOutputTokens: GEM_FAST_PERSONA_CAPS.maxOutputTokens,
+            modelRequested: 'gemini-2.5-flash'
+          },
+          getModelActuallyUsed: () => 'gemini-2.5-flash',
           invoke: p => ray.analyze(p, false, GEM_FAST_PERSONA_CAPS),
           getText: (x: string) => x
         });
@@ -771,7 +810,7 @@ export async function runPortfolioDebateAppService(params: {
           personaKey: 'HINDENBURG',
           personaBiasDirective: '',
           memoryDirective: memDir('HINDENBURG'),
-          compressionMode: 'standard_compressed'
+          compressionMode: LIGHT_PERSONA_CM
         })}\n\n${buildPortfolioFastPersonaPromptBundle('HINDENBURG')}`;
         assertActiveExecution(ex, 'portfolio:light:pre_hindenburg');
         hindenburgGenLight = await runPortfolioPersonaWithQualityRetry({
@@ -780,6 +819,12 @@ export async function runPortfolioDebateAppService(params: {
           analysisType,
           runMode: 'light',
           executionId: ex?.executionId ?? null,
+          qualityMeta: {
+            compressionMode: LIGHT_PERSONA_CM,
+            maxOutputTokens: OPENAI_PERSONA_CAPS.maxOutputTokens,
+            modelRequested: getPersonaModelConfig('HINDENBURG').model
+          },
+          getModelActuallyUsed: g => g.model,
           invoke: prompt =>
             generateWithPersonaProvider({
               discordUserId: userId,
@@ -822,6 +867,12 @@ export async function runPortfolioDebateAppService(params: {
         analysisType,
         runMode: 'light',
         executionId: ex?.executionId ?? null,
+        qualityMeta: {
+          compressionMode: LIGHT_PERSONA_CM,
+          maxOutputTokens: GEM_FAST_CIO_CAPS.maxOutputTokens,
+          modelRequested: 'gemini-2.5-flash'
+        },
+        getModelActuallyUsed: () => 'gemini-2.5-flash',
         invoke: p => cio.decide(false, p, GEM_FAST_CIO_CAPS),
         getText: (x: string) => x
       });
@@ -830,7 +881,7 @@ export async function runPortfolioDebateAppService(params: {
       collectPartialResult(ex, 'Stanley Druckenmiller (CIO)', cioRes);
       await notifyLightSeg('CIO', cioRes);
       ex?.setPerfMetrics({
-        compressed_prompt_mode: 'aggressive_compressed',
+        compressed_prompt_mode: 'standard_compressed',
         retry_mode_used: 'light_summary',
         persona_parallel_wall_time_ms: 0,
         prompt_build_time_ms: null,
@@ -1104,6 +1155,7 @@ export async function runPortfolioDebateAppService(params: {
     const precomputedDruckerPreamble = `${personaBiasDirective('DRUCKER')}${styleDirectiveBlock}\n${buildPortfolioFastPersonaPromptBundle('DRUCKER')}`;
     const precomputedCioStyleBlock = `${personaBiasDirective('CIO')}${styleDirectiveBlock}`;
     const advisoryOnlyLine = '[ADVISORY_ONLY] 자동 주문·자동 매매 없음. 조언·정보 목적.';
+    const FULL_CM: CompressedPromptMode = 'full_quality_priority';
 
     const compressedBaseCore = buildPortfolioBaseContext({
       mode: modePromptLine,
@@ -1113,7 +1165,7 @@ export async function runPortfolioDebateAppService(params: {
       profileOneLiner: profileOneLiner || undefined,
       quoteQualityBlock: quoteQualityPlain || undefined,
       styleDirectiveBlock: styleDirectiveBlock || undefined,
-      compressionMode: 'standard_compressed'
+      compressionMode: FULL_CM
     });
     const compressedBase = `${compressedBaseCore}\n${advisoryOnlyLine}`;
     const prompt_build_time_ms = Date.now() - tPromptStart;
@@ -1133,7 +1185,7 @@ export async function runPortfolioDebateAppService(params: {
         personaKey: 'RAY',
         personaBiasDirective: personaBiasDirective('RAY'),
         memoryDirective: rayMemory,
-        compressionMode: 'standard_compressed'
+        compressionMode: FULL_CM
       })}\n\n${buildPortfolioFastPersonaPromptBundle('RAY')}`;
       assertActiveExecution(ex, 'portfolio:pre_ray');
       const rayResRaw = await runPortfolioPersonaWithQualityRetry({
@@ -1142,6 +1194,12 @@ export async function runPortfolioDebateAppService(params: {
         analysisType,
         runMode: 'full',
         executionId: ex?.executionId ?? null,
+        qualityMeta: {
+          compressionMode: FULL_CM,
+          maxOutputTokens: GEM_PERSONA_CAPS.maxOutputTokens,
+          modelRequested: 'gemini-2.5-flash'
+        },
+        getModelActuallyUsed: () => 'gemini-2.5-flash',
         invoke: p => ray.analyze(p, false, GEM_PERSONA_CAPS),
         getText: (x: string) => x
       });
@@ -1168,15 +1226,21 @@ export async function runPortfolioDebateAppService(params: {
         personaKey: 'HINDENBURG',
         personaBiasDirective: personaBiasDirective('HINDENBURG'),
         memoryDirective: hindenburgMemory,
-        compressionMode: 'standard_compressed'
+        compressionMode: FULL_CM
       })}\n\n${buildPortfolioFastPersonaPromptBundle('HINDENBURG')}`;
       assertActiveExecution(ex, 'portfolio:pre_hindenburg');
-      const hindGen = await runPortfolioPersonaWithQualityRetry({
+      const hindGen = await runPortfolioPersonaWithQualityRetry<ProviderGenerationResult>({
         personaKey: 'HINDENBURG',
         basePrompt: hq,
         analysisType,
         runMode: 'full',
         executionId: ex?.executionId ?? null,
+        qualityMeta: {
+          compressionMode: FULL_CM,
+          maxOutputTokens: OPENAI_PERSONA_CAPS.maxOutputTokens,
+          modelRequested: getPersonaModelConfig('HINDENBURG').model
+        },
+        getModelActuallyUsed: g => g.model,
         invoke: prompt =>
           generateWithPersonaProvider({
             discordUserId: userId,
@@ -1243,7 +1307,7 @@ export async function runPortfolioDebateAppService(params: {
       logger.info('AI_PERF', 'parallel_ray_hindenburg_window_ms', {
         persona_parallel_wall_time_ms,
         parallel_execution_used: true,
-        compressed_prompt_mode: 'standard_compressed'
+        compressed_prompt_mode: 'full_quality_priority'
       });
     } else if (committeePlan.runRay) {
       rayRes = await runRayExec();
@@ -1257,7 +1321,7 @@ export async function runPortfolioDebateAppService(params: {
       logger.info('AI_PERF', 'parallel_ray_hindenburg_window_ms', {
         persona_parallel_wall_time_ms,
         parallel_execution_used: false,
-        compressed_prompt_mode: 'standard_compressed'
+        compressed_prompt_mode: 'full_quality_priority'
       });
     } else if (committeePlan.runHindenburg) {
       rayRes = SK('Ray Dalio (PB)');
@@ -1276,7 +1340,7 @@ export async function runPortfolioDebateAppService(params: {
       logger.info('AI_PERF', 'parallel_ray_hindenburg_window_ms', {
         persona_parallel_wall_time_ms,
         parallel_execution_used: false,
-        compressed_prompt_mode: 'standard_compressed'
+        compressed_prompt_mode: 'full_quality_priority'
       });
     } else {
       rayRes = SK('Ray Dalio (PB)');
@@ -1298,7 +1362,7 @@ export async function runPortfolioDebateAppService(params: {
         personaKey: 'SIMONS',
         personaBiasDirective: personaBiasDirective('SIMONS'),
         memoryDirective: simonsMemory,
-        compressionMode: 'standard_compressed'
+        compressionMode: FULL_CM
       })}\n\n${buildPortfolioFastPersonaPromptBundle('SIMONS')}`;
       assertActiveExecution(ex, 'portfolio:pre_simons');
       const tSim = Date.now();
@@ -1308,6 +1372,12 @@ export async function runPortfolioDebateAppService(params: {
         analysisType,
         runMode: 'full',
         executionId: ex?.executionId ?? null,
+        qualityMeta: {
+          compressionMode: FULL_CM,
+          maxOutputTokens: OPENAI_PERSONA_CAPS.maxOutputTokens,
+          modelRequested: getPersonaModelConfig('SIMONS').model
+        },
+        getModelActuallyUsed: g => g.model,
         invoke: prompt =>
           generateWithPersonaProvider({
             discordUserId: userId,
@@ -1354,6 +1424,12 @@ export async function runPortfolioDebateAppService(params: {
       analysisType,
       runMode: 'full',
       executionId: ex?.executionId ?? null,
+      qualityMeta: {
+        compressionMode: FULL_CM,
+        maxOutputTokens: GEM_PERSONA_CAPS.maxOutputTokens,
+        modelRequested: 'gemini-2.5-flash'
+      },
+      getModelActuallyUsed: () => 'gemini-2.5-flash',
       invoke: p => drucker.summarizeAndGenerateActions(false, p, GEM_PERSONA_CAPS),
       getText: (x: string) => x
     });
@@ -1429,6 +1505,12 @@ export async function runPortfolioDebateAppService(params: {
       analysisType,
       runMode: 'full',
       executionId: ex?.executionId ?? null,
+      qualityMeta: {
+        compressionMode: FULL_CM,
+        maxOutputTokens: GEM_CIO_CAPS.maxOutputTokens,
+        modelRequested: 'gemini-2.5-flash'
+      },
+      getModelActuallyUsed: () => 'gemini-2.5-flash',
       invoke: p => cio.decide(false, p, GEM_CIO_CAPS),
       getText: (x: string) => x
     });
@@ -1442,7 +1524,7 @@ export async function runPortfolioDebateAppService(params: {
       ms: cio_stage_time_ms,
       cio_stage_time_ms,
       compressed_prompt_used: true,
-      compressed_prompt_mode: 'standard_compressed',
+      compressed_prompt_mode: 'full_quality_priority',
       model_used: 'gemini-2.5-flash',
       prompt_token_estimate: estimateTokensApprox(cioCombinedLog.length)
     });
@@ -1455,7 +1537,7 @@ export async function runPortfolioDebateAppService(params: {
       cio_stage_time_ms,
       parallel_execution_used: true,
       compressed_prompt_used: true,
-      compressed_prompt_mode: 'standard_compressed',
+      compressed_prompt_mode: 'full_quality_priority',
       retry_mode_used: 'none',
       base_context_chars: compressedBase.length,
       prompt_token_estimate: estimateTokensApprox(compressedBase.length)
@@ -1465,7 +1547,7 @@ export async function runPortfolioDebateAppService(params: {
       prompt_build_time_ms,
       persona_parallel_wall_time_ms,
       cio_stage_time_ms,
-      compressed_prompt_mode: 'standard_compressed',
+      compressed_prompt_mode: 'full_quality_priority',
       retry_mode_used: 'none'
     });
 
