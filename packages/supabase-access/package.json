@@ -1,0 +1,25 @@
+{
+  "name": "@office-unify/supabase-access",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@office-unify/shared-types": "*",
+    "@supabase/supabase-js": "^2.56.0"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}

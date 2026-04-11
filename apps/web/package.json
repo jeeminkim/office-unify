@@ -1,0 +1,38 @@
+{
+  "name": "dev-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "selfcheck": "node scripts/self-check.mjs",
+    "clean:win": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"if (Test-Path .next) { Remove-Item .next -Recurse -Force }; if (Test-Path node_modules) { Remove-Item node_modules -Recurse -Force }\""
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.6.1",
+    "@supabase/supabase-js": "^2.49.1",
+    "@office-unify/ai-office-engine": "*",
+    "@office-unify/shared-types": "*",
+    "@office-unify/shared-utils": "*",
+    "@office-unify/supabase-access": "*",
+    "lucide-react": "^1.7.0",
+    "mermaid": "^11.14.0",
+    "next": "16.2.2",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.2",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

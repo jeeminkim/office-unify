@@ -1,0 +1,14 @@
+node_modules
+.next
+dist
+*.tsbuildinfo
+.env
+.env.local
+.env*.local
+# env variants (never commit secrets)
+.env.development
+.env.production
+.env.test
+.vercel
+.DS_Store
+.cursor/
