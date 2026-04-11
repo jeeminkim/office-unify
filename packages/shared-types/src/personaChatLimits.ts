@@ -22,3 +22,6 @@ export const PERSONA_CHAT_MEMORY_SNIPPET_MAX_CHARS = 500;
 
 /** 스니펫 목표 하한(자) — 너무 짧은 한 줄만 쌓이는 것 완화(선택적 절단 시) */
 export const PERSONA_CHAT_MEMORY_SNIPPET_TARGET_MIN_CHARS = 200;
+
+/** 피드백과 함께 저장하는 사용자 메모 최대 길이(자) */
+export const PERSONA_CHAT_FEEDBACK_NOTE_MAX_CHARS = 400;

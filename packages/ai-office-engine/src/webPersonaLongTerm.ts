@@ -4,7 +4,11 @@
  * 저장소 전략·분리 테이블 검토는 `docs/persona-long-term-memory-strategy.md` 참고.
  */
 
-import { PERSONA_CHAT_MEMORY_SNIPPET_MAX_CHARS } from '@office-unify/shared-types';
+import {
+  PERSONA_CHAT_FEEDBACK_NOTE_MAX_CHARS,
+  PERSONA_CHAT_MEMORY_SNIPPET_MAX_CHARS,
+  type PersonaChatFeedbackRating,
+} from '@office-unify/shared-types';
 
 const SNIPPET_MAX = PERSONA_CHAT_MEMORY_SNIPPET_MAX_CHARS;
 const ENTRY_CAP = 24;
@@ -19,11 +23,18 @@ export function buildAssistantSnippetForLongTerm(assistantText: string): string 
 
 export const WEB_PERSONA_LONG_TERM_SOURCE = 'web_persona_chat' as const;
 
+export type WebPersonaLongTermEntryV1 = {
+  at: string;
+  snippet: string;
+  rating?: PersonaChatFeedbackRating;
+  userNote?: string;
+};
+
 export type WebPersonaLongTermPayloadV1 = {
   v: 1;
   source: typeof WEB_PERSONA_LONG_TERM_SOURCE;
   updatedAt: string;
-  entries: Array<{ at: string; snippet: string }>;
+  entries: WebPersonaLongTermEntryV1[];
 };
 
 /** PB 장기 기억 이관 등에서 재사용 */
@@ -52,7 +63,13 @@ export function formatLongTermForPrompt(raw: string | null | undefined): string 
   if (structured?.entries?.length) {
     return structured.entries
       .slice(-12)
-      .map((e) => `· [${e.at}] ${e.snippet}`)
+      .map((e) => {
+        const tag = e.rating ? ` [${e.rating}]` : '';
+        const note = e.userNote?.trim()
+          ? ` — ${e.userNote.trim().slice(0, PERSONA_CHAT_FEEDBACK_NOTE_MAX_CHARS)}`
+          : '';
+        return `· [${e.at}]${tag} ${e.snippet}${note}`;
+      })
       .join('\n');
   }
   const t = raw?.trim();
@@ -89,6 +106,66 @@ export function mergeWebLongTerm(prevRaw: string | null, assistantText: string):
       source: WEB_PERSONA_LONG_TERM_SOURCE,
       updatedAt: stamp,
       entries: [{ at: stamp, snippet }],
+    };
+  }
+
+  let out = JSON.stringify(payload);
+  while (out.length > STORAGE_MAX && payload.entries.length > 1) {
+    payload = {
+      ...payload,
+      updatedAt: stamp,
+      entries: payload.entries.slice(1),
+    };
+    out = JSON.stringify(payload);
+  }
+  return out;
+}
+
+function trimFeedbackNote(note: string | null | undefined): string | undefined {
+  const t = note?.trim();
+  if (!t) return undefined;
+  return t.slice(0, PERSONA_CHAT_FEEDBACK_NOTE_MAX_CHARS);
+}
+
+/** 사용자 피드백이 있을 때만 장기 기억에 한 건 추가한다. */
+export function mergeWebLongTermWithFeedback(
+  prevRaw: string | null,
+  assistantText: string,
+  rating: PersonaChatFeedbackRating,
+  userNote?: string | null,
+): string {
+  const stamp = new Date().toISOString();
+  const snippet = buildAssistantSnippetForLongTerm(assistantText);
+  const note = trimFeedbackNote(userNote ?? undefined);
+
+  const prevStruct = parseWebLongTermPayload(prevRaw);
+  let payload: WebPersonaLongTermPayloadV1;
+
+  const entry: WebPersonaLongTermEntryV1 = { at: stamp, snippet, rating, ...(note ? { userNote: note } : {}) };
+
+  if (prevStruct) {
+    payload = {
+      ...prevStruct,
+      updatedAt: stamp,
+      entries: [...prevStruct.entries, entry].slice(-ENTRY_CAP),
+    };
+  } else if (prevRaw?.trim()) {
+    payload = {
+      v: 1,
+      source: WEB_PERSONA_LONG_TERM_SOURCE,
+      updatedAt: stamp,
+      entries: [
+        { at: stamp, snippet: '[이전 비구조 요약에서 이관]' },
+        { at: stamp, snippet: prevRaw.trim().slice(0, SNIPPET_MAX) },
+        entry,
+      ],
+    };
+  } else {
+    payload = {
+      v: 1,
+      source: WEB_PERSONA_LONG_TERM_SOURCE,
+      updatedAt: stamp,
+      entries: [entry],
     };
   }
 

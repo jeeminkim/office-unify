@@ -20,7 +20,6 @@ import {
   listWebPortfolioWatchlistForUser,
   listWebPersonaMessages,
   selectPersonaLongTermSummary,
-  upsertPersonaLongTermSummary,
 } from '@office-unify/supabase-access';
 import { formatWebPortfolioLedgerForPrivateBankerPrompt } from './privateBanker/privateBankerPortfolioLedgerPrompt';
 import { generateGeminiPersonaReply, streamGeminiPersonaReply, type GeminiChatTurn } from './geminiWebPersonaAdapter';
@@ -33,7 +32,7 @@ import {
 import { resolveGeminiModelForWebPersonaSlug, resolveOpenAiModelForWebPersonaSlug } from './webPersonaLlmModels';
 import { isOpenAiWebPersonaSlug } from './webPersonaOpenAiRouting';
 import { getOpenAiMonthlyBudgetUsd, getOpenAiMonthlyMaxCalls, isOpenAiFallbackToGeminiEnabled } from './llmEnvConfig';
-import { formatLongTermForPrompt, mergeWebLongTerm } from './webPersonaLongTerm';
+import { formatLongTermForPrompt } from './webPersonaLongTerm';
 import { getCommitteeSystemPromptAppend } from './committee/committeePrompt';
 
 /** 조일현 제외 — persona-chat에서 Supabase 웹 원장 스냅샷을 시스템 프롬프트에 붙인다(Ray Dalio 포함). */
@@ -68,10 +67,9 @@ export type PersonaChatTurnPrepared = {
   systemInstruction: string;
   contents: GeminiChatTurn[];
   /**
-   * 기본은 `personaKey`와 동일 행. Private Banker 등은 채팅 키와 장기 기억 행 키를 분리한다.
+   * 기본은 `personaKey`와 동일 행. Private Banker 등은 채팅 키와 장기 기억 행 키를 분리한다(피드백 저장 시 사용).
    */
   longTermPersonaKey?: PersonaWebKey;
-  mergeLongTerm?: (prev: string | null, reply: string) => string;
   formatLongTermForDisplay?: (raw: string | null) => string;
 };
 
@@ -106,7 +104,10 @@ export function buildWebPersonaSystemInstruction(params: {
   if (params.longTermForPrompt.trim()) {
     chunks.push('', '[장기 기억 요약 — 사용자와의 누적 맥락]', params.longTermForPrompt);
   } else {
-    chunks.push('', '[장기 기억 요약: 아직 없음. 오늘 대화에서 신뢰할 만한 선호·맥락이 생기면 이후에 저장됩니다.]');
+    chunks.push(
+      '',
+      '[장기 기억 요약: 아직 없음. 각 답변 아래 평가(매우 도움·보통·약함)와 선택 메모로 맥락을 저장할 수 있습니다.]',
+    );
   }
 
   if (params.previousDayAssistantHint) {
@@ -375,22 +376,16 @@ export async function insertPersonaChatTurnMessages(params: {
   );
 }
 
-/** 메시지 행이 이미 있을 때 장기 기억만 반영 */
+/**
+ * 턴 완료 응답 조립. 장기 기억 본문은 사용자 피드백 API에서만 갱신한다(자동 병합 없음).
+ */
 export async function finalizePersonaChatTurnMemory(params: {
-  supabase: SupabaseClient;
-  userKey: OfficeUserKey;
   prepared: PersonaChatTurnPrepared;
-  replyText: string;
   userMessage: PersonaChatMessageDto;
   assistantMessage: PersonaChatMessageDto;
 }): Promise<PersonaChatMessageResponseBody> {
-  const memoryPersonaKey = params.prepared.longTermPersonaKey ?? params.prepared.personaKey;
-  const merge = params.prepared.mergeLongTerm ?? mergeWebLongTerm;
   const formatLt = params.prepared.formatLongTermForDisplay ?? formatLongTermForPrompt;
-  const mergedRaw = merge(params.prepared.longTermRaw, params.replyText);
-  await upsertPersonaLongTermSummary(params.supabase, params.userKey, memoryPersonaKey, mergedRaw);
-
-  const display = formatLt(mergedRaw).trim();
+  const display = formatLt(params.prepared.longTermRaw).trim();
 
   return {
     userMessage: params.userMessage,
@@ -414,10 +409,7 @@ export async function persistPersonaChatAfterLlm(params: {
     replyText: params.replyText,
   });
   return finalizePersonaChatTurnMemory({
-    supabase: params.supabase,
-    userKey: params.userKey,
     prepared: params.prepared,
-    replyText: params.replyText,
     userMessage: pair.userMessage,
     assistantMessage: pair.assistantMessage,
   });

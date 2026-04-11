@@ -58,6 +58,21 @@ export type CommitteeDiscussionLineDto = {
   content: string;
 };
 
+/** POST /api/persona-chat/feedback — 장기 기억에 반영할 답변 평가 */
+export type PersonaChatFeedbackRating = 'top' | 'ok' | 'weak';
+
+export type PersonaChatFeedbackRequestBody = {
+  personaKey: string;
+  assistantMessageId: string;
+  rating: PersonaChatFeedbackRating;
+  note?: string;
+};
+
+export type PersonaChatFeedbackResponseBody = {
+  ok: true;
+  longTermMemorySummary: string | null;
+};
+
 export type PersonaChatMessageResponseBody = {
   userMessage: PersonaChatMessageDto;
   assistantMessage: PersonaChatMessageDto;

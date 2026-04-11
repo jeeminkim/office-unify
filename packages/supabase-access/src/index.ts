@@ -20,6 +20,7 @@ export {
   fetchWebPersonaMessagesByIds,
   insertWebPersonaUserAssistantPair,
   listWebPersonaMessages,
+  selectWebPersonaAssistantMessageForFeedback,
 } from './webPersonaChatRepository';
 export { selectPersonaLongTermSummary, upsertPersonaLongTermSummary } from './personaMemoryWebRepository';
 export {

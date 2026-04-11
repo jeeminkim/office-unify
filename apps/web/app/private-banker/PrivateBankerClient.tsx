@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PersonaChatMessageDto, PersonaChatSessionInitResponseBody } from "@office-unify/shared-types";
 import { PERSONA_CHAT_USER_MESSAGE_MAX_CHARS } from "@office-unify/shared-types";
 import Link from "next/link";
+import { PersonaAssistantFeedbackRow } from "@/components/PersonaAssistantFeedbackRow";
 
 const jsonHeaders: HeadersInit = {
   "Content-Type": "application/json",
@@ -135,7 +136,7 @@ export function PrivateBankerClient() {
         </Link>
       </div>
       <p className="text-sm text-slate-500">
-        종목 추천기가 아니라 구조화된 투자 판단 보조입니다. 매수 4유형·체크리스트·원장 규칙은 서버 시스템 프롬프트에 반영되어 있습니다.
+        종목 추천기가 아니라 구조화된 투자 판단 보조입니다. 매수 4유형·체크리스트·원장 규칙은 서버 시스템 프롬프트에 반영되어 있습니다. 장기 기억은 각 답변 아래 평가로만 갱신됩니다.
       </p>
 
       {sessionDateKst ? (
@@ -184,6 +185,16 @@ export function PrivateBankerClient() {
                 <div key={m.id} className={`text-sm ${m.role === "user" ? "text-slate-900" : "text-slate-600"}`}>
                   <span className="font-semibold">{m.role === "user" ? "나" : "J. Pierpont"}</span>
                   <p className="mt-1 whitespace-pre-wrap">{m.content}</p>
+                  {m.role === "assistant" ? (
+                    <PersonaAssistantFeedbackRow
+                      personaKey="j-pierpont"
+                      assistantMessageId={m.id}
+                      assistantLabel="J. Pierpont"
+                      onSaved={(summary) => {
+                        if (summary) setLongTerm(summary);
+                      }}
+                    />
+                  ) : null}
                 </div>
               ))
             )}

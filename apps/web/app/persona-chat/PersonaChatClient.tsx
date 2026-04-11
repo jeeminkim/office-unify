@@ -8,6 +8,7 @@ import {
 } from "@office-unify/shared-types";
 import { listRegisteredPersonaWebKeys, resolveWebPersona } from "@office-unify/ai-office-engine";
 import Link from "next/link";
+import { PersonaAssistantFeedbackRow } from "@/components/PersonaAssistantFeedbackRow";
 
 const jsonHeaders: HeadersInit = {
   "Content-Type": "application/json",
@@ -219,7 +220,7 @@ export function PersonaChatClient() {
         </Link>
       </div>
       <p className="text-sm text-slate-500">
-        KST 기준 일별 세션입니다. 장기 기억은 서버에 저장되며, 오늘 대화만 모델 컨텍스트에 주로 사용됩니다. Google 로그인 세션으로만 접근합니다.
+        KST 기준 일별 세션입니다. 장기 기억은 각 답변 아래 평가로만 갱신·저장되며, 오늘 대화만 모델 컨텍스트에 주로 사용됩니다. Google 로그인 세션으로만 접근합니다.
       </p>
 
       {sessionDateKst ? (
@@ -325,6 +326,15 @@ export function PersonaChatClient() {
                   <div key={m.id} className={`text-sm ${m.role === "user" ? "text-slate-900" : "text-slate-600"}`}>
                     <span className="font-semibold">{m.role === "user" ? "나" : "페르소나"}</span>
                     <p className="mt-1 whitespace-pre-wrap">{m.content}</p>
+                    {m.role === "assistant" ? (
+                      <PersonaAssistantFeedbackRow
+                        personaKey={personaKey.trim()}
+                        assistantMessageId={m.id}
+                        onSaved={(summary) => {
+                          if (summary) setLongTerm(summary);
+                        }}
+                      />
+                    ) : null}
                   </div>
                 ))}
                 {streamPreview !== null ? (

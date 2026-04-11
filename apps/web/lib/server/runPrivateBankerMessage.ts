@@ -224,10 +224,7 @@ export async function runPrivateBankerMessageWithDbIdempotency(params: {
     }
 
     const outBase = await finalizePersonaChatTurnMemory({
-      supabase,
-      userKey,
       prepared,
-      replyText,
       userMessage,
       assistantMessage,
     });

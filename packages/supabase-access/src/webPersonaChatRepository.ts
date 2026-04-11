@@ -93,6 +93,43 @@ export async function fetchWebPersonaMessagesByIds(
   };
 }
 
+/**
+ * 사용자·페르소나 세션에 속한 assistant 메시지 한 건만 조회(피드백·장기 기억 저장 전 검증).
+ */
+export async function selectWebPersonaAssistantMessageForFeedback(
+  client: SupabaseClient,
+  userKey: OfficeUserKey,
+  personaKey: PersonaWebKey,
+  assistantMessageId: string,
+): Promise<{ content: string } | null> {
+  const mid = Number(assistantMessageId);
+  if (!Number.isFinite(mid)) return null;
+
+  const { data: msg, error: mErr } = await client
+    .from('web_persona_chat_messages')
+    .select('id, role, content, session_id')
+    .eq('id', mid)
+    .maybeSingle();
+
+  if (mErr) throw mErr;
+  const row = msg as { id: number; role: string; content: string; session_id: string } | null;
+  if (!row || row.role !== 'assistant') return null;
+
+  const { data: sess, error: sErr } = await client
+    .from('web_persona_chat_sessions')
+    .select('user_key, persona_key')
+    .eq('id', row.session_id)
+    .maybeSingle();
+
+  if (sErr) throw sErr;
+  const s = sess as { user_key: string; persona_key: string } | null;
+  if (!s || s.user_key !== (userKey as string) || s.persona_key !== (personaKey as string)) {
+    return null;
+  }
+
+  return { content: String(row.content) };
+}
+
 export async function listWebPersonaMessages(
   client: SupabaseClient,
   sessionId: string,

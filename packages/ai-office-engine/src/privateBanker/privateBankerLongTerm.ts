@@ -7,7 +7,11 @@
  * 레거시 행 수동 정리: docs/sql/cleanup_legacy_j_pierpont_persona_memory_optional.sql
  */
 
-import { PERSONA_CHAT_MEMORY_SNIPPET_MAX_CHARS } from '@office-unify/shared-types';
+import {
+  PERSONA_CHAT_FEEDBACK_NOTE_MAX_CHARS,
+  PERSONA_CHAT_MEMORY_SNIPPET_MAX_CHARS,
+  type PersonaChatFeedbackRating,
+} from '@office-unify/shared-types';
 import { toPersonaWebKey, type PersonaWebKey } from '@office-unify/shared-types';
 import {
   formatLongTermForPrompt,
@@ -24,11 +28,18 @@ export const PRIVATE_BANKER_LT_MEMORY_KEY: PersonaWebKey = toPersonaWebKey('j-pi
 
 export const PRIVATE_BANKER_LONG_TERM_SOURCE = 'private_banker_v1' as const;
 
+export type PrivateBankerLongTermEntryV1 = {
+  at: string;
+  snippet: string;
+  rating?: PersonaChatFeedbackRating;
+  userNote?: string;
+};
+
 export type PrivateBankerLongTermPayloadV1 = {
   v: 2;
   source: typeof PRIVATE_BANKER_LONG_TERM_SOURCE;
   updatedAt: string;
-  entries: Array<{ at: string; snippet: string }>;
+  entries: PrivateBankerLongTermEntryV1[];
 };
 
 export function parsePrivateBankerLongTermPayload(raw: string | null | undefined): PrivateBankerLongTermPayloadV1 | null {
@@ -70,7 +81,13 @@ export function formatPrivateBankerLongTermForPrompt(raw: string | null | undefi
   if (structured?.entries?.length) {
     return structured.entries
       .slice(-10)
-      .map((e) => `· [${e.at.slice(0, 10)}] ${e.snippet}`)
+      .map((e) => {
+        const tag = e.rating ? ` [${e.rating}]` : '';
+        const note = e.userNote?.trim()
+          ? ` — ${e.userNote.trim().slice(0, PERSONA_CHAT_FEEDBACK_NOTE_MAX_CHARS)}`
+          : '';
+        return `· [${e.at.slice(0, 10)}]${tag} ${e.snippet}${note}`;
+      })
       .join('\n');
   }
   return formatLongTermForPrompt(raw);
@@ -126,6 +143,70 @@ export function mergePrivateBankerLongTerm(prevRaw: string | null, assistantText
       source: PRIVATE_BANKER_LONG_TERM_SOURCE,
       updatedAt: stamp,
       entries: [{ at: stamp, snippet }],
+    };
+  }
+
+  let out = JSON.stringify(payload);
+  while (out.length > STORAGE_MAX && payload.entries.length > 1) {
+    payload = {
+      ...payload,
+      updatedAt: stamp,
+      entries: payload.entries.slice(1),
+    };
+    out = JSON.stringify(payload);
+  }
+  return out;
+}
+
+function trimPbFeedbackNote(note: string | null | undefined): string | undefined {
+  const t = note?.trim();
+  if (!t) return undefined;
+  return t.slice(0, PERSONA_CHAT_FEEDBACK_NOTE_MAX_CHARS);
+}
+
+export function mergePrivateBankerLongTermWithFeedback(
+  prevRaw: string | null,
+  assistantText: string,
+  rating: PersonaChatFeedbackRating,
+  userNote?: string | null,
+): string {
+  const stamp = new Date().toISOString();
+  const snippet = extractPrivateBankerMemorySnippet(assistantText);
+  const note = trimPbFeedbackNote(userNote ?? undefined);
+
+  const prevPb = parsePrivateBankerLongTermPayload(prevRaw);
+  const prevWeb = parseWebLongTermPayload(prevRaw);
+
+  const entry: PrivateBankerLongTermEntryV1 = { at: stamp, snippet, rating, ...(note ? { userNote: note } : {}) };
+
+  let payload: PrivateBankerLongTermPayloadV1;
+
+  if (prevPb) {
+    payload = {
+      ...prevPb,
+      updatedAt: stamp,
+      entries: [...prevPb.entries, entry].slice(-ENTRY_CAP),
+    };
+  } else if (prevWeb) {
+    payload = seedFromWebPayload(prevWeb, stamp);
+    payload.entries = [...payload.entries, entry].slice(-ENTRY_CAP);
+  } else if (prevRaw?.trim()) {
+    payload = {
+      v: 2,
+      source: PRIVATE_BANKER_LONG_TERM_SOURCE,
+      updatedAt: stamp,
+      entries: [
+        { at: stamp, snippet: '[비구조 요약에서 이관 — 수치·종목은 사용자 최신 자료로만]' },
+        { at: stamp, snippet: prevRaw.trim().slice(0, SNIPPET_MAX) },
+        entry,
+      ],
+    };
+  } else {
+    payload = {
+      v: 2,
+      source: PRIVATE_BANKER_LONG_TERM_SOURCE,
+      updatedAt: stamp,
+      entries: [entry],
     };
   }
 

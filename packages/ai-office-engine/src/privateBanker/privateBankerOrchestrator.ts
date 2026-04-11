@@ -11,11 +11,7 @@ import {
   listWebPersonaMessages,
   selectPersonaLongTermSummary,
 } from '@office-unify/supabase-access';
-import {
-  formatPrivateBankerLongTermForPrompt,
-  mergePrivateBankerLongTerm,
-  PRIVATE_BANKER_LT_MEMORY_KEY,
-} from './privateBankerLongTerm';
+import { formatPrivateBankerLongTermForPrompt, PRIVATE_BANKER_LT_MEMORY_KEY } from './privateBankerLongTerm';
 import { generateGeminiPersonaReply, type GeminiChatTurn } from '../geminiWebPersonaAdapter';
 import { executeOpenAiWithBudgetAndGeminiFallback } from '../openAiBudgetRunner';
 import { resolveGeminiModelForWebPersonaSlug } from '../webPersonaLlmModels';
@@ -95,7 +91,7 @@ function buildPrivateBankerFullInstruction(params: {
   } else {
     chunks.push(
       '',
-      '[Private Banker 장기 기억: 아직 없음. 패턴·약점·전제가 쌓이면 이후 저장된다. 수치 저장소가 아니다.]',
+      '[Private Banker 장기 기억: 아직 없음. 각 답변 아래 평가로 패턴·약점·전제 맥락을 저장할 수 있다. 수치 저장소가 아니다.]',
     );
   }
 
@@ -213,7 +209,6 @@ export async function preparePrivateBankerTurnContext(params: {
     systemInstruction,
     contents,
     longTermPersonaKey: PRIVATE_BANKER_LT_MEMORY_KEY,
-    mergeLongTerm: mergePrivateBankerLongTerm,
     formatLongTermForDisplay: formatPrivateBankerLongTermForPrompt,
   };
 }
@@ -248,7 +243,7 @@ export async function generatePrivateBankerAssistantReply(params: {
   });
 }
 
-/** Gemini 경로의 `persistPersonaChatAfterLlm`과 동일 — PB는 `longTermPersonaKey`·`mergeLongTerm`으로 LT만 분리 */
+/** Gemini 경로의 `persistPersonaChatAfterLlm`과 동일 — PB는 `longTermPersonaKey`로 LT 행만 분리 */
 export async function persistPrivateBankerAfterLlm(params: {
   supabase: SupabaseClient;
   userKey: OfficeUserKey;

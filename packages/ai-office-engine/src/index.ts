@@ -10,6 +10,7 @@ export * from './openAiBudgetRunner';
 export * from './openAiUsageCost';
 export * from './webPersonaChatOrchestrator';
 export * from './webPersonaLongTerm';
+export * from './personaChatFeedback';
 export * from './privateBanker/privateBankerOrchestrator';
 export * from './privateBanker/privateBankerPrompt';
 export * from './privateBanker/privateBankerLongTerm';

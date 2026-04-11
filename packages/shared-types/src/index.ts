@@ -158,6 +158,9 @@ export type {
 export type {
   CommitteeDiscussionLineDto,
   DailySessionDateKst,
+  PersonaChatFeedbackRating,
+  PersonaChatFeedbackRequestBody,
+  PersonaChatFeedbackResponseBody,
   PersonaChatMessageDto,
   PersonaChatMessageRequestBody,
   PersonaChatMessageResponseBody,
@@ -174,6 +177,7 @@ export {
   PERSONA_CHAT_MEMORY_SNIPPET_TARGET_MIN_CHARS,
   PERSONA_CHAT_STREAM_FLUSH_CHARS,
   PERSONA_CHAT_USER_MESSAGE_MAX_CHARS,
+  PERSONA_CHAT_FEEDBACK_NOTE_MAX_CHARS,
 } from './personaChatLimits';
 export type {
   PersonaChatProcessingStage,
