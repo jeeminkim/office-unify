@@ -65,8 +65,30 @@ PK: `(user_key, persona_key)` 또는 UUID PK + 유니크 제약.
 
 **점진 이행**: 선택 스키마와 체크리스트는 `docs/persona-web-memory-migration.md`, `docs/sql/append_web_persona_memory_optional.sql` 참고.
 
+## 투자위원회 (committee)
+
+- **턴 식별**: 테이블 `web_committee_turns` — `id` = `committee_turn_id`(UUID). 첫 라운드 시 서버가 생성하고, 이후 라운드·종료 API에 동일 ID를 넘긴다. SQL: `docs/sql/append_web_committee_turns.sql`.
+- **장기 기억 키**: `persona_memory.persona_name` = **`committee-lt`** — 일반 웹 페르소나(`ray-dalio` 등)·PB(`j-pierpont-lt`)와 **섞이지 않음**.
+- **페이로드**: JSON v3, `source: committee_v1`, 엔트리에 `committeeTurnId`·스니펫·`rating`·선택 `userNote`. 구현: `packages/ai-office-engine/src/committee/committeeLongTerm.ts`.
+- **피드백 API**: `POST /api/committee/feedback` — `POST /api/persona-chat/feedback`과 분리(유지보수·입력 계약 명확화).
+- **표시·프롬프트 우선순위**: persona/PB와 동일 철학 — `packages/ai-office-engine/src/longTermEntryPriority.ts` (피드백 등급 > 메모 유무 > 최근 `at`).
+- **위원회 라운드 프롬프트**: `runCommitteeDiscussionRound` / closing 경로에서 `committee-lt` 요약을 시스템 프롬프트에 `[투자위원회 누적 피드백 기억]` 블록으로 주입.
+
+### persona 기억 vs committee 기억
+
+| 구분 | 키 / 소스 | 트리거 |
+|------|-----------|--------|
+| 일반 persona-chat | 슬러그별 행, `web_persona_chat` | assistant 메시지 피드백 |
+| Private Banker | `j-pierpont-lt`, `private_banker_v1` | 동일 |
+| 투자위원회 | `committee-lt`, `committee_v1` | `web_committee_turns.id`에 대한 피드백 |
+
+향후 **페르소나별 위원회 발언** 피드백을 넣을 경우, 엔트리에 `personaSlug` 등을 추가하거나 `committee_turn_id` 하위 테이블을 두는 식으로 확장할 수 있다(현재는 턴 전체 피드백만).
+
 ## 관련 코드
 
+- 우선순위 정렬(표시·프롬프트 공통): `packages/ai-office-engine/src/longTermEntryPriority.ts`
 - 직렬화/병합: `packages/ai-office-engine/src/webPersonaLongTerm.ts`
 - PB 전용 병합/표시: `packages/ai-office-engine/src/privateBanker/privateBankerLongTerm.ts`
+- 위원회 LT: `packages/ai-office-engine/src/committee/committeeLongTerm.ts`, `committeeFeedback.ts`
 - 읽기/쓰기: `packages/supabase-access/src/personaMemoryWebRepository.ts`
+- 위원회 턴: `packages/supabase-access/src/webCommitteeTurnsRepository.ts`

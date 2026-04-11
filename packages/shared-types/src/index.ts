@@ -157,6 +157,11 @@ export type {
 
 export type {
   CommitteeDiscussionLineDto,
+  CommitteeDiscussionRoundRequestBody,
+  CommitteeDiscussionRoundResponseBody,
+  CommitteeFeedbackRequestBody,
+  CommitteeFeedbackResponseBody,
+  CommitteeMemoryResponseBody,
   DailySessionDateKst,
   PersonaChatFeedbackRating,
   PersonaChatFeedbackRequestBody,

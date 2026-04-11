@@ -13,6 +13,7 @@ import {
   type PersonaChatFeedbackRating,
 } from '@office-unify/shared-types';
 import { toPersonaWebKey, type PersonaWebKey } from '@office-unify/shared-types';
+import { sortLongTermEntriesForDisplay } from '../longTermEntryPriority';
 import {
   formatLongTermForPrompt,
   parseWebLongTermPayload,
@@ -79,14 +80,15 @@ export function extractPrivateBankerMemorySnippet(assistantText: string): string
 export function formatPrivateBankerLongTermForPrompt(raw: string | null | undefined): string {
   const structured = parsePrivateBankerLongTermPayload(raw);
   if (structured?.entries?.length) {
-    return structured.entries
-      .slice(-10)
+    const sorted = sortLongTermEntriesForDisplay(structured.entries);
+    return sorted
+      .slice(0, 10)
       .map((e) => {
-        const tag = e.rating ? ` [${e.rating}]` : '';
+        const date = e.at.slice(0, 10);
         const note = e.userNote?.trim()
-          ? ` — ${e.userNote.trim().slice(0, PERSONA_CHAT_FEEDBACK_NOTE_MAX_CHARS)}`
+          ? ` — 메모: ${e.userNote.trim().slice(0, PERSONA_CHAT_FEEDBACK_NOTE_MAX_CHARS)}`
           : '';
-        return `· [${e.at.slice(0, 10)}]${tag} ${e.snippet}${note}`;
+        return `· ${date} · ${e.snippet}${note}`;
       })
       .join('\n');
   }

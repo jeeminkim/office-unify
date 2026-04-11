@@ -143,7 +143,6 @@ export async function runPrivateBankerMessageWithDbIdempotency(params: {
     userContent: content,
   });
 
-  let replyText: string;
   let userMessage: PersonaChatMessageDto;
   let assistantMessage: PersonaChatMessageDto;
 
@@ -160,7 +159,6 @@ export async function runPrivateBankerMessageWithDbIdempotency(params: {
     let llmProviderNote: string | undefined;
 
     if (resumeMemoryOnly) {
-      replyText = row.llmAssistantText!;
       const pair = await fetchWebPersonaMessagesByIds(
         supabase,
         prepared.sessionId,
@@ -199,13 +197,11 @@ export async function runPrivateBankerMessageWithDbIdempotency(params: {
           latest.assistantMessageId,
         );
         const rem = remediatePrivateBankerReply(pair.assistantMessage.content);
-        replyText = rem.text;
         if (rem.note) pbFormatNote = rem.note;
         userMessage = pair.userMessage;
         assistantMessage = { ...pair.assistantMessage, content: rem.text };
       } else {
         const rem = remediatePrivateBankerReply(llmRaw);
-        replyText = rem.text;
         if (rem.note) pbFormatNote = rem.note;
         const pair = await insertPersonaChatTurnMessages({
           supabase,

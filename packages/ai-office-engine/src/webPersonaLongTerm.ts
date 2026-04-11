@@ -9,6 +9,7 @@ import {
   PERSONA_CHAT_MEMORY_SNIPPET_MAX_CHARS,
   type PersonaChatFeedbackRating,
 } from '@office-unify/shared-types';
+import { sortLongTermEntriesForDisplay } from './longTermEntryPriority';
 
 const SNIPPET_MAX = PERSONA_CHAT_MEMORY_SNIPPET_MAX_CHARS;
 const ENTRY_CAP = 24;
@@ -57,19 +58,23 @@ export function parseWebLongTermPayload(raw: string | null | undefined): WebPers
   return null;
 }
 
-/** 프롬프트·UI 표시용: 구조화 항목 또는 레거시 평문 */
+/** 한 줄: 날짜(일) + 스니펫 + 선택 메모 — 내부 rating 토큰은 노출하지 않는다(순서가 우선순위). */
+export function formatWebPersonaLongTermEntryLine(e: WebPersonaLongTermEntryV1): string {
+  const date = e.at.slice(0, 10);
+  const note = e.userNote?.trim()
+    ? ` — 메모: ${e.userNote.trim().slice(0, PERSONA_CHAT_FEEDBACK_NOTE_MAX_CHARS)}`
+    : '';
+  return `· ${date} · ${e.snippet}${note}`;
+}
+
+/** 프롬프트·UI 표시용: 피드백 우선순위 정렬 후 상위 N건, 구조화 항목 또는 레거시 평문 */
 export function formatLongTermForPrompt(raw: string | null | undefined): string {
   const structured = parseWebLongTermPayload(raw);
   if (structured?.entries?.length) {
-    return structured.entries
-      .slice(-12)
-      .map((e) => {
-        const tag = e.rating ? ` [${e.rating}]` : '';
-        const note = e.userNote?.trim()
-          ? ` — ${e.userNote.trim().slice(0, PERSONA_CHAT_FEEDBACK_NOTE_MAX_CHARS)}`
-          : '';
-        return `· [${e.at}]${tag} ${e.snippet}${note}`;
-      })
+    const sorted = sortLongTermEntriesForDisplay(structured.entries);
+    return sorted
+      .slice(0, 12)
+      .map((e) => formatWebPersonaLongTermEntryLine(e))
       .join('\n');
   }
   const t = raw?.trim();

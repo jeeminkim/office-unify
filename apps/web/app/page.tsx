@@ -58,7 +58,9 @@ export default function Home() {
   const { generate, isLoading, error, result } = useGenerate();
 
   useEffect(() => {
-    void refreshPreferenceHint();
+    queueMicrotask(() => {
+      void refreshPreferenceHint();
+    });
   }, [refreshPreferenceHint]);
 
   useEffect(() => {

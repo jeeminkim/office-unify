@@ -156,7 +156,6 @@ export async function runPersonaChatMessageWithDbIdempotency(params: {
     userContent: content,
   });
 
-  let replyText: string;
   let userMessage: PersonaChatMessageDto;
   let assistantMessage: PersonaChatMessageDto;
 
@@ -173,7 +172,6 @@ export async function runPersonaChatMessageWithDbIdempotency(params: {
     let llmProviderNote: string | undefined;
 
     if (resumeMemoryOnly) {
-      replyText = row.llmAssistantText!;
       const pair = await fetchWebPersonaMessagesByIds(
         supabase,
         prepared.sessionId,
@@ -213,12 +211,10 @@ export async function runPersonaChatMessageWithDbIdempotency(params: {
         );
         if (isCommitteePersonaSlug(personaSlug)) {
           const rem = remediateCommitteePersonaReply(personaSlug, pair.assistantMessage.content);
-          replyText = rem.text;
           if (rem.note) personaFormatNote = rem.note;
           userMessage = pair.userMessage;
           assistantMessage = { ...pair.assistantMessage, content: rem.text };
         } else {
-          replyText = pair.assistantMessage.content;
           userMessage = pair.userMessage;
           assistantMessage = pair.assistantMessage;
         }
@@ -226,7 +222,6 @@ export async function runPersonaChatMessageWithDbIdempotency(params: {
         const rem = isCommitteePersonaSlug(personaSlug)
           ? remediateCommitteePersonaReply(personaSlug, llmRaw)
           : { text: llmRaw, note: null as string | null };
-        replyText = rem.text;
         if (rem.note) personaFormatNote = rem.note;
         const pair = await insertPersonaChatTurnMessages({
           supabase,

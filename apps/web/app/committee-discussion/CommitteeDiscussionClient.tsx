@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { CommitteeDiscussionLineDto } from "@office-unify/shared-types";
 import Link from "next/link";
+import { CommitteeTurnFeedbackRow } from "@/components/CommitteeTurnFeedbackRow";
 
 const jsonHeaders: HeadersInit = {
   "Content-Type": "application/json",
@@ -18,6 +19,22 @@ export function CommitteeDiscussionClient() {
   const [error, setError] = useState<string | null>(null);
   const [reportMd, setReportMd] = useState<string | null>(null);
   const [loadingReport, setLoadingReport] = useState(false);
+  const [committeeTurnId, setCommitteeTurnId] = useState<string | null>(null);
+  const [committeeLongTerm, setCommitteeLongTerm] = useState<string | null>(null);
+
+  const loadCommitteeMemory = useCallback(async () => {
+    try {
+      const res = await fetch("/api/committee/memory", { credentials: "same-origin" });
+      const data = (await res.json()) as { longTermMemorySummary?: string | null; error?: string };
+      if (res.ok) setCommitteeLongTerm(data.longTermMemorySummary ?? null);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadCommitteeMemory();
+  }, [loadCommitteeMemory]);
 
   const canStart = topic.trim().length > 0 && phase !== "loading_round" && phase !== "loading_closing";
 
@@ -34,11 +51,17 @@ export function CommitteeDiscussionClient() {
             topic: topic.trim(),
             roundNote: roundNote.trim() || undefined,
             priorTranscript: prior,
+            ...(committeeTurnId ? { committeeTurnId } : {}),
           }),
         });
-        const data = (await res.json()) as { lines?: CommitteeDiscussionLineDto[]; error?: string };
+        const data = (await res.json()) as {
+          lines?: CommitteeDiscussionLineDto[];
+          committeeTurnId?: string;
+          error?: string;
+        };
         if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
         const lines = data.lines ?? [];
+        if (data.committeeTurnId) setCommitteeTurnId(data.committeeTurnId);
         setTranscript((prev) => [...prev, ...lines]);
         setRoundNote("");
         setPhase("after_round");
@@ -47,7 +70,7 @@ export function CommitteeDiscussionClient() {
         setPhase(prior.length === 0 ? "idle" : "after_round");
       }
     },
-    [topic, roundNote],
+    [topic, roundNote, committeeTurnId],
   );
 
   const startDiscussion = () => void runRound([]);
@@ -66,6 +89,7 @@ export function CommitteeDiscussionClient() {
         body: JSON.stringify({
           topic: topic.trim(),
           transcript,
+          ...(committeeTurnId ? { committeeTurnId } : {}),
         }),
       });
       const data = (await res.json()) as {
@@ -123,9 +147,14 @@ export function CommitteeDiscussionClient() {
         </Link>
       </div>
       <p className="text-sm text-slate-500">
-        Hindenburg → James Simons → CIO → Peter Drucker 순으로 한 라운드씩 발언합니다. 서버가 조회한 보유·관심 원장이 시스템 프롬프트에 포함됩니다(조일현 페르소나는 제외). 토론 내용은 이 화면에만 쌓이며 일반 persona-chat 세션과는 별도입니다. 조일현 Markdown 보고서는{" "}
+        Hindenburg → James Simons → CIO → Peter Drucker 순으로 한 라운드씩 발언합니다. 서버가 조회한 보유·관심 원장이 시스템 프롬프트에 포함됩니다(조일현 페르소나는 제외). 토론 내용은 이 화면에만 쌓이며 일반 persona-chat 세션과는 별도입니다. 피드백은 서버에 턴 ID로 저장되어 위원회 전용 장기 기억(committee-lt)에 반영됩니다. 조일현 Markdown 보고서는{" "}
         <strong className="font-medium text-slate-700">아래 버튼을 눌렀을 때만</strong> 서버가 생성합니다.
       </p>
+
+      <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 shadow-sm">
+        <strong className="text-slate-800">위원회 피드백 기억 (committee-lt)</strong>
+        <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap">{committeeLongTerm ?? "—"}</p>
+      </div>
 
       <div className="grid gap-2 rounded-xl border border-slate-200 bg-white p-4 text-sm shadow-sm">
         <label className="flex flex-col gap-1">
@@ -176,6 +205,16 @@ export function CommitteeDiscussionClient() {
             ))
           )}
         </div>
+
+        {committeeTurnId && transcript.length > 0 ? (
+          <CommitteeTurnFeedbackRow
+            committeeTurnId={committeeTurnId}
+            onSaved={(summary) => {
+              if (summary) setCommitteeLongTerm(summary);
+              void loadCommitteeMemory();
+            }}
+          />
+        ) : null}
 
         {showContinue ? (
           <div className="flex flex-col gap-2 border-t border-slate-100 pt-3">

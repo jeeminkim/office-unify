@@ -73,6 +73,38 @@ export type PersonaChatFeedbackResponseBody = {
   longTermMemorySummary: string | null;
 };
 
+/** POST /api/committee-discussion/round — 요청(확장) */
+export type CommitteeDiscussionRoundRequestBody = {
+  topic: string;
+  roundNote?: string;
+  priorTranscript?: CommitteeDiscussionLineDto[];
+  /** 첫 라운드 생략 시 서버가 생성. 이후 라운드는 필수 */
+  committeeTurnId?: string;
+};
+
+/** POST /api/committee-discussion/round — 응답 */
+export type CommitteeDiscussionRoundResponseBody = {
+  lines: CommitteeDiscussionLineDto[];
+  committeeTurnId: string;
+};
+
+/** POST /api/committee/feedback — 위원회 토론 1회에 대한 피드백 */
+export type CommitteeFeedbackRequestBody = {
+  committeeTurnId: string;
+  rating: PersonaChatFeedbackRating;
+  note?: string;
+};
+
+export type CommitteeFeedbackResponseBody = {
+  ok: true;
+  longTermMemorySummary: string | null;
+};
+
+/** GET /api/committee/memory — committee-lt 요약 표시용 */
+export type CommitteeMemoryResponseBody = {
+  longTermMemorySummary: string | null;
+};
+
 export type PersonaChatMessageResponseBody = {
   userMessage: PersonaChatMessageDto;
   assistantMessage: PersonaChatMessageDto;

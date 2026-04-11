@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
-import type { CommitteeDiscussionLineDto } from '@office-unify/shared-types';
+import type { CommitteeDiscussionLineDto, CommitteeDiscussionRoundResponseBody } from '@office-unify/shared-types';
 import { requirePersonaChatAuth } from '@/lib/server/persona-chat-auth';
 import { getServiceSupabase } from '@/lib/server/supabase-service';
+import {
+  buildCommitteeTranscriptExcerpt,
+  getWebCommitteeTurnForUser,
+  insertWebCommitteeTurn,
+  updateWebCommitteeTurnExcerpt,
+} from '@office-unify/supabase-access';
 import {
   executeCommitteeDiscussionRound,
   resolvePersonaChatLlmEnv,
@@ -11,6 +17,7 @@ type Body = {
   topic?: string;
   roundNote?: string;
   priorTranscript?: CommitteeDiscussionLineDto[];
+  committeeTurnId?: string;
 };
 
 export async function POST(req: Request) {
@@ -32,6 +39,7 @@ export async function POST(req: Request) {
 
   const priorTranscript = Array.isArray(body.priorTranscript) ? body.priorTranscript : [];
   const roundNote = typeof body.roundNote === 'string' ? body.roundNote.trim() : undefined;
+  let committeeTurnId = typeof body.committeeTurnId === 'string' ? body.committeeTurnId.trim() : '';
 
   const llm = resolvePersonaChatLlmEnv();
   if (!llm.ok) {
@@ -47,6 +55,29 @@ export async function POST(req: Request) {
   }
 
   try {
+    if (priorTranscript.length === 0) {
+      if (!committeeTurnId) {
+        const initialExcerpt = buildCommitteeTranscriptExcerpt(topic, []);
+        committeeTurnId = await insertWebCommitteeTurn(supabase, userKey, topic, initialExcerpt);
+      } else {
+        const row = await getWebCommitteeTurnForUser(supabase, userKey, committeeTurnId);
+        if (!row) {
+          return NextResponse.json({ error: 'Invalid committeeTurnId.' }, { status: 400 });
+        }
+      }
+    } else {
+      if (!committeeTurnId) {
+        return NextResponse.json(
+          { error: 'committeeTurnId is required when continuing a discussion.' },
+          { status: 400 },
+        );
+      }
+      const row = await getWebCommitteeTurnForUser(supabase, userKey, committeeTurnId);
+      if (!row) {
+        return NextResponse.json({ error: 'Invalid committeeTurnId.' }, { status: 400 });
+      }
+    }
+
     const { lines } = await executeCommitteeDiscussionRound({
       supabase,
       userKey,
@@ -56,7 +87,13 @@ export async function POST(req: Request) {
       roundNote: roundNote || undefined,
       priorTranscript,
     });
-    return NextResponse.json({ lines });
+
+    const fullTranscript = [...priorTranscript, ...lines];
+    const excerpt = buildCommitteeTranscriptExcerpt(topic, fullTranscript);
+    await updateWebCommitteeTurnExcerpt(supabase, userKey, committeeTurnId, excerpt);
+
+    const res: CommitteeDiscussionRoundResponseBody = { lines, committeeTurnId };
+    return NextResponse.json(res);
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error';
     return NextResponse.json({ error: message }, { status: 500 });

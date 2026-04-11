@@ -22,6 +22,12 @@ export {
   listWebPersonaMessages,
   selectWebPersonaAssistantMessageForFeedback,
 } from './webPersonaChatRepository';
+export {
+  buildCommitteeTranscriptExcerpt,
+  getWebCommitteeTurnForUser,
+  insertWebCommitteeTurn,
+  updateWebCommitteeTurnExcerpt,
+} from './webCommitteeTurnsRepository';
 export { selectPersonaLongTermSummary, upsertPersonaLongTermSummary } from './personaMemoryWebRepository';
 export {
   fetchPersonaChatRequestRow,

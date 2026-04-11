@@ -3,6 +3,10 @@ import type { CommitteeDiscussionLineDto } from '@office-unify/shared-types';
 import { requirePersonaChatAuth } from '@/lib/server/persona-chat-auth';
 import { getServiceSupabase } from '@/lib/server/supabase-service';
 import {
+  buildCommitteeTranscriptExcerpt,
+  updateWebCommitteeTurnExcerpt,
+} from '@office-unify/supabase-access';
+import {
   executeCommitteeDiscussionClosing,
   resolvePersonaChatLlmEnv,
 } from '@/lib/server/runCommitteeDiscussion';
@@ -10,6 +14,8 @@ import {
 type Body = {
   topic?: string;
   transcript?: CommitteeDiscussionLineDto[];
+  /** 있으면 종료 후 해당 턴의 transcript_excerpt 갱신 */
+  committeeTurnId?: string;
 };
 
 export async function POST(req: Request) {
@@ -47,6 +53,8 @@ export async function POST(req: Request) {
     );
   }
 
+  const committeeTurnId = typeof body.committeeTurnId === 'string' ? body.committeeTurnId.trim() : '';
+
   try {
     const { cio, drucker } = await executeCommitteeDiscussionClosing({
       supabase,
@@ -56,6 +64,17 @@ export async function POST(req: Request) {
       topic,
       transcript,
     });
+
+    if (committeeTurnId) {
+      const full = [...transcript, cio, drucker];
+      await updateWebCommitteeTurnExcerpt(
+        supabase,
+        userKey,
+        committeeTurnId,
+        buildCommitteeTranscriptExcerpt(topic, full),
+      );
+    }
+
     return NextResponse.json({ cio, drucker });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error';

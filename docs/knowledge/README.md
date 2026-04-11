@@ -6,6 +6,7 @@
 - `packages/ai-office-engine/src/privateBanker/privateBankerLongTerm.ts` — PB 전용 장기 기억 JSON(`private_banker_v1`) 및 `persona_memory` 네임스페이스 키(`j-pierpont-lt`).
 - `packages/ai-office-engine/src/privateBanker/privateBankerResponseFormat.ts` — PB 응답 최소 형식 검증·서버 보정(선택).
 - `packages/ai-office-engine/src/committee/committeePrompt.ts` · `committeeResponseFormat.ts` — 투자위원회(persona-chat 5인) 공통 계약·최소 보정.
+- 투자위원회 피드백·`committee-lt` 장기 기억: `committee/committeeLongTerm.ts`, `committeeFeedback.ts`, `longTermEntryPriority.ts`; durable 턴 `docs/sql/append_web_committee_turns.sql`, 설명 `docs/persona-long-term-memory-strategy.md` (committee 섹션).
 - Dev_Support 생성은 서버 `GEMINI_API_KEY`만 사용(`apps/web/app/api/generate/route.ts`). 클라이언트에 키를 넣지 않는다.
 - 포트폴리오 원장 테이블: `docs/sql/append_web_portfolio_ledger.sql` — 적용 후 `/portfolio-ledger`에서 INSERT/DELETE 검증·반영.
 - 레거시 `persona_memory` 행(`j-pierpont`) 수동 정리: `docs/sql/cleanup_legacy_j_pierpont_persona_memory_optional.sql`, `docs/persona-long-term-memory-strategy.md`.

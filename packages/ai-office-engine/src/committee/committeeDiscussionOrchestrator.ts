@@ -6,6 +6,7 @@ import {
   getOrCreateWebPersonaSession,
   listWebPortfolioHoldingsForUser,
   listWebPortfolioWatchlistForUser,
+  selectPersonaLongTermSummary,
 } from '@office-unify/supabase-access';
 import { remediateCommitteePersonaReply } from './committeeResponseFormat';
 import { COMMITTEE_DISCUSSION_SPEAKER_ORDER, getCommitteeSystemPromptAppend } from './committeePrompt';
@@ -21,6 +22,7 @@ import {
 import { resolveGeminiModelForWebPersonaSlug, resolveOpenAiModelForWebPersonaSlug } from '../webPersonaLlmModels';
 import { isOpenAiWebPersonaSlug } from '../webPersonaOpenAiRouting';
 import { resolveWebPersona } from '../webPersonas/registry';
+import { COMMITTEE_LT_MEMORY_KEY, formatCommitteeLongTermForPrompt } from './committeeLongTerm';
 
 function toGeminiContents(messages: { role: 'user' | 'assistant'; content: string }[]): GeminiChatTurn[] {
   return messages.map((m) => ({
@@ -81,6 +83,8 @@ async function buildCommitteeSpeakerPrepared(params: {
   personaSlug: string;
   userContent: string;
   ledgerSnapshot: string;
+  /** 투자위원회 전용 피드백 장기 기억(committee-lt), 일반 persona 장기 기억과 별도 */
+  committeeLongTermForPrompt?: string;
 }): Promise<PersonaChatTurnPrepared> {
   const def = resolveWebPersona(params.personaSlug);
   if (!def) throw new Error(`Unknown persona: ${params.personaSlug}`);
@@ -99,7 +103,7 @@ async function buildCommitteeSpeakerPrepared(params: {
 
   const committeeAppend = getCommitteeSystemPromptAppend(personaKey);
 
-  const systemInstruction = buildWebPersonaSystemInstruction({
+  let systemInstruction = buildWebPersonaSystemInstruction({
     personaSystem: def.systemPrompt,
     longTermForPrompt: '',
     previousDayAssistantHint: null,
@@ -107,6 +111,10 @@ async function buildCommitteeSpeakerPrepared(params: {
     committeeAppend,
     ledgerSnapshot: params.ledgerSnapshot,
   });
+
+  if (params.committeeLongTermForPrompt?.trim()) {
+    systemInstruction += `\n\n[투자위원회 누적 피드백 기억 — 과거 토론에서 남긴 유용한 맥락]\n${params.committeeLongTermForPrompt.trim()}`;
+  }
 
   return {
     def,
@@ -166,6 +174,8 @@ export async function runCommitteeDiscussionRound(params: {
   priorTranscript: CommitteeDiscussionLineDto[];
 }): Promise<{ lines: CommitteeDiscussionLineDto[] }> {
   const ledgerSnapshot = await loadLedgerSnapshot(params.supabase, params.userKey);
+  const committeeRaw = await selectPersonaLongTermSummary(params.supabase, params.userKey, COMMITTEE_LT_MEMORY_KEY);
+  const committeeLt = formatCommitteeLongTermForPrompt(committeeRaw).trim();
 
   const lines: CommitteeDiscussionLineDto[] = [];
   for (const slug of COMMITTEE_DISCUSSION_SPEAKER_ORDER) {
@@ -185,6 +195,7 @@ export async function runCommitteeDiscussionRound(params: {
       personaSlug: slug,
       userContent,
       ledgerSnapshot,
+      committeeLongTermForPrompt: committeeLt || undefined,
     });
 
     const { text: raw } = await generatePersonaAssistantReply({
@@ -214,6 +225,8 @@ export async function runCommitteeDiscussionClosing(params: {
   transcript: CommitteeDiscussionLineDto[];
 }): Promise<{ cio: CommitteeDiscussionLineDto; drucker: CommitteeDiscussionLineDto }> {
   const ledgerSnapshot = await loadLedgerSnapshot(params.supabase, params.userKey);
+  const committeeRaw = await selectPersonaLongTermSummary(params.supabase, params.userKey, COMMITTEE_LT_MEMORY_KEY);
+  const committeeLt = formatCommitteeLongTermForPrompt(committeeRaw).trim();
   const transcriptText = truncateForCommittee(formatTranscript(params.transcript), 20_000);
 
   const baseUser = truncateForCommittee(
@@ -230,6 +243,7 @@ export async function runCommitteeDiscussionClosing(params: {
     personaSlug: 'cio',
     userContent: baseUser,
     ledgerSnapshot,
+    committeeLongTermForPrompt: committeeLt || undefined,
   });
   const cioSystem = `${cioPrepared.systemInstruction}\n${CLOSING_CIO_APPEND}`;
   const cioGen = await generatePersonaAssistantReply({
@@ -259,6 +273,7 @@ export async function runCommitteeDiscussionClosing(params: {
     personaSlug: 'drucker',
     userContent: druckerUser,
     ledgerSnapshot,
+    committeeLongTermForPrompt: committeeLt || undefined,
   });
   const druckerSystem = `${druckerPrepared.systemInstruction}\n${CLOSING_DRUCKER_APPEND}`;
   const druckerGen = await generatePersonaAssistantReply({
