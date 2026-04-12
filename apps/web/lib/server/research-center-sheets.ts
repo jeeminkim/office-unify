@@ -96,7 +96,7 @@ export async function appendResearchCenterSheets(params: {
   });
   await sheetsValuesAppend({
     spreadsheetId: id,
-    rangeA1: `${SHEET_TAB_NAMES.researchReportsLog}!A:L`,
+    rangeA1: `${SHEET_TAB_NAMES.researchReportsLog}!A:M`,
     values: [logRow],
     valueInputOption: 'USER_ENTERED',
   });
