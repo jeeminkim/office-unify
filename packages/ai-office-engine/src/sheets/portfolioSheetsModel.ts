@@ -6,7 +6,7 @@
 import type { JoLedgerPayloadV1 } from '@office-unify/shared-types';
 import type { WebPortfolioHoldingRow, WebPortfolioWatchlistRow } from '@office-unify/supabase-access';
 
-/** 보유 탭: 원장 9열 + GOOGLEFINANCE·파생 수식 열 */
+/** 보유 탭: 원장 9열 + GOOGLEFINANCE·파생 수식 열 + 목표가·기대수익(시트 research_price_targets 참조) */
 export const HOLDINGS_HEADER = [
   'market',
   'symbol',
@@ -14,7 +14,7 @@ export const HOLDINGS_HEADER = [
   'sector',
   'qty',
   'avg_price',
-  'target_price',
+  'target_price_manual',
   'investment_memo',
   'judgment_memo',
   'exchange_ticker',
@@ -28,6 +28,29 @@ export const HOLDINGS_HEADER = [
   'datadelay',
   'target_gap_pct',
   'price_status',
+  'target_price_reports_avg',
+  'target_price_blended',
+  'upside_pct_manual',
+  'upside_pct_reports_avg',
+  'upside_pct_blended',
+  'report_count',
+  'expected_return_weighted',
+  'consensus_status',
+] as const;
+
+/** 수동 입력·append 전용. 동기화 API는 이 탭을 덮어쓰지 않음. */
+export const RESEARCH_PRICE_TARGETS_HEADER = [
+  'market',
+  'symbol',
+  'name',
+  'source_type',
+  'source_name',
+  'report_date',
+  'target_price',
+  'rating',
+  'currency',
+  'note',
+  'confidence',
 ] as const;
 
 /** 관심 탭 */
@@ -49,9 +72,12 @@ export const WATCHLIST_HEADER = [
   'tradetime',
   'datadelay',
   'price_status',
+  'target_price_reports_avg',
+  'upside_pct_reports_avg',
+  'report_count',
 ] as const;
 
-const PORTFOLIO_SUMMARY_HEADER = [
+export const PORTFOLIO_SUMMARY_HEADER = [
   'total_market_value_krw',
   'total_pnl_amount_krw',
   'total_pnl_pct',
@@ -67,6 +93,21 @@ const PORTFOLIO_SUMMARY_HEADER = [
   'sector_top1_weight_pct',
   'sector_top2',
   'sector_top2_weight_pct',
+  'portfolio_expected_return_manual',
+  'portfolio_expected_return_reports_avg',
+  'portfolio_expected_return_blended',
+  'top_upside_symbol_1',
+  'top_upside_symbol_2',
+  'top_upside_symbol_3',
+  'top_expected_return_contributor_1',
+  'top_expected_return_contributor_2',
+  'top_expected_return_contributor_3',
+  'target_price_missing_count',
+  'report_consensus_missing_count',
+  'report_consensus_negative_count',
+  'avg_report_count_per_holding',
+  'holdings_with_positive_upside_count',
+  'holdings_with_negative_upside_count',
 ] as const;
 
 /** 단순 레버리지·변동성 프록시(원장 메타). 리서치 센터 아님. */
@@ -99,6 +140,8 @@ function exchangeTickerFormula(r: number): string {
   return `=IFERROR(IF(UPPER(TRIM(A${r}))="KR", IF(REGEXMATCH(TO_TEXT(B${r}),"^[0-9]+$"), "KRX:"&TEXT(VALUE(B${r}),"000000"), "KRX:"&TRIM(B${r})), IF(UPPER(TRIM(A${r}))="US", "NASDAQ:"&UPPER(TRIM(B${r})), "")), "")`;
 }
 
+const RP_TAB = 'research_price_targets';
+
 function holdingDerivedFormulas(r: number): string[] {
   const ex = exchangeTickerFormula(r);
   const k = `=IFERROR(GOOGLEFINANCE(J${r},"price"), "")`;
@@ -111,7 +154,15 @@ function holdingDerivedFormulas(r: number): string[] {
   const dd = `=IFERROR(GOOGLEFINANCE(J${r},"datadelay"), "")`;
   const tgtGap = `=IFERROR(IF(OR(G${r}="", M${r}="", K${r}="", K${r}=0), "", IF(UPPER(TRIM(A${r}))="KR", (G${r}-M${r})/M${r}, (G${r}-K${r})/K${r})), "")`;
   const st = `=IFERROR(IF(K${r}="","시세 없음", IF(AND(R${r}<>"", R${r}>0), "준실시간(지연 "&R${r}&"분 가능)", "연동")), "")`;
-  return [ex, k, fx, krw, mv, pnl, pnlPct, tt, dd, tgtGap, st];
+  const rpAvg = `=IFERROR(AVERAGE(FILTER(${RP_TAB}!$G$2:$G$10000, ${RP_TAB}!$A$2:$A$10000=$A${r}, ${RP_TAB}!$B$2:$B$10000=$B${r})), "")`;
+  const tpBlend = `=IFERROR(IF(G${r}<>"", G${r}, IF(U${r}<>"", U${r}, "")), "")`;
+  const upMan = `=IFERROR(IF(OR(G${r}="",K${r}="",K${r}=0), "", (G${r}-K${r})/K${r}), "")`;
+  const upRep = `=IFERROR(IF(OR(U${r}="",K${r}="",K${r}=0), "", (U${r}-K${r})/K${r}), "")`;
+  const upBlend = `=IFERROR(IF(OR(V${r}="",K${r}="",K${r}=0), "", (V${r}-K${r})/K${r}), "")`;
+  const repCt = `=IFERROR(COUNTIFS(${RP_TAB}!$A$2:$A$10000,$A${r},${RP_TAB}!$B$2:$B$10000,$B${r}), "")`;
+  const expW = `=IFERROR(IF(OR($N${r}="", $N${r}=0, SUM($N$2:$N$2000)=0), "", $N${r}/SUM($N$2:$N$2000)*X${r}), "")`;
+  const consSt = `=IF(Z${r}=0,"리포트 목표가 없음", IF(AND(G${r}<>"", U${r}<>"", ABS(U${r}-G${r})/MAX(ABS(G${r}),1e-9)>0.15), "수동·리포트 괴리 큼", "참고"))`;
+  return [ex, k, fx, krw, mv, pnl, pnlPct, tt, dd, tgtGap, st, rpAvg, tpBlend, upMan, upRep, upBlend, repCt, expW, consSt];
 }
 
 /**
@@ -151,7 +202,10 @@ function watchlistDerivedFormulas(r: number): string[] {
   const tt = `=IFERROR(GOOGLEFINANCE(J${r},"tradetime"), "")`;
   const dd = `=IFERROR(GOOGLEFINANCE(J${r},"datadelay"), "")`;
   const st = `=IFERROR(IF(K${r}="","시세 없음", IF(AND(P${r}<>"", P${r}>0), "준실시간(지연 "&P${r}&"분 가능)", "연동")), "")`;
-  return [ex, k, fx, krw, dist, tt, dd, st];
+  const rpAvg = `=IFERROR(AVERAGE(FILTER(${RP_TAB}!$G$2:$G$10000, ${RP_TAB}!$A$2:$A$10000=$A${r}, ${RP_TAB}!$B$2:$B$10000=$B${r})), "")`;
+  const upRep = `=IFERROR(IF(OR(R${r}="",K${r}="",K${r}=0), "", (R${r}-K${r})/K${r}), "")`;
+  const repCt = `=IFERROR(COUNTIFS(${RP_TAB}!$A$2:$A$10000,$A${r},${RP_TAB}!$B$2:$B$10000,$B${r}), "")`;
+  return [ex, k, fx, krw, dist, tt, dd, st, rpAvg, upRep, repCt];
 }
 
 export function buildWatchlistDashboardRow(w: WebPortfolioWatchlistRow, rowIndex: number): string[] {
@@ -188,6 +242,11 @@ export function portfolioSummaryFormulaRow(): string[] {
   const h = `${rng}H2:H${HOLDINGS_MAX_ROW}`;
   const n = `${rng}N2:N${HOLDINGS_MAX_ROW}`;
   const o = `${rng}O2:O${HOLDINGS_MAX_ROW}`;
+  const w = `${rng}W2:W${HOLDINGS_MAX_ROW}`;
+  const x = `${rng}X2:X${HOLDINGS_MAX_ROW}`;
+  const y = `${rng}Y2:Y${HOLDINGS_MAX_ROW}`;
+  const z = `${rng}Z2:Z${HOLDINGS_MAX_ROW}`;
+  const aa = `${rng}AA2:AA${HOLDINGS_MAX_ROW}`;
   const sumN = `SUM(${n})`;
   const sumO = `SUM(${o})`;
   const costSum = `SUMPRODUCT(${e},${f})`;
@@ -211,7 +270,54 @@ export function portfolioSummaryFormulaRow(): string[] {
   const s2 = `=IFERROR(INDEX(${qSector},2,1),"")`;
   const s2w = `=IFERROR(IF(${sumN}=0,"", INDEX(${qSector},2,2)/${sumN}),"")`;
 
-  return [totalMv, totalPnl, totalPnlPct, krW, usW, top3, lev, hv, cash, missT, missM, s1, s1w, s2, s2w];
+  const perMan = `=IFERROR(SUMPRODUCT(${n},${w})/SUM(${n}), "")`;
+  const perRep = `=IFERROR(SUMPRODUCT(${n},${x})/SUM(${n}), "")`;
+  const perBlend = `=IFERROR(SUMPRODUCT(${n},${y})/SUM(${n}), "")`;
+  const topX1 = `=IFERROR(INDEX(${b}, MATCH(LARGE(${x}, 1), ${x}, 0)), "")`;
+  const topX2 = `=IFERROR(INDEX(${b}, MATCH(LARGE(${x}, 2), ${x}, 0)), "")`;
+  const topX3 = `=IFERROR(INDEX(${b}, MATCH(LARGE(${x}, 3), ${x}, 0)), "")`;
+  const topA1 = `=IFERROR(INDEX(${b}, MATCH(LARGE(${aa}, 1), ${aa}, 0)), "")`;
+  const topA2 = `=IFERROR(INDEX(${b}, MATCH(LARGE(${aa}, 2), ${aa}, 0)), "")`;
+  const topA3 = `=IFERROR(INDEX(${b}, MATCH(LARGE(${aa}, 3), ${aa}, 0)), "")`;
+  const missTdup = `=COUNTIF(${g},"")`;
+  const repMiss = `=COUNTIF(${z},0)`;
+  const repNeg = `=COUNTIF(${x},"<0")`;
+  const avgRep = `=IFERROR(AVERAGE(${z}), "")`;
+  const posUps = `=COUNTIF(${x},">0")`;
+  const negUps = `=COUNTIF(${x},"<0")`;
+
+  return [
+    totalMv,
+    totalPnl,
+    totalPnlPct,
+    krW,
+    usW,
+    top3,
+    lev,
+    hv,
+    cash,
+    missT,
+    missM,
+    s1,
+    s1w,
+    s2,
+    s2w,
+    perMan,
+    perRep,
+    perBlend,
+    topX1,
+    topX2,
+    topX3,
+    topA1,
+    topA2,
+    topA3,
+    missTdup,
+    repMiss,
+    repNeg,
+    avgRep,
+    posUps,
+    negUps,
+  ];
 }
 
 export function portfolioSummarySheetGrid(_holdings: WebPortfolioHoldingRow[]): string[][] {
@@ -307,6 +413,12 @@ export function buildCommitteeInputSummaryLines(holdings: WebPortfolioHoldingRow
     '시가총액·손익·국가 비중(시가)·목표가 괴리는 스프레드시트 `portfolio_summary` / `holdings_dashboard`의 GOOGLEFINANCE 파생 열을 우선 참고한다(준실시간, 최대 약 20분 지연·#N/A 가능). 운영용이며 초단타·자동 매매 신호가 아니다.',
   );
   lines.push(
+    '리포트 평균 목표가·기대수익률(시가 가중)은 `research_price_targets` 탭 수동 입력을 전제로 `holdings_dashboard`·`portfolio_summary`에 계산된다. 시장 컨센서스 참고용이며 투자 판단의 유일한 근거나 확정 수익률이 아니다.',
+  );
+  lines.push(
+    '`portfolio_summary`에서 portfolio_expected_return_reports_avg(리포트 기준), top_upside_symbol_*, top_expected_return_contributor_*, report_consensus_missing_count 등을 확인한다. 수동 목표가(G열)와 리포트 평균(U열) 괴리는 consensus_status·시트 문구로 보조한다.',
+  );
+  lines.push(
     `원장 스냅샷(원가 기준 참고): 한국 비중 약 ${s.kr_weight_pct}%, 미국 비중 약 ${s.us_weight_pct}% — 시가 반영 시 수치는 시트와 다를 수 있다.`,
   );
   if (s.top3_concentration_pct) {
@@ -339,7 +451,7 @@ export function formatCommitteeInputSummaryForPrompt(holdings: WebPortfolioHoldi
   if (lines.length === 0) return '';
   return [
     '## 운영 대시보드 요약 (구조화 — 참고, 단정 아님)',
-    '(아래 한 줄은 Supabase 원장 메타 + Google Sheets GOOGLEFINANCE 운영 관점 안내를 함께 쓴다.)',
+    '(Supabase 원장 메타 + Google Sheets GOOGLEFINANCE·리포트 목표가 수동 탭 기준. 숫자는 시트·지연·입력 품질에 의존하며 위원회가 절대적 사실로 단정하지 않는다.)',
     ...lines.map((l) => `- ${l}`),
   ].join('\n');
 }
@@ -350,6 +462,8 @@ export const SHEET_TAB_NAMES = {
   portfolioSummary: 'portfolio_summary',
   committeeSummary: 'committee_input_summary',
   ledgerQueue: 'ledger_change_queue',
+  /** 수동 입력 전용 — 동기화 API가 덮어쓰지 않음 */
+  researchPriceTargets: 'research_price_targets',
   /** Research Center — 스프레드시트에 동일 이름 탭을 두면 append 동작 */
   researchRequests: 'research_requests',
   researchContextCache: 'research_context_cache',

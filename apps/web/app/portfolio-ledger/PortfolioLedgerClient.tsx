@@ -206,8 +206,11 @@ export function PortfolioLedgerClient() {
         <p className="mt-2 text-[11px] text-slate-500">
           동기화는 Vercel 환경변수 <code className="rounded bg-slate-200 px-1">GOOGLE_SERVICE_ACCOUNT_JSON</code>,{" "}
           <code className="rounded bg-slate-200 px-1">GOOGLE_SHEETS_SPREADSHEET_ID</code> 및 스프레드시트에 서비스 계정 공유가
-          필요합니다. 시세는 <strong>GOOGLEFINANCE 수식</strong>(준실시간, 최대 약 20분 지연 가능)으로 주입됩니다. 자세한 내용은{" "}
-          <code className="rounded bg-slate-200 px-1">docs/google-sheets-portfolio-dashboard.md</code> 참고.
+          필요합니다. 시세·환율은 <strong>GOOGLEFINANCE 수식</strong>(준실시간, 지연·#N/A 가능)으로 주입됩니다.{" "}
+          <strong>리포트 평균 목표가</strong>는 <code className="rounded bg-slate-200 px-1">research_price_targets</code> 탭에
+          수동 입력한 뒤 <code className="rounded bg-slate-200 px-1">holdings_dashboard</code>·
+          <code className="rounded bg-slate-200 px-1">portfolio_summary</code>에서 집계됩니다(참고용, 유일한 근거 아님). 자세한
+          내용은 <code className="rounded bg-slate-200 px-1">docs/google-sheets-portfolio-dashboard.md</code> 참고.
         </p>
         <label className="mt-3 block text-[11px] font-medium text-slate-700">ledger_change_queue에 append (jo_ledger_v1 JSON)</label>
         <textarea

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   JoLedgerEditMode,
   JoLedgerLedgerTarget,
@@ -82,6 +82,7 @@ export function JoIlHyeonLedgerForm(props: Props) {
 
   const [loadMsg, setLoadMsg] = useState<string | null>(null);
   const [loadingSnap, setLoadingSnap] = useState(false);
+  const [holdingsList, setHoldingsList] = useState<SnapshotRow[]>([]);
 
   /** 성공적으로 불러온 행(병합 신뢰 기준) */
   const [holdingBaseline, setHoldingBaseline] = useState<SnapshotRow | null>(null);
@@ -95,6 +96,15 @@ export function JoIlHyeonLedgerForm(props: Props) {
     ledgerTarget === "holding" && actionType === "upsert" && editMode !== "full";
 
   const inputMergeKey = useMemo(() => mergeKey(market, symbol), [market, symbol]);
+
+  const holdingSelectValue = useMemo(() => {
+    if (!holdingsList.length) return "";
+    const hit = holdingsList.some((r) => {
+      const m = r.market?.toUpperCase() === "US" ? "US" : "KR";
+      return mergeKey(m, r.symbol ?? "") === inputMergeKey;
+    });
+    return hit ? inputMergeKey : "";
+  }, [holdingsList, inputMergeKey]);
 
   const holdingMergeReady =
     holdingPartial &&
@@ -128,6 +138,49 @@ export function JoIlHyeonLedgerForm(props: Props) {
     setCanonicalWatchlistName(null);
   }, []);
 
+  const applyHoldingSnapshotRow = useCallback((row: SnapshotRow, opts?: { prevName?: string }) => {
+    const m = row.market?.toUpperCase() === "US" ? "US" : "KR";
+    const sym = String(row.symbol ?? "").trim();
+    const prevName = opts?.prevName ?? "";
+    const canonical = String(row.name ?? "").trim();
+    setMarket(m);
+    setSymbol(sym);
+    setCanonicalHoldingName(canonical || null);
+    setName(canonical || prevName);
+    setHoldingBaseline(row);
+    setHoldingMergeKey(mergeKey(m, sym));
+    setSector(row.sector != null ? String(row.sector) : "");
+    setInvestmentMemo(row.investment_memo != null ? String(row.investment_memo) : "");
+    setQty(row.qty != null ? String(row.qty) : "");
+    setAvgPrice(row.avg_price != null ? String(row.avg_price) : "");
+    setTargetPrice(row.target_price != null ? String(row.target_price) : "");
+    setJudgmentMemo(row.judgment_memo != null ? String(row.judgment_memo) : "");
+
+    let msg =
+      "원장에서 보유 행을 불러왔습니다. 수량·평단·메모·목표가를 수정한 뒤 JSON을 보내세요. (동일 시장+심볼로 upsert)";
+    if (prevName && canonical && prevName !== canonical) {
+      msg += ` 종목명은 원장 기준(${canonical})으로 맞췄습니다.`;
+    }
+    setLoadMsg(msg);
+  }, []);
+
+  const fetchHoldingsList = useCallback(async () => {
+    try {
+      const res = await fetch("/api/portfolio/ledger/snapshot", { credentials: "same-origin" });
+      const data = (await res.json()) as { holdings?: SnapshotRow[]; error?: string };
+      if (!res.ok) return;
+      setHoldingsList(data.holdings ?? []);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (ledgerTarget === "holding" && actionType === "upsert") {
+      void fetchHoldingsList();
+    }
+  }, [ledgerTarget, actionType, fetchHoldingsList]);
+
   const loadHoldingRow = useCallback(async () => {
     setLoadMsg(null);
     if (!symbol.trim()) {
@@ -140,6 +193,7 @@ export function JoIlHyeonLedgerForm(props: Props) {
       const data = (await res.json()) as { holdings?: SnapshotRow[]; error?: string };
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
       const rows = data.holdings ?? [];
+      setHoldingsList(rows);
       const sym = symbol.trim().toUpperCase();
       const row = rows.find(
         (r) => r.market?.toUpperCase() === market && r.symbol?.trim().toUpperCase() === sym,
@@ -154,24 +208,7 @@ export function JoIlHyeonLedgerForm(props: Props) {
         }
         return;
       }
-      const canonical = String(row.name ?? "").trim();
-      const prevName = name.trim();
-      setCanonicalHoldingName(canonical || null);
-      setName(canonical || prevName);
-      setHoldingBaseline(row);
-      setHoldingMergeKey(mergeKey(market, symbol));
-      setSector(row.sector != null ? String(row.sector) : "");
-      setInvestmentMemo(row.investment_memo != null ? String(row.investment_memo) : "");
-      setQty(row.qty != null ? String(row.qty) : "");
-      setAvgPrice(row.avg_price != null ? String(row.avg_price) : "");
-      setTargetPrice(row.target_price != null ? String(row.target_price) : "");
-      setJudgmentMemo(row.judgment_memo != null ? String(row.judgment_memo) : "");
-
-      let msg = "원장에서 보유 행을 불러왔습니다. 심볼·시장이 같으면 동일 종목으로 upsert됩니다.";
-      if (prevName && canonical && prevName !== canonical) {
-        msg += ` 종목명은 원장 기준(${canonical})으로 맞췄습니다.`;
-      }
-      setLoadMsg(msg);
+      applyHoldingSnapshotRow(row, { prevName: name.trim() });
       if (process.env.NODE_ENV === "development") {
         console.debug("[jo-ledger] snapshot merge ok holding", {
           mergeKey: mergeKey(market, symbol),
@@ -187,7 +224,7 @@ export function JoIlHyeonLedgerForm(props: Props) {
     } finally {
       setLoadingSnap(false);
     }
-  }, [market, symbol, name, resetHoldingMerge]);
+  }, [market, symbol, name, resetHoldingMerge, applyHoldingSnapshotRow]);
 
   const loadWatchlistRow = useCallback(async () => {
     setLoadMsg(null);
@@ -509,7 +546,7 @@ export function JoIlHyeonLedgerForm(props: Props) {
               setLoadMsg(null);
             }}
           >
-            <option value="full">전체 입력</option>
+            <option value="full">전체 입력 (신규 추가 · 수량·평단·메모·목표가 수정)</option>
             <option value="memo_only">메모만 수정</option>
             <option value="target_only">목표가만 수정</option>
             <option value="memo_target">메모 + 목표가만 수정</option>
@@ -519,7 +556,71 @@ export function JoIlHyeonLedgerForm(props: Props) {
               실제 DB는 UPDATE가 아니라 <strong>동일 키 INSERT upsert</strong>입니다. 원장에 없는 종목은 부분 수정 대신{" "}
               <strong>전체 입력</strong>으로 추가하세요.
             </p>
-          ) : null}
+          ) : (
+            <p className="text-[11px] text-slate-600">
+              <strong>매매 후 수량·평단을 반영</strong>하려면 <strong>전체 입력</strong>을 선택한 뒤, 아래「보유 종목 불러오기」에서
+              종목을 고르거나 시장+티커를 맞추고 「티커로 불러오기」를 누르세요.
+            </p>
+          )}
+        </div>
+      ) : null}
+
+      {ledgerTarget === "holding" && actionType === "upsert" ? (
+        <div className="flex flex-col gap-2 rounded border border-emerald-200/80 bg-white/90 p-3 text-xs">
+          <span className="font-medium text-emerald-950">보유 종목 정보 불러오기 (원장 SELECT)</span>
+          <p className="text-[11px] leading-snug text-slate-600">
+            Supabase 원장 스냅샷으로 폼을 채웁니다. 이후 수량·투자 메모·목표가 등을 고치고 JSON을 보내면 조일현이 upsert SQL을
+            제시합니다.
+          </p>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="flex min-w-[min(100%,280px)] flex-1 flex-col gap-1">
+              <span className="text-[11px] text-slate-600">종목 선택 (드롭다운)</span>
+              <select
+                className="rounded border border-slate-200 bg-white px-2 py-1.5 text-slate-900"
+                disabled={disabled || loadingSnap}
+                value={holdingSelectValue}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (!v) return;
+                  const row = holdingsList.find((r) => {
+                    const m = r.market?.toUpperCase() === "US" ? "US" : "KR";
+                    return mergeKey(m, r.symbol ?? "") === v;
+                  });
+                  if (row) {
+                    applyHoldingSnapshotRow(row, { prevName: name.trim() });
+                  }
+                }}
+              >
+                <option value="">보유 종목 선택…</option>
+                {holdingsList.map((r) => {
+                  const m = r.market?.toUpperCase() === "US" ? "US" : "KR";
+                  const k = mergeKey(m, r.symbol ?? "");
+                  const label = `${r.name ?? r.symbol} (${r.symbol}) · ${m}`;
+                  return (
+                    <option key={k} value={k}>
+                      {label}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="rounded border border-slate-300 bg-white px-2 py-1.5 text-[11px] text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+              disabled={disabled || loadingSnap}
+              onClick={() => void fetchHoldingsList()}
+            >
+              목록 새로고침
+            </button>
+            <button
+              type="button"
+              className="rounded border border-emerald-600 bg-emerald-50 px-2 py-1.5 text-[11px] font-medium text-emerald-950 hover:bg-emerald-100 disabled:opacity-50"
+              disabled={disabled || loadingSnap}
+              onClick={() => void loadHoldingRow()}
+            >
+              {loadingSnap ? "불러오는 중…" : "티커로 불러오기"}
+            </button>
+          </div>
         </div>
       ) : null}
 
@@ -601,17 +702,6 @@ export function JoIlHyeonLedgerForm(props: Props) {
         </p>
       ) : ledgerTarget === "holding" ? (
         <>
-          {ledgerTarget === "holding" && actionType === "upsert" && holdingPartial ? (
-            <button
-              type="button"
-              className="self-start rounded border border-emerald-600 bg-white px-3 py-1.5 text-xs text-emerald-900 hover:bg-emerald-50 disabled:opacity-50"
-              disabled={disabled || loadingSnap}
-              onClick={() => void loadHoldingRow()}
-            >
-              {loadingSnap ? "불러오는 중…" : "원장에서 보유 행 불러오기"}
-            </button>
-          ) : null}
-
           {holdingBaseline && holdingPartial ? (
             <div className="rounded border border-slate-200 bg-white/80 p-2 text-[11px] text-slate-800">
               <p className="mb-1 font-medium text-slate-700">불러온 원장 값 (참고)</p>

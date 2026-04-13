@@ -12,6 +12,13 @@
 - **지연**: 최대 약 **20분** 지연·누락·`#N/A`가 날 수 있습니다. **초단타·실시간 트레이딩 엔진이 아닙니다.**
 - **환율(원화 환산)**: `GOOGLEFINANCE("CURRENCY:USDKRW","price")` US 보유/관심 행에 사용합니다. KR 행은 `fx_rate_to_krw = 1`로 둡니다.
 
+## 리포트 목표가 (`research_price_targets`)
+
+- **외부 리포트 목표가·내 부 메모**를 **수동으로** 적재하는 탭입니다. 동기화 API는 이 탭을 **덮어쓰지 않습니다.**
+- **1행**에 `packages/ai-office-engine`의 `RESEARCH_PRICE_TARGETS_HEADER` 컬럼과 맞는 헤더를 두세요.
+- `holdings_dashboard`의 `target_price_reports_avg`, `upside_pct_reports_avg`, `report_count` 등은 이 탭의 **동일 시장·심볼** 행을 `FILTER`/`AVERAGE`로 집계합니다.
+- **리포트 평균 목표가는 운영 참고값**이며, 투자 판단의 유일한 근거나 확정 수익률이 아닙니다.
+
 ## exchange_ticker 규칙 (수식)
 
 - **KR**: `KRX:` + 6자리 숫자 티커(앞자리 0). 숫자가 아닌 티커·ETF 등은 `KRX:원문` — **KOSDAQ 전용 종목**은 시트에서 `KOSDAQ:티커` 등으로 수동 수정할 수 있습니다.
@@ -21,11 +28,12 @@
 
 | 탭 | 내용 |
 |----|------|
-| `holdings_dashboard` | 원장 9열 + `exchange_ticker`~`price_status` 수식 |
-| `watchlist_dashboard` | 원장 9열 + 시세·거리·지연 상태 수식 |
-| `portfolio_summary` | `holdings_dashboard` 열 `N`(시가총액 원화)·`O`(손익 원화) 등을 **SUM/QUERY**로 집계 |
+| `holdings_dashboard` | 원장 9열 + 시세·손익·목표가 괴리·**리포트 평균 목표가·기대수익** 수식 |
+| `watchlist_dashboard` | 원장 9열 + 시세·거리·지연 상태 + **리포트 평균 목표가 보조** |
+| `portfolio_summary` | **포트폴리오 전체 기대수익률(수동/리포트/블렌드 가중)**·상위 심볼·컨센서스 누락 등 |
 | `committee_input_summary` | 투자위원회용 문장 (`summary_line` 열) |
 | `ledger_change_queue` | 조일현 JSON 대기열 (DB 아님) |
+| `research_price_targets` | **수동 전용** — 리포트 목표가 적재 (API 미동기화) |
 
 동기화 API는 **앞 4개 탭만** 덮어씁니다. `ledger_change_queue`는 API로 **한 줄 append**만 합니다.
 
@@ -44,4 +52,8 @@
 
 ## 투자위원회
 
-서버는 **`formatCommitteeInputSummaryForPrompt`**에 스프레드시트·GOOGLEFINANCE 안내와 원장 메타(원가 비중 등)를 함께 넣습니다. **실제 시가 비중·손익은 시트 `portfolio_summary`를 우선**합니다.
+서버는 **`formatCommitteeInputSummaryForPrompt`**에 스프레드시트·GOOGLEFINANCE 안내와 원장 메타(원가 비중 등)를 함께 넣습니다. **실제 시가 비중·손익·리포트 기대수익은 시트 `portfolio_summary` / `holdings_dashboard`를 우선**하며, 숫자는 **지연·수동 입력 품질**에 의존하므로 위원회가 절대적 사실로 단정하지 않습니다.
+
+## Gemini
+
+기대수익률·목표가 **숫자 자체는 시트 수식·집계**로 두고, Gemini는 **해석·문장 보조**에만 쓰는 것을 권장합니다.
