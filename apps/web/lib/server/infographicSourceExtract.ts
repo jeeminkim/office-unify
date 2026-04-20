@@ -1,4 +1,11 @@
-import type { InfographicInputSourceType } from '@office-unify/shared-types';
+import type {
+  InfographicArticlePattern,
+  InfographicIndustryPattern,
+  InfographicInputSourceType,
+  InfographicSourceTone,
+  InfographicStructureDensity,
+  InfographicSubjectivityLevel,
+} from '@office-unify/shared-types';
 
 const MAX_EXTRACT_TEXT = 22000;
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
@@ -6,6 +13,63 @@ const FETCH_TIMEOUT_MS = 12000;
 
 function normalizeWhitespace(text: string): string {
   return text.replace(/\r/g, '\n').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function classifyArticlePattern(params: {
+  text: string;
+  title?: string;
+  sourceUrl?: string;
+}): {
+  articlePattern: InfographicArticlePattern;
+  sourceTone: InfographicSourceTone;
+  subjectivityLevel: InfographicSubjectivityLevel;
+  structureDensity: InfographicStructureDensity;
+} {
+  const lower = `${params.title ?? ''}\n${params.text}\n${params.sourceUrl ?? ''}`.toLowerCase();
+  const score = (patterns: RegExp[]) => patterns.reduce((acc, re) => acc + (re.test(lower) ? 1 : 0), 0);
+  const reportScore = score([/보고서|리포트|survey|설문|요약|전망/, /%|점유율|순위|표|figure|table/, /기관|연구소|investor|sec/]);
+  const companyScore = score([/실적|가이던스|매출|영업이익|eps|밸류에이션|기업/, /ceo|cfo|분기|ir/]);
+  const opinionScore = score([/내 생각|나는|개인적으로|솔직히|칼럼|opinion|editorial/, /과장|우려|의견|주장/]);
+  const marketScore = score([/시황|수급|금리|환율|증시|테마|섹터|모멘텀|선물|채권/]);
+  const thematicScore = score([/테마|구조|밸류체인|생태계|플랫폼|전환|확산/]);
+  const howtoScore = score([/방법|절차|가이드|체크리스트|어떻게|실무|운영 팁/]);
+  let articlePattern: InfographicArticlePattern = 'mixed_or_unknown';
+  const top = Math.max(reportScore, companyScore, opinionScore, marketScore, thematicScore, howtoScore);
+  if (top > 0) {
+    if (top === reportScore) articlePattern = 'industry_report';
+    else if (top === companyScore) articlePattern = 'company_report';
+    else if (top === opinionScore) articlePattern = 'opinion_editorial';
+    else if (top === marketScore) articlePattern = 'market_commentary';
+    else if (top === thematicScore) articlePattern = 'thematic_analysis';
+    else if (top === howtoScore) articlePattern = 'how_to_explainer';
+  }
+  const subjectivityLevel: InfographicSubjectivityLevel =
+    opinionScore >= 2 ? 'high' : opinionScore >= 1 ? 'medium' : 'low';
+  const headingCount = (params.text.match(/\n\s*(\d+\.|[-*]|##?|[가-힣A-Za-z ]{2,20}:)/g) ?? []).length;
+  const structureDensity: InfographicStructureDensity =
+    headingCount >= 10 ? 'high' : headingCount >= 4 ? 'medium' : 'low';
+  const sourceTone: InfographicSourceTone =
+    articlePattern === 'industry_report' ? 'institutional'
+      : articlePattern === 'company_report' ? 'corporate'
+      : articlePattern === 'opinion_editorial' ? 'personal_blog'
+      : 'editorial';
+  return { articlePattern, sourceTone, subjectivityLevel, structureDensity };
+}
+
+function detectIndustryPatternLight(text: string): InfographicIndustryPattern {
+  const t = text.toLowerCase();
+  if (/반도체|메모리|파운드리|전자|디스플레이/.test(t)) return 'semiconductor_electronics';
+  if (/원유|가스|정유|전력|재생에너지|석탄|우라늄/.test(t)) return 'energy_resources';
+  if (/사이버|보안|security|랜섬|피싱|관제|탐지|mfa|edr|cnapp|cspm/.test(t)) return 'cybersecurity_service';
+  if (/소프트웨어|클라우드|saas|플랫폼|api|ai 서비스/.test(t)) return 'software_platform';
+  if (/바이오|헬스|의료|제약|임상/.test(t)) return 'healthcare_bio';
+  if (/유통|소비재|리테일|브랜드|이커머스/.test(t)) return 'consumer_retail';
+  if (/은행|보험|증권|핀테크|자산운용|결제/.test(t)) return 'finance_insurance';
+  if (/자동차|모빌리티|전기차|배터리|자율주행/.test(t)) return 'mobility_automotive';
+  if (/콘텐츠|미디어|광고|스트리밍|게임|ip/.test(t)) return 'media_content';
+  if (/산업재|기계|플랜트|물류|b2b/.test(t)) return 'industrials_b2b';
+  if (/제조|소재|장비|공장/.test(t)) return 'manufacturing';
+  return 'mixed_or_unknown';
 }
 
 function cleanupExtractedText(text: string): { cleanedText: string; cleanupApplied: boolean; cleanupNotes: string[] } {
@@ -37,6 +101,15 @@ function cleanupExtractedText(text: string): { cleanedText: string; cleanupAppli
     }
     if (/^그림\s*\d+|^표\s*\d+|^figure\s*\d+|^table\s*\d+/i.test(line)) {
       notes.push('caption_like_line_removed');
+      continue;
+    }
+    if (/개인적으로|솔직히|말 그대로|사실상|후원|광고|파트너스|구독과 좋아요/i.test(line)) {
+      notes.push('opinion_meta_phrase_reduced');
+      continue;
+    }
+    if (/[!?]{3,}|[ㅋㅎ]{3,}|[~]{2,}/.test(line)) {
+      notes.push('excessive_emphasis_reduced');
+      cleanedLines.push(line.replace(/[!?]{2,}/g, '!').replace(/[ㅋㅎ]{2,}/g, '').trim());
       continue;
     }
     cleanedLines.push(line);
@@ -132,6 +205,11 @@ export async function resolveInfographicSourceText(params: {
   extractionWarnings: string[];
   cleanupApplied: boolean;
   cleanupNotes: string[];
+  articlePattern: InfographicArticlePattern;
+  sourceTone: InfographicSourceTone;
+  subjectivityLevel: InfographicSubjectivityLevel;
+  structureDensity: InfographicStructureDensity;
+  industryPattern: InfographicIndustryPattern;
   rawExtractedTextLength: number;
   cleanedTextLength: number;
 }> {
@@ -140,12 +218,18 @@ export async function resolveInfographicSourceText(params: {
     const text = normalizeWhitespace(params.rawText ?? '');
     const rawText = text.slice(0, MAX_EXTRACT_TEXT);
     const cleaned = cleanupExtractedText(rawText);
+    const classified = classifyArticlePattern({ text: cleaned.cleanedText });
     return {
       rawText,
       cleanedText: cleaned.cleanedText,
       extractionWarnings: warnings,
       cleanupApplied: cleaned.cleanupApplied,
       cleanupNotes: cleaned.cleanupNotes,
+      articlePattern: classified.articlePattern,
+      sourceTone: classified.sourceTone,
+      subjectivityLevel: classified.subjectivityLevel,
+      structureDensity: classified.structureDensity,
+      industryPattern: detectIndustryPatternLight(cleaned.cleanedText),
       rawExtractedTextLength: rawText.length,
       cleanedTextLength: cleaned.cleanedText.length,
     };
@@ -160,6 +244,7 @@ export async function resolveInfographicSourceText(params: {
     const extracted = stripHtmlToText(html);
     if (extracted.text.length < 400) warnings.push('url_text_short');
     const cleaned = cleanupExtractedText(extracted.text);
+    const classified = classifyArticlePattern({ text: cleaned.cleanedText, title: extracted.title, sourceUrl: url });
     return {
       rawText: extracted.text,
       cleanedText: cleaned.cleanedText,
@@ -168,6 +253,11 @@ export async function resolveInfographicSourceText(params: {
       extractionWarnings: warnings,
       cleanupApplied: cleaned.cleanupApplied,
       cleanupNotes: cleaned.cleanupNotes,
+      articlePattern: classified.articlePattern,
+      sourceTone: classified.sourceTone,
+      subjectivityLevel: classified.subjectivityLevel,
+      structureDensity: classified.structureDensity,
+      industryPattern: detectIndustryPatternLight(cleaned.cleanedText),
       rawExtractedTextLength: extracted.text.length,
       cleanedTextLength: cleaned.cleanedText.length,
     };
@@ -184,6 +274,7 @@ export async function resolveInfographicSourceText(params: {
     const text = extractPdfTextFromBytes(bytes);
     if (text.length < 180) warnings.push('pdf_text_too_short');
     const cleaned = cleanupExtractedText(text);
+    const classified = classifyArticlePattern({ text: cleaned.cleanedText, sourceUrl: url });
     return {
       rawText: text,
       cleanedText: cleaned.cleanedText,
@@ -191,6 +282,11 @@ export async function resolveInfographicSourceText(params: {
       extractionWarnings: warnings,
       cleanupApplied: cleaned.cleanupApplied,
       cleanupNotes: cleaned.cleanupNotes,
+      articlePattern: classified.articlePattern,
+      sourceTone: classified.sourceTone,
+      subjectivityLevel: classified.subjectivityLevel,
+      structureDensity: classified.structureDensity,
+      industryPattern: detectIndustryPatternLight(cleaned.cleanedText),
       rawExtractedTextLength: text.length,
       cleanedTextLength: cleaned.cleanedText.length,
     };
@@ -206,6 +302,7 @@ export async function resolveInfographicSourceText(params: {
     const text = extractPdfTextFromBytes(bytes);
     if (text.length < 180) warnings.push('pdf_text_too_short');
     const cleaned = cleanupExtractedText(text);
+    const classified = classifyArticlePattern({ text: cleaned.cleanedText, title: file.name });
     return {
       rawText: text,
       cleanedText: cleaned.cleanedText,
@@ -213,6 +310,11 @@ export async function resolveInfographicSourceText(params: {
       extractionWarnings: warnings,
       cleanupApplied: cleaned.cleanupApplied,
       cleanupNotes: cleaned.cleanupNotes,
+      articlePattern: classified.articlePattern,
+      sourceTone: classified.sourceTone,
+      subjectivityLevel: classified.subjectivityLevel,
+      structureDensity: classified.structureDensity,
+      industryPattern: detectIndustryPatternLight(cleaned.cleanedText),
       rawExtractedTextLength: text.length,
       cleanedTextLength: cleaned.cleanedText.length,
     };

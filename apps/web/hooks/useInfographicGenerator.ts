@@ -22,6 +22,11 @@ export function useInfographicGenerator() {
   const [sourcePreviewRawText, setSourcePreviewRawText] = useState('');
   const [sourcePreviewMeta, setSourcePreviewMeta] = useState<{
     sourceType: InfographicInputSourceType;
+    articlePattern?: string;
+    industryPattern?: string;
+    sourceTone?: string;
+    subjectivityLevel?: string;
+    structureDensity?: string;
     sourceUrl?: string;
     sourceTitle?: string;
     extractionWarnings: string[];
@@ -31,10 +36,19 @@ export function useInfographicGenerator() {
     cleanupApplied: boolean;
     cleanupNotes: string[];
   } | null>(null);
+  const [degradedMeta, setDegradedMeta] = useState<{
+    degradedReasons?: string[];
+    articlePattern?: string;
+    industryPattern?: string;
+  } | null>(null);
+  const [pipelineStage, setPipelineStage] = useState<
+    'idle' | 'source_extracted' | 'cleaned_preview_ready' | 'spec_generation_succeeded' | 'spec_generation_fallback' | 'spec_generation_degraded'
+  >('idle');
 
   const generate = useCallback(async (payload: InfographicExtractRequestBody, pdfFile?: File | null) => {
     setLoading(true);
     setError(null);
+    setPipelineStage((prev) => (prev === 'cleaned_preview_ready' ? prev : 'source_extracted'));
     try {
       const hasUpload = payload.sourceType === 'pdf_upload' && pdfFile instanceof File;
       const requestInit: RequestInit = hasUpload
@@ -45,6 +59,8 @@ export function useInfographicGenerator() {
             if (payload.rawText) form.set('rawText', payload.rawText);
             if (payload.sourceUrl) form.set('sourceUrl', payload.sourceUrl);
             if (payload.pdfUrl) form.set('pdfUrl', payload.pdfUrl);
+            if (payload.articlePatternOverride) form.set('articlePatternOverride', payload.articlePatternOverride);
+            if (payload.industryPatternOverride) form.set('industryPatternOverride', payload.industryPatternOverride);
             form.set('pdfFile', pdfFile as File);
             return {
               method: 'POST',
@@ -63,7 +79,25 @@ export function useInfographicGenerator() {
       });
       const data = (await res.json()) as InfographicExtractResponseBody & { error?: string };
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-      setSpec(data.spec);
+      const mode = data.spec?.sourceMeta?.extractionMode;
+      if (mode === 'degraded_fallback') {
+        setSpec(null);
+        setDegradedMeta({
+          degradedReasons: data.spec?.sourceMeta?.degradedReasons?.map(String) ?? [],
+          articlePattern: data.spec?.sourceMeta?.articlePattern,
+          industryPattern: data.spec?.sourceMeta?.industryPattern,
+        });
+        setPipelineStage('spec_generation_degraded');
+        setError('원문 추출은 성공했지만 구조화 품질이 부족합니다. 추출 텍스트를 조금 더 정리해 다시 시도하세요.');
+      } else {
+        setSpec(data.spec);
+        setDegradedMeta(null);
+        setPipelineStage(
+          mode === 'semantic_fallback' || mode === 'llm_repaired'
+            ? 'spec_generation_fallback'
+            : 'spec_generation_succeeded',
+        );
+      }
       setWarnings(data.warnings ?? []);
       return data.spec;
     } catch (e: unknown) {
@@ -88,6 +122,8 @@ export function useInfographicGenerator() {
             if (payload.rawText) form.set('rawText', payload.rawText);
             if (payload.sourceUrl) form.set('sourceUrl', payload.sourceUrl);
             if (payload.pdfUrl) form.set('pdfUrl', payload.pdfUrl);
+            if (payload.articlePatternOverride) form.set('articlePatternOverride', payload.articlePatternOverride);
+            if (payload.industryPatternOverride) form.set('industryPatternOverride', payload.industryPatternOverride);
             form.set('pdfFile', pdfFile as File);
             return {
               method: 'POST',
@@ -108,6 +144,7 @@ export function useInfographicGenerator() {
       setSourcePreviewRawText(data.rawText ?? '');
       setSourcePreviewMeta(data.sourceMeta);
       setWarnings(data.warnings ?? []);
+      setPipelineStage('cleaned_preview_ready');
       return data;
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : '원문 추출 실패';
@@ -128,6 +165,8 @@ export function useInfographicGenerator() {
     sourcePreviewRawText,
     setSourcePreviewText,
     sourcePreviewMeta,
+    degradedMeta,
+    pipelineStage,
     generate,
     extractSourceText,
   };

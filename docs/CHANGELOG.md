@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Infographic control + predictability polish:** 자동 분류(articlePattern/industryPattern) override UI와 reset-to-auto를 추가해 사용자 교정 루프를 강화.
+- **Degraded fallback action guide:** degraded reason classifier를 도입하고 reason별 행동 문구/CTA(재시도, 텍스트 축약, 패턴 전환)를 제공.
+- **Result mode surfaced:** 생성 결과를 `industry_structure`/`opinion_argument_map`/`market_checkpoint_map` 등으로 명시하고 구조화 방식을 strip으로 설명.
+- **Regression fixture set fixed:** 반도체/보안/기관 인사이트/의견형/시황형/혼합형 6종 fixture를 고정해 입력 유형별 품질 흔들림 점검 기반 확보.
+- **Infographic article-aware expansion:** 문서 성격 분류(`articlePattern`)를 추가해 리포트형/의견형/시황형/테마형을 분기 처리. 의견/시황 문서는 opinion frame 기반(`thesis/support/counter/checkpoint`)으로 구조화한 뒤 4-zone 템플릿으로 매핑.
+- **Domain hint 확장:** `industryPattern`을 반도체/에너지/소비재/금융/모빌리티/미디어/산업재 등으로 확장하고 zone/risk salvage 힌트를 보강.
+- **Tone/subjectivity meta:** source cleanup에 블로그/칼럼형 노이즈 중립화 규칙을 추가하고 `sourceTone`, `subjectivityLevel`, `structureDensity` 메타를 기록.
+- **Infographic extractor hardening (phase 5):** 긴 URL/PDF 본문에서 spec 생성 실패를 줄이기 위해 `llm direct -> compact retry -> semantic fallback` 3단계 정책을 추가. JSON parse repair(smart quote/trailing comma/backslash/tail cut), domain-aware zone mapping(`industryPattern`), numeric salvage(bar/pie/comparison), minimum viable spec 기준 및 `degraded_fallback` UX를 도입.
 - **Stabilization Phase 4 (explainability + trust):** followup recommendedAction을 warning code + draft 필드 기반 item-aware 가이드로 고도화하고 quality strip(`정상 추출/자동 복구 적용/복구 초안 기반`)을 추가. `fallback_used` 저장 시 필드 부족 맥락을 포함한 confirm UX를 제공.
 - **Jo report quality loop:** sanitizer 메타에 `removedSectionCount`, `keptSectionCount`, `sanitationSeverity`를 추가하고 debug/로그에서 품질 회귀 감시가 가능하도록 보강.
 - **Infographic cleanup trust UX:** source cleanup 결과에 raw/cleaned 길이, cleanup notes, severity 요약 strip을 추가. 기본은 cleaned preview, raw는 debug 토글로 분리. 모바일 저장용 미리보기에서 저장 직전 확인과 렌더 준비 상태 안내를 추가.

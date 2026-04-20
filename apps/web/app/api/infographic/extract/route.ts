@@ -17,6 +17,8 @@ async function parseMultipartBody(req: Request): Promise<unknown> {
   const sourceUrl = String(form.get('sourceUrl') ?? '').trim();
   const pdfUrl = String(form.get('pdfUrl') ?? '').trim();
   const rawText = String(form.get('rawText') ?? '').trim();
+  const articlePatternOverride = String(form.get('articlePatternOverride') ?? '').trim();
+  const industryPatternOverride = String(form.get('industryPatternOverride') ?? '').trim();
   const pdfFileRaw = form.get('pdfFile');
   const pdfFile = pdfFileRaw instanceof File ? pdfFileRaw : undefined;
   return {
@@ -25,6 +27,8 @@ async function parseMultipartBody(req: Request): Promise<unknown> {
     sourceUrl: sourceUrl || undefined,
     pdfUrl: pdfUrl || undefined,
     rawText: rawText || undefined,
+    articlePatternOverride: articlePatternOverride || undefined,
+    industryPatternOverride: industryPatternOverride || undefined,
     pdfFile,
   };
 }
@@ -71,10 +75,12 @@ export async function POST(req: Request) {
     const extracted = await executeInfographicExtract({
       geminiApiKey: llm.geminiApiKey,
       industryName: parsed.value.industryName,
-      rawText: sourceResolved.rawText,
+      rawText: sourceResolved.cleanedText || sourceResolved.rawText,
       sourceUrl: sourceResolved.sourceUrl,
       sourceTitle: sourceResolved.sourceTitle,
       extractionWarnings: sourceResolved.extractionWarnings,
+      articlePatternOverride: parsed.value.articlePatternOverride,
+      industryPatternOverride: parsed.value.industryPatternOverride,
     });
     const normalized = normalizeInfographicForRender(
       extracted.spec,
@@ -86,7 +92,7 @@ export async function POST(req: Request) {
       sourceUrl: sourceResolved.sourceUrl,
       sourceTitle: sourceResolved.sourceTitle,
       extractionWarnings: sourceResolved.extractionWarnings,
-      extractedTextLength: sourceResolved.rawText.length,
+      extractedTextLength: sourceResolved.cleanedText.length || sourceResolved.rawText.length,
     };
     const validationErrors = validateInfographicSpec(normalized);
     const warnings = [...(extracted.warnings ?? []), ...validationErrors, ...sourceResolved.extractionWarnings];

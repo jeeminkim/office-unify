@@ -238,6 +238,9 @@ AI 협업 도구(Cursor, GPT Builder 등)와의 연결도 쉬워진다.
 - URL/PDF 입력은 추출 텍스트 preview/edit 단계를 거쳐 품질을 사용자가 통제할 수 있게 한다.
 - 추출 텍스트는 cleanup 단계를 거쳐 신뢰 가능한 초안을 제공하고, 모바일에서는 읽기/저장 미리보기 UX를 분리한다.
 - 품질 메타(debug)와 사용자용 품질 요약(strip)을 병행해 결과의 설명 가능성과 운영 피로도 감소를 함께 달성한다.
+- source extraction 성공과 spec generation 실패를 단계적으로 분리해 표시하고, spec 생성은 domain-aware mapping + semantic/numeric fallback으로 복구 가능성을 높인다.
+- 산업 리포트뿐 아니라 블로그/칼럼/시황 코멘트도 articlePattern classifier + opinion-aware 경로로 구조화하여 템플릿 재사용성과 범용성을 동시에 확보한다.
+- 최종 사용 단계에서는 자동 분류를 신뢰하되 사용자가 즉시 교정(override)할 수 있게 하여 예측 가능성과 재시도 용이성을 높인다.
 
 즉, 지금 단계는 “완성형 제품”이 아니라,
 **올바른 구조로 가기 위한 첫 번째 안정화 단계**다.

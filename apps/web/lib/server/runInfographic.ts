@@ -20,6 +20,8 @@ export async function executeInfographicExtract(params: {
   sourceUrl?: string;
   sourceTitle?: string;
   extractionWarnings?: string[];
+  articlePatternOverride?: string;
+  industryPatternOverride?: string;
 }): Promise<InfographicExtractResponseBody> {
   return runInfographicExtraction({
     geminiApiKey: params.geminiApiKey,
@@ -28,6 +30,8 @@ export async function executeInfographicExtract(params: {
     sourceUrl: params.sourceUrl,
     sourceTitle: params.sourceTitle,
     extractionWarnings: params.extractionWarnings,
+    articlePatternOverride: params.articlePatternOverride,
+    industryPatternOverride: params.industryPatternOverride,
   });
 }
 

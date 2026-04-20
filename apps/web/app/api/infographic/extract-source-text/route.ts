@@ -11,6 +11,8 @@ async function parseMultipartBody(req: Request): Promise<unknown> {
   const sourceUrl = String(form.get('sourceUrl') ?? '').trim();
   const pdfUrl = String(form.get('pdfUrl') ?? '').trim();
   const rawText = String(form.get('rawText') ?? '').trim();
+  const articlePatternOverride = String(form.get('articlePatternOverride') ?? '').trim();
+  const industryPatternOverride = String(form.get('industryPatternOverride') ?? '').trim();
   const pdfFileRaw = form.get('pdfFile');
   const pdfFile = pdfFileRaw instanceof File ? pdfFileRaw : undefined;
   return {
@@ -19,6 +21,8 @@ async function parseMultipartBody(req: Request): Promise<unknown> {
     sourceUrl: sourceUrl || undefined,
     pdfUrl: pdfUrl || undefined,
     rawText: rawText || undefined,
+    articlePatternOverride: articlePatternOverride || undefined,
+    industryPatternOverride: industryPatternOverride || undefined,
     pdfFile,
   };
 }
@@ -56,6 +60,11 @@ export async function POST(req: Request) {
       warnings: sourceResolved.extractionWarnings,
       sourceMeta: {
         sourceType: parsed.value.sourceType,
+        articlePattern: parsed.value.articlePatternOverride ?? sourceResolved.articlePattern,
+        industryPattern: parsed.value.industryPatternOverride ?? sourceResolved.industryPattern,
+        sourceTone: sourceResolved.sourceTone,
+        subjectivityLevel: sourceResolved.subjectivityLevel,
+        structureDensity: sourceResolved.structureDensity,
         sourceUrl: sourceResolved.sourceUrl,
         sourceTitle: sourceResolved.sourceTitle,
         extractionWarnings: sourceResolved.extractionWarnings,

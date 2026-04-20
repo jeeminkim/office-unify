@@ -1,8 +1,10 @@
 import type {
+  InfographicArticlePattern,
   InfographicCharts,
   InfographicExtractRequestBody,
   InfographicFlow,
   InfographicInputSourceType,
+  InfographicIndustryPattern,
   InfographicRisk,
   InfographicSpec,
   InfographicZone,
@@ -12,6 +14,29 @@ import type {
 const MAX_RAW_TEXT = 22000;
 const REQUIRED_ZONE_ORDER: InfographicZoneId[] = ['input', 'production', 'distribution', 'demand'];
 const INPUT_SOURCE_TYPES: InfographicInputSourceType[] = ['text', 'url', 'pdf_upload', 'pdf_url'];
+const ARTICLE_PATTERNS: InfographicArticlePattern[] = [
+  'industry_report',
+  'company_report',
+  'opinion_editorial',
+  'market_commentary',
+  'thematic_analysis',
+  'how_to_explainer',
+  'mixed_or_unknown',
+];
+const INDUSTRY_PATTERNS: InfographicIndustryPattern[] = [
+  'manufacturing',
+  'semiconductor_electronics',
+  'energy_resources',
+  'healthcare_bio',
+  'software_platform',
+  'cybersecurity_service',
+  'consumer_retail',
+  'finance_insurance',
+  'mobility_automotive',
+  'media_content',
+  'industrials_b2b',
+  'mixed_or_unknown',
+];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -26,12 +51,22 @@ export function parseInfographicExtractRequest(input: unknown):
   const rawText = typeof input.rawText === 'string' ? input.rawText.trim() : '';
   const sourceUrl = typeof input.sourceUrl === 'string' ? input.sourceUrl.trim() : undefined;
   const pdfUrl = typeof input.pdfUrl === 'string' ? input.pdfUrl.trim() : undefined;
+  const articlePatternOverride =
+    typeof input.articlePatternOverride === 'string' ? input.articlePatternOverride.trim() : undefined;
+  const industryPatternOverride =
+    typeof input.industryPatternOverride === 'string' ? input.industryPatternOverride.trim() : undefined;
   const errors: string[] = [];
   if (!industryName) errors.push('industryName_required');
   if (!INPUT_SOURCE_TYPES.includes(sourceType)) errors.push('sourceType_invalid');
   if (sourceType === 'text' && !rawText) errors.push('rawText_required');
   if (sourceType === 'url' && !sourceUrl) errors.push('sourceUrl_required');
   if (sourceType === 'pdf_url' && !pdfUrl) errors.push('pdfUrl_required');
+  if (articlePatternOverride && !ARTICLE_PATTERNS.includes(articlePatternOverride as InfographicArticlePattern)) {
+    errors.push('articlePatternOverride_invalid');
+  }
+  if (industryPatternOverride && !INDUSTRY_PATTERNS.includes(industryPatternOverride as InfographicIndustryPattern)) {
+    errors.push('industryPatternOverride_invalid');
+  }
   if (errors.length > 0) return { ok: false, errors };
   return {
     ok: true,
@@ -41,6 +76,8 @@ export function parseInfographicExtractRequest(input: unknown):
       rawText: rawText.slice(0, MAX_RAW_TEXT),
       sourceUrl,
       pdfUrl,
+      articlePatternOverride: articlePatternOverride as InfographicArticlePattern | undefined,
+      industryPatternOverride: industryPatternOverride as InfographicIndustryPattern | undefined,
     },
   };
 }
@@ -167,6 +204,58 @@ export function normalizeInfographicSpec(spec: InfographicSpec, industryName: st
       sourceType: spec.sourceMeta?.sourceType ?? 'unknown',
       generatedAt: spec.sourceMeta?.generatedAt ?? new Date().toISOString(),
       confidence: spec.sourceMeta?.confidence ?? 'low',
+      industryPattern: spec.sourceMeta?.industryPattern,
+      extractionMode: spec.sourceMeta?.extractionMode,
+      parseStage: spec.sourceMeta?.parseStage,
+      resultMode: spec.sourceMeta?.resultMode,
+      articlePattern: spec.sourceMeta?.articlePattern,
+      sourceTone: spec.sourceMeta?.sourceTone,
+      subjectivityLevel: spec.sourceMeta?.subjectivityLevel,
+      structureDensity: spec.sourceMeta?.structureDensity,
+      specCompletenessScore:
+        typeof spec.sourceMeta?.specCompletenessScore === 'number'
+          ? spec.sourceMeta.specCompletenessScore
+          : undefined,
+      filledZoneCount:
+        typeof spec.sourceMeta?.filledZoneCount === 'number'
+          ? spec.sourceMeta.filledZoneCount
+          : undefined,
+      numericEvidenceCount:
+        typeof spec.sourceMeta?.numericEvidenceCount === 'number'
+          ? spec.sourceMeta.numericEvidenceCount
+          : undefined,
+      riskCount:
+        typeof spec.sourceMeta?.riskCount === 'number'
+          ? spec.sourceMeta.riskCount
+          : undefined,
+      comparisonCount:
+        typeof spec.sourceMeta?.comparisonCount === 'number'
+          ? spec.sourceMeta.comparisonCount
+          : undefined,
+      chartCount:
+        typeof spec.sourceMeta?.chartCount === 'number'
+          ? spec.sourceMeta.chartCount
+          : undefined,
+      extractedFromText:
+        typeof spec.sourceMeta?.extractedFromText === 'boolean'
+          ? spec.sourceMeta.extractedFromText
+          : undefined,
+      extractedClaimsCount:
+        typeof spec.sourceMeta?.extractedClaimsCount === 'number'
+          ? spec.sourceMeta.extractedClaimsCount
+          : undefined,
+      extractedSignalsCount:
+        typeof spec.sourceMeta?.extractedSignalsCount === 'number'
+          ? spec.sourceMeta.extractedSignalsCount
+          : undefined,
+      extractedRisksCount:
+        typeof spec.sourceMeta?.extractedRisksCount === 'number'
+          ? spec.sourceMeta.extractedRisksCount
+          : undefined,
+      degradedReasons: Array.isArray(spec.sourceMeta?.degradedReasons)
+        ? spec.sourceMeta?.degradedReasons.map(String) as InfographicSpec['sourceMeta']['degradedReasons']
+        : [],
+      zoneAliases: spec.sourceMeta?.zoneAliases,
       sourceUrl: spec.sourceMeta?.sourceUrl,
       sourceTitle: spec.sourceMeta?.sourceTitle,
       extractionWarnings: Array.isArray(spec.sourceMeta?.extractionWarnings)

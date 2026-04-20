@@ -85,6 +85,75 @@
 - 모바일에서는 `저장용 미리보기` 액션으로 export 레이아웃을 확인한다.
 - 저장용 미리보기에서 "이 화면이 PNG로 저장됩니다." 안내 후 저장을 수행한다.
 
+## Extractor Hardening (긴 본문/도메인 편차 대응)
+
+- source extraction 성공 이후 `text -> InfographicSpec` 실패를 줄이기 위해 추출 단계 강화:
+  - `llm_direct`
+  - `llm_repaired`
+  - `semantic_fallback`
+  - `degraded_fallback`
+- parse pipeline:
+  - raw trim / fence 제거
+  - first JSON candidate
+  - strict parse
+  - repair parse(smart quote, trailing comma, stray backslash, tail cut)
+  - semantic fallback
+- domain-aware zone mapping:
+  - 제조업형 + 소프트웨어/클라우드/보안형 해석 가이드를 prompt에 포함
+  - `sourceMeta.industryPattern` 및 `zoneAliases`로 해석 맥락을 유지
+- numeric salvage:
+  - `%`, 순위, `라벨: 수치` 패턴을 규칙 기반 추출
+  - chart/comparison 복구 시 원문 수치만 사용(추정 생성 금지)
+- minimum viable spec 기준:
+  - 4개 zone 중 3개 이상 실질 item
+  - risks 3개 이상
+  - comparisons 또는 charts 존재
+  - notes 2개 이상 + summary non-empty
+- 기준 미달 시 `degraded_fallback`으로 분류하고 빈 인포그래픽 렌더 대신 재시도 안내를 우선한다.
+
+## Article-aware / Opinion-aware 확장
+
+- `industryPattern`(산업 맥락)과 `articlePattern`(문서 성격)을 분리해 처리한다.
+  - industryPattern: 제조/보안/헬스/금융/소비재 등 도메인 힌트
+  - articlePattern: 리포트형/의견형/시황형/테마형/가이드형
+- 의견형(`opinion_editorial`) 및 시황형(`market_commentary`)은 opinion frame을 우선 추출:
+  - `thesis`, `supportingPoints`, `counterPoints`, `risks`, `checkpoints`, `signals` 등
+  - 이후 4-zone 템플릿으로 매핑해 렌더 호환을 유지
+- 표현 중립화 원칙:
+  - 감정적 수사/과장/메타 발언은 cleanup 단계에서 완화
+  - 원문 근거 없는 주장 생성 금지
+- quality meta:
+  - `articlePattern`, `sourceTone`, `subjectivityLevel`, `structureDensity`
+  - `extractedClaimsCount`, `extractedSignalsCount`, `extractedRisksCount`
+
+## 사용자 override / 재시도 제어
+
+- 입력 UI에서 자동 분류를 직접 교정할 수 있다:
+  - `articlePatternOverride`
+  - `industryPatternOverride`
+- 기본은 자동 감지 결과를 표시하고, 수동 지정 시 override가 extractor 우선값으로 사용된다.
+- `Reset to auto`로 자동 모드 복귀 가능.
+
+## Degraded fallback reason
+
+- degraded fallback 시 단순 실패가 아니라 reason classifier를 함께 반환:
+  - `insufficient_structure`
+  - `mixed_document`
+  - `too_long_and_diffuse`
+  - `weak_numeric_support`
+  - `weak_zone_signal`
+  - `opinion_structure_unclear`
+- UI는 reason별 행동 가이드를 제공하고, 재시도/텍스트 축약/패턴 전환 CTA를 노출한다.
+
+## Result Mode
+
+- 최종 구조화 결과 유형을 `sourceMeta.resultMode`로 표시:
+  - `industry_structure`
+  - `opinion_argument_map`
+  - `market_checkpoint_map`
+  - `howto_process_map`
+  - `mixed_summary_map`
+
 ## PNG 저장 방식
 
 - 렌더 결과는 단일 SVG (`InfographicCanvas`)
