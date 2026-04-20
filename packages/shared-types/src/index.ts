@@ -174,6 +174,17 @@ export type {
   PersonaChatSessionInitResponseBody,
   PersonaWebKey,
 } from './personaChat';
+export type {
+  CommitteeFollowupDraft,
+  CommitteeFollowupExtractRequestBody,
+  CommitteeFollowupExtractResponse,
+  CommitteeFollowupItem,
+  CommitteeFollowupItemType,
+  CommitteeFollowupPriority,
+  CommitteeFollowupSaveRequest,
+  CommitteeFollowupSaveResponse,
+  CommitteeFollowupStatus,
+} from './committeeFollowup';
 export { toPersonaWebKey } from './personaChat';
 export {
   COMMITTEE_DISCUSSION_USER_CONTENT_MAX_CHARS,

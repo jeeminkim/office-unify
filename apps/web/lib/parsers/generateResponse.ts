@@ -1,5 +1,11 @@
 import { GenerateResponse, TaskType } from '../types';
 import { ApiError, logDevError } from '../utils';
+import {
+  detectDiagramType,
+  extractMermaid,
+  logMermaidEvent,
+  sanitizeForLog,
+} from '../mermaid/pipeline';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -35,7 +41,8 @@ export function extractJsonObject(text: string): unknown {
 
 export function normalizeGenerateResponse(
   parsed: unknown,
-  requestedTaskType: TaskType
+  requestedTaskType: TaskType,
+  rawResponseText?: string
 ): GenerateResponse {
   const obj = isRecord(parsed) ? parsed : {};
 
@@ -55,8 +62,27 @@ export function normalizeGenerateResponse(
 
   const parsedExplanation =
     typeof obj.explanation === 'string' ? obj.explanation : undefined;
-  const parsedMermaidCode =
+  const rawMermaidField =
     typeof obj.mermaidCode === 'string' ? obj.mermaidCode : undefined;
+  const parsedMermaidCode =
+    parsedTaskType === 'flow'
+      ? (() => {
+          const sourceText = typeof rawResponseText === 'string' ? rawResponseText : '';
+          logMermaidEvent('MERMAID_EXTRACT_START', {
+            requestedTaskType,
+            rawLength: sourceText.length,
+            mermaidFieldLength: rawMermaidField?.length ?? 0,
+          });
+          const extracted = extractMermaid(sourceText, rawMermaidField);
+          logMermaidEvent('MERMAID_EXTRACT_RESULT', {
+            requestedTaskType,
+            extractedLength: extracted.length,
+            diagramType: detectDiagramType(extracted),
+            sample: sanitizeForLog(extracted),
+          });
+          return extracted || rawMermaidField;
+        })()
+      : rawMermaidField;
   const parsedExample =
     typeof obj.example === 'string' ? obj.example : undefined;
 

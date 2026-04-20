@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "selfcheck": "node scripts/self-check.mjs",
     "clean:win": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"if (Test-Path .next) { Remove-Item .next -Recurse -Force }; if (Test-Path node_modules) { Remove-Item node_modules -Recurse -Force }\""

@@ -67,7 +67,7 @@ export class GeminiProvider implements Provider {
       if (!text) throw new ApiError('LLM에서 빈 응답을 반환했습니다.', 500);
 
       const parsed = extractJsonObject(text);
-      return normalizeGenerateResponse(parsed, taskType);
+      return normalizeGenerateResponse(parsed, taskType, text);
 
     } catch (error: unknown) {
       const status =

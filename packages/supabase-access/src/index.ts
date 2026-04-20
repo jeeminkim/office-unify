@@ -28,6 +28,11 @@ export {
   insertWebCommitteeTurn,
   updateWebCommitteeTurnExcerpt,
 } from './webCommitteeTurnsRepository';
+export {
+  getWebCommitteeTurnForUserScope,
+  insertCommitteeFollowupArtifact,
+  insertCommitteeFollowupItem,
+} from './committeeFollowupRepository';
 export { selectPersonaLongTermSummary, upsertPersonaLongTermSummary } from './personaMemoryWebRepository';
 export {
   fetchPersonaChatRequestRow,

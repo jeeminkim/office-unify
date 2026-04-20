@@ -21,6 +21,7 @@ export * from './committeeFeedback';
 export * from './committee/committeePrompt';
 export * from './committee/committeeResponseFormat';
 export * from './committee/committeeDiscussionOrchestrator';
+export * from './committee/committeeFollowupExtractor';
 export * from './sheets/portfolioSheetsModel';
 export { runResearchCenterGeneration } from './research-center/researchCenterOrchestrator';
 export {

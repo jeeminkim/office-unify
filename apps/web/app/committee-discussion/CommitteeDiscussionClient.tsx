@@ -1,7 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { CommitteeDiscussionLineDto } from "@office-unify/shared-types";
+import type {
+  CommitteeDiscussionLineDto,
+  CommitteeFollowupDraft,
+  CommitteeFollowupExtractResponse,
+  CommitteeFollowupSaveResponse,
+} from "@office-unify/shared-types";
 import Link from "next/link";
 import { CommitteeTurnFeedbackRow } from "@/components/CommitteeTurnFeedbackRow";
 
@@ -21,6 +26,11 @@ export function CommitteeDiscussionClient() {
   const [loadingReport, setLoadingReport] = useState(false);
   const [committeeTurnId, setCommitteeTurnId] = useState<string | null>(null);
   const [committeeLongTerm, setCommitteeLongTerm] = useState<string | null>(null);
+  const [closingSummary, setClosingSummary] = useState<string | null>(null);
+  const [followupDrafts, setFollowupDrafts] = useState<(CommitteeFollowupDraft & { localId: string; savedId?: string })[]>([]);
+  const [followupWarnings, setFollowupWarnings] = useState<string[]>([]);
+  const [extractingFollowups, setExtractingFollowups] = useState(false);
+  const [savingFollowupId, setSavingFollowupId] = useState<string | null>(null);
 
   const loadCommitteeMemory = useCallback(async () => {
     try {
@@ -100,6 +110,7 @@ export function CommitteeDiscussionClient() {
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
       if (data.cio && data.drucker) {
         setTranscript((prev) => [...prev, data.cio!, data.drucker!]);
+        setClosingSummary(`${data.cio.content}\n\n${data.drucker.content}`);
       }
       setPhase("closed");
     } catch (e: unknown) {
@@ -130,6 +141,100 @@ export function CommitteeDiscussionClient() {
       setError(e instanceof Error ? e.message : "보고서 생성 실패");
     } finally {
       setLoadingReport(false);
+    }
+  };
+
+  const extractFollowups = async () => {
+    if (transcript.length === 0 || !committeeTurnId) return;
+    setError(null);
+    setFollowupWarnings([]);
+    setExtractingFollowups(true);
+    try {
+      const transcriptText = transcript
+        .map((line) => `${line.displayName}(${line.slug}): ${line.content}`)
+        .join("\n\n");
+      const res = await fetch("/api/committee-discussion/followups/extract", {
+        method: "POST",
+        headers: jsonHeaders,
+        credentials: "same-origin",
+        body: JSON.stringify({
+          topic: topic.trim(),
+          transcript: transcriptText,
+          closing: closingSummary ?? undefined,
+          joMarkdown: reportMd ?? undefined,
+          committeeTurnId,
+        }),
+      });
+      const data = (await res.json()) as CommitteeFollowupExtractResponse & { error?: string };
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      setFollowupWarnings(data.warnings ?? []);
+      setFollowupDrafts(
+        (data.items ?? []).map((item, idx) => ({
+          ...item,
+          localId: `${Date.now()}-${idx}-${item.title}`,
+        })),
+      );
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "후속작업 추출 실패");
+    } finally {
+      setExtractingFollowups(false);
+    }
+  };
+
+  const updateDraft = (localId: string, patch: Partial<CommitteeFollowupDraft>) => {
+    setFollowupDrafts((prev) =>
+      prev.map((it) => (it.localId === localId ? { ...it, ...patch } : it)),
+    );
+  };
+
+  const removeDraft = (localId: string) => {
+    setFollowupDrafts((prev) => prev.filter((it) => it.localId !== localId));
+  };
+
+  const saveDraft = async (localId: string) => {
+    if (!committeeTurnId) return;
+    const draft = followupDrafts.find((d) => d.localId === localId);
+    if (!draft || draft.savedId) return;
+    setSavingFollowupId(localId);
+    setError(null);
+    try {
+      const res = await fetch("/api/committee-discussion/followups/save", {
+        method: "POST",
+        headers: jsonHeaders,
+        credentials: "same-origin",
+        body: JSON.stringify({
+          committeeTurnId,
+          sourceReportKind: "jo_report",
+          item: {
+            title: draft.title,
+            itemType: draft.itemType,
+            priority: draft.priority,
+            rationale: draft.rationale,
+            entities: draft.entities,
+            requiredEvidence: draft.requiredEvidence,
+            acceptanceCriteria: draft.acceptanceCriteria,
+            ownerPersona: draft.ownerPersona,
+            status: draft.status === "draft" ? "accepted" : draft.status,
+          },
+          originalDraftJson: draft,
+        }),
+      });
+      const data = (await res.json()) as CommitteeFollowupSaveResponse & { error?: string; warnings?: string[] };
+      if (!res.ok) {
+        setFollowupWarnings(data.warnings ?? []);
+        throw new Error(data.error ?? `HTTP ${res.status}`);
+      }
+      setFollowupDrafts((prev) =>
+        prev.map((it) =>
+          it.localId === localId
+            ? { ...it, savedId: data.id, status: it.status === "draft" ? "accepted" : it.status }
+            : it,
+        ),
+      );
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "후속작업 저장 실패");
+    } finally {
+      setSavingFollowupId(null);
     }
   };
 
@@ -269,6 +374,14 @@ export function CommitteeDiscussionClient() {
             >
               {loadingReport ? "보고서 작성 중…" : "보고서 생성 (서버 호출)"}
             </button>
+            <button
+              type="button"
+              className="mt-2 ml-2 rounded-md border border-emerald-700 bg-white px-4 py-2 text-sm text-emerald-900 disabled:opacity-50"
+              disabled={extractingFollowups || busyRound || busyClosing || !committeeTurnId}
+              onClick={() => void extractFollowups()}
+            >
+              {extractingFollowups ? "후속작업 추출 중…" : "후속작업 추출"}
+            </button>
           </div>
         ) : null}
       </div>
@@ -296,6 +409,65 @@ export function CommitteeDiscussionClient() {
             className="min-h-[200px] w-full rounded border border-emerald-200 bg-white font-mono text-xs text-slate-800"
             value={reportMd}
           />
+        </div>
+      ) : null}
+
+      {followupWarnings.length > 0 ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <p className="font-semibold">후속작업 검증 경고</p>
+          <ul className="mt-1 list-disc pl-4">
+            {followupWarnings.map((w, i) => (
+              <li key={`${w}-${i}`}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {followupDrafts.length > 0 ? (
+        <div className="flex flex-col gap-3 rounded-xl border border-indigo-200 bg-indigo-50/40 p-4 shadow-sm">
+          <h2 className="text-sm font-semibold text-indigo-900">위원회 후속작업 초안</h2>
+          {followupDrafts.map((draft) => (
+            <div
+              key={draft.localId}
+              className={`rounded-lg border p-3 ${draft.savedId ? "border-emerald-300 bg-emerald-50" : "border-indigo-200 bg-white"}`}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <input
+                  value={draft.title}
+                  onChange={(e) => updateDraft(draft.localId, { title: e.target.value })}
+                  className="min-w-[220px] flex-1 rounded border border-slate-200 px-2 py-1 text-sm"
+                />
+                <div className="flex gap-2 text-xs">
+                  <span className="rounded bg-slate-100 px-2 py-1">{draft.itemType}</span>
+                  <span className="rounded bg-slate-100 px-2 py-1">priority: {draft.priority}</span>
+                  <span className={`rounded px-2 py-1 ${draft.savedId ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-900"}`}>
+                    {draft.savedId ? `saved(${draft.status})` : "draft"}
+                  </span>
+                </div>
+              </div>
+              <p className="mt-2 text-xs text-slate-700 whitespace-pre-wrap">{draft.rationale}</p>
+              <p className="mt-2 text-xs text-slate-600"><strong>관련 엔티티:</strong> {draft.entities.join(", ") || "-"}</p>
+              <p className="mt-1 text-xs text-slate-600"><strong>필요 근거:</strong> {draft.requiredEvidence.join(" | ") || "-"}</p>
+              <p className="mt-1 text-xs text-slate-600"><strong>완료 기준:</strong> {draft.acceptanceCriteria.join(" | ") || "-"}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="rounded border border-indigo-300 bg-white px-3 py-1 text-xs text-indigo-900 disabled:opacity-50"
+                  disabled={!!draft.savedId || savingFollowupId === draft.localId}
+                  onClick={() => void saveDraft(draft.localId)}
+                >
+                  {savingFollowupId === draft.localId ? "저장 중…" : draft.savedId ? "저장됨" : "저장"}
+                </button>
+                <button
+                  type="button"
+                  className="rounded border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700"
+                  onClick={() => removeDraft(draft.localId)}
+                >
+                  삭제
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       ) : null}
     </div>

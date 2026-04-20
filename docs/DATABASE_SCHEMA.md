@@ -24,6 +24,22 @@
 | `docs/sql/append_web_persona_memory_optional.sql` | 선택 웹 장기 기억 |
 | `docs/sql/append_web_portfolio_ledger.sql` | 포트폴리오 원장 |
 | `docs/sql/append_web_llm_usage_monthly.sql` | LLM 사용량 |
+| `docs/sql/append_web_committee_followups.sql` | 투자위원회 후속작업(추출 draft 저장) |
+
+## Committee Followups (조일현 보고서 후속작업)
+
+**파일:** `docs/sql/append_web_committee_followups.sql`
+
+| 테이블 | 역할 |
+|--------|------|
+| `committee_followup_items` | `committee_turn_id`에 연결된 후속작업 본문/상태 |
+| `committee_followup_artifacts` | draft JSON 등 원본 아티팩트 |
+
+핵심 원칙:
+
+- 조일현 Markdown(`report`)은 사람용 문서이며, DB 저장용 후속작업은 별도 JSON 계약으로 분리한다.
+- 저장은 사용자 명시 액션(`followups/save`)에서만 수행한다.
+- 자동 주문/자동 매매/원장 자동 반영과 무관한 추적 테이블이다.
 
 ## 미적용 시 동작 (Trend memory)
 
