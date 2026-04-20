@@ -19,12 +19,17 @@ export function useInfographicGenerator() {
   const [spec, setSpec] = useState<InfographicSpec | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [sourcePreviewText, setSourcePreviewText] = useState('');
+  const [sourcePreviewRawText, setSourcePreviewRawText] = useState('');
   const [sourcePreviewMeta, setSourcePreviewMeta] = useState<{
     sourceType: InfographicInputSourceType;
     sourceUrl?: string;
     sourceTitle?: string;
     extractionWarnings: string[];
     extractedTextLength: number;
+    rawExtractedTextLength: number;
+    cleanedTextLength: number;
+    cleanupApplied: boolean;
+    cleanupNotes: string[];
   } | null>(null);
 
   const generate = useCallback(async (payload: InfographicExtractRequestBody, pdfFile?: File | null) => {
@@ -99,7 +104,8 @@ export function useInfographicGenerator() {
       const res = await fetch('/api/infographic/extract-source-text', requestInit);
       const data = (await res.json()) as InfographicExtractSourceTextResponseBody & { error?: string };
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-      setSourcePreviewText(data.rawText ?? '');
+      setSourcePreviewText(data.cleanedText ?? '');
+      setSourcePreviewRawText(data.rawText ?? '');
       setSourcePreviewMeta(data.sourceMeta);
       setWarnings(data.warnings ?? []);
       return data;
@@ -119,6 +125,7 @@ export function useInfographicGenerator() {
     warnings,
     setSpec,
     sourcePreviewText,
+    sourcePreviewRawText,
     setSourcePreviewText,
     sourcePreviewMeta,
     generate,

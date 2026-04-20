@@ -110,6 +110,7 @@ export type InfographicExtractResponseBody = {
 export type InfographicExtractSourceTextResponseBody = {
   ok: boolean;
   rawText: string;
+  cleanedText: string;
   warnings: string[];
   sourceMeta: {
     sourceType: InfographicInputSourceType;
@@ -117,6 +118,10 @@ export type InfographicExtractSourceTextResponseBody = {
     sourceTitle?: string;
     extractionWarnings: string[];
     extractedTextLength: number;
+    rawExtractedTextLength: number;
+    cleanedTextLength: number;
+    cleanupApplied: boolean;
+    cleanupNotes: string[];
   };
 };
 

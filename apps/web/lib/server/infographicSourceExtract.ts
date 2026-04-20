@@ -8,6 +8,71 @@ function normalizeWhitespace(text: string): string {
   return text.replace(/\r/g, '\n').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
 }
 
+function cleanupExtractedText(text: string): { cleanedText: string; cleanupApplied: boolean; cleanupNotes: string[] } {
+  const notes: string[] = [];
+  const lines = text.split('\n').map((line) => line.trim());
+  const lineCount = new Map<string, number>();
+  for (const line of lines) {
+    if (!line) continue;
+    lineCount.set(line, (lineCount.get(line) ?? 0) + 1);
+  }
+
+  const cleanedLines: string[] = [];
+  for (const line of lines) {
+    if (!line) {
+      cleanedLines.push('');
+      continue;
+    }
+    if ((lineCount.get(line) ?? 0) >= 4 && line.length < 80) {
+      notes.push('repeated_header_footer_removed');
+      continue;
+    }
+    if (/^page\s*\d+(\s*\/\s*\d+)?$/i.test(line) || /^\d+\s*\/\s*\d+$/.test(line)) {
+      notes.push('page_number_line_removed');
+      continue;
+    }
+    if (/copyright|all rights reserved|무단 전재|배포 금지/i.test(line)) {
+      notes.push('copyright_line_removed');
+      continue;
+    }
+    if (/^그림\s*\d+|^표\s*\d+|^figure\s*\d+|^table\s*\d+/i.test(line)) {
+      notes.push('caption_like_line_removed');
+      continue;
+    }
+    cleanedLines.push(line);
+  }
+
+  const merged: string[] = [];
+  for (const line of cleanedLines) {
+    if (!line) {
+      if (merged.length > 0 && merged[merged.length - 1] !== '') merged.push('');
+      continue;
+    }
+    if (line.length <= 2 && /^[\W_]+$/.test(line)) {
+      notes.push('noisy_short_line_removed');
+      continue;
+    }
+    if (merged.length === 0 || merged[merged.length - 1] === '') {
+      merged.push(line);
+      continue;
+    }
+    const prev = merged[merged.length - 1];
+    if (prev.length < 120 && line.length < 80) {
+      merged[merged.length - 1] = `${prev} ${line}`;
+      notes.push('broken_paragraph_joined');
+    } else {
+      merged.push(line);
+    }
+  }
+
+  const cleanedText = normalizeWhitespace(merged.join('\n')).slice(0, MAX_EXTRACT_TEXT);
+  return {
+    cleanedText,
+    cleanupApplied: notes.length > 0,
+    cleanupNotes: Array.from(new Set(notes)),
+  };
+}
+
 function stripHtmlToText(html: string): { text: string; title?: string } {
   const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   const title = titleMatch ? normalizeWhitespace(titleMatch[1].replace(/<[^>]+>/g, '')) : undefined;
@@ -61,14 +126,29 @@ export async function resolveInfographicSourceText(params: {
   pdfFile?: File;
 }): Promise<{
   rawText: string;
+  cleanedText: string;
   sourceUrl?: string;
   sourceTitle?: string;
   extractionWarnings: string[];
+  cleanupApplied: boolean;
+  cleanupNotes: string[];
+  rawExtractedTextLength: number;
+  cleanedTextLength: number;
 }> {
   const warnings: string[] = [];
   if (params.sourceType === 'text') {
     const text = normalizeWhitespace(params.rawText ?? '');
-    return { rawText: text.slice(0, MAX_EXTRACT_TEXT), extractionWarnings: warnings };
+    const rawText = text.slice(0, MAX_EXTRACT_TEXT);
+    const cleaned = cleanupExtractedText(rawText);
+    return {
+      rawText,
+      cleanedText: cleaned.cleanedText,
+      extractionWarnings: warnings,
+      cleanupApplied: cleaned.cleanupApplied,
+      cleanupNotes: cleaned.cleanupNotes,
+      rawExtractedTextLength: rawText.length,
+      cleanedTextLength: cleaned.cleanedText.length,
+    };
   }
 
   if (params.sourceType === 'url') {
@@ -79,11 +159,17 @@ export async function resolveInfographicSourceText(params: {
     const html = await res.text();
     const extracted = stripHtmlToText(html);
     if (extracted.text.length < 400) warnings.push('url_text_short');
+    const cleaned = cleanupExtractedText(extracted.text);
     return {
       rawText: extracted.text,
+      cleanedText: cleaned.cleanedText,
       sourceUrl: url,
       sourceTitle: extracted.title,
       extractionWarnings: warnings,
+      cleanupApplied: cleaned.cleanupApplied,
+      cleanupNotes: cleaned.cleanupNotes,
+      rawExtractedTextLength: extracted.text.length,
+      cleanedTextLength: cleaned.cleanedText.length,
     };
   }
 
@@ -97,7 +183,17 @@ export async function resolveInfographicSourceText(params: {
     if (bytes.byteLength > MAX_PDF_BYTES) throw new Error('pdf_too_large');
     const text = extractPdfTextFromBytes(bytes);
     if (text.length < 180) warnings.push('pdf_text_too_short');
-    return { rawText: text, sourceUrl: url, extractionWarnings: warnings };
+    const cleaned = cleanupExtractedText(text);
+    return {
+      rawText: text,
+      cleanedText: cleaned.cleanedText,
+      sourceUrl: url,
+      extractionWarnings: warnings,
+      cleanupApplied: cleaned.cleanupApplied,
+      cleanupNotes: cleaned.cleanupNotes,
+      rawExtractedTextLength: text.length,
+      cleanedTextLength: cleaned.cleanedText.length,
+    };
   }
 
   if (params.sourceType === 'pdf_upload') {
@@ -109,7 +205,17 @@ export async function resolveInfographicSourceText(params: {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const text = extractPdfTextFromBytes(bytes);
     if (text.length < 180) warnings.push('pdf_text_too_short');
-    return { rawText: text, sourceTitle: file.name, extractionWarnings: warnings };
+    const cleaned = cleanupExtractedText(text);
+    return {
+      rawText: text,
+      cleanedText: cleaned.cleanedText,
+      sourceTitle: file.name,
+      extractionWarnings: warnings,
+      cleanupApplied: cleaned.cleanupApplied,
+      cleanupNotes: cleaned.cleanupNotes,
+      rawExtractedTextLength: text.length,
+      cleanedTextLength: cleaned.cleanedText.length,
+    };
   }
 
   throw new Error('unsupported_source_type');

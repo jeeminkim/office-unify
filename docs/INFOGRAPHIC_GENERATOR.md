@@ -36,6 +36,7 @@
 - `POST /api/infographic/extract-source-text`
   - sourceType 기반 원문 추출 전용
   - URL/PDF 입력의 추출 결과를 preview/edit 단계로 전달
+  - 내부 처리: `raw extract -> cleanup -> cleaned text`
 - `POST /api/infographic/extract`
   - 최종 텍스트를 받아 `InfographicSpec` 생성
 
@@ -51,6 +52,10 @@
 - `sourceTitle?`
 - `extractionWarnings?`
 - `extractedTextLength?`
+- `cleanupApplied?`
+- `cleanupNotes?`
+- `rawExtractedTextLength?`
+- `cleanedTextLength?`
 - `generatedAt`
 - `confidence`
 
@@ -66,6 +71,7 @@
 - 추정/가짜 수치 금지
 - fallback 발생 시 `warnings`에 사유 기록
 - URL/PDF 본문 추출 실패 또는 본문 과소 추출 시 `extractionWarnings` 기록
+- cleanup 적용 시 `cleanupNotes`에 적용 규칙을 기록
 
 ## 렌더 모드 정책
 
@@ -74,6 +80,7 @@
 - `responsive`: 읽기 UX 중심
 - `export`: PNG 저장 기준 레이아웃
 - PNG 저장은 항상 export 기준으로 수행
+- 모바일에서는 `저장용 미리보기` 액션으로 export 레이아웃을 확인한다.
 
 ## PNG 저장 방식
 

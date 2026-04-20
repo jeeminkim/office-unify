@@ -52,13 +52,18 @@ export async function POST(req: Request) {
     const response: InfographicExtractSourceTextResponseBody = {
       ok: true,
       rawText: sourceResolved.rawText,
+      cleanedText: sourceResolved.cleanedText,
       warnings: sourceResolved.extractionWarnings,
       sourceMeta: {
         sourceType: parsed.value.sourceType,
         sourceUrl: sourceResolved.sourceUrl,
         sourceTitle: sourceResolved.sourceTitle,
         extractionWarnings: sourceResolved.extractionWarnings,
-        extractedTextLength: sourceResolved.rawText.length,
+        extractedTextLength: sourceResolved.cleanedTextLength,
+        rawExtractedTextLength: sourceResolved.rawExtractedTextLength,
+        cleanedTextLength: sourceResolved.cleanedTextLength,
+        cleanupApplied: sourceResolved.cleanupApplied,
+        cleanupNotes: sourceResolved.cleanupNotes,
       },
     };
     return NextResponse.json(response);

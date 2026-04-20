@@ -51,14 +51,14 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { markdown } = await executeCommitteeDiscussionJoReport({
+    const { markdown, sanitizeMeta } = await executeCommitteeDiscussionJoReport({
       supabase,
       geminiApiKey: llm.geminiApiKey,
       openAiApiKey: llm.openAiApiKey,
       topic,
       transcript,
     });
-    return NextResponse.json({ markdown });
+    return NextResponse.json({ markdown, sanitizeMeta });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error';
     return NextResponse.json({ error: message }, { status: 500 });

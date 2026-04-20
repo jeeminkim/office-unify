@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Stabilization Phase 3 (operational trust):** followup warning에 `recommendedAction` 가이드를 추가하고 `fallback_used` 저장 전 점검 confirm UX를 도입. 조일현 보고서는 whitelist sanitizer 제거 이력 메타(`removedSectionTitles`, `removedBlockCount`, `removedTableCount`, `removedBucketLikeBlocks`, `removedPreview`)를 debug 용도로 제공.
+- **Infographic cleanup + mobile export preview:** source text 추출에 cleanup 단계(`raw -> cleanup -> cleaned`)를 추가하고 `extract-source-text` 응답에 raw/cleaned 길이 및 cleanup 메타를 포함. 기본 preview는 cleaned text로 제공하고 raw text는 접기 debug로 분리. 모바일에서는 export를 `저장용 미리보기` 액션으로 확인하도록 UX 보강.
 - **Stabilization Phase 2 (UX-first):** followup warning code를 사용자 친화 문구로 매핑하고(`parse_failed`, `fallback_used` 등), `fallback_used` 초안에 `자동 복구 초안` 배지를 추가. raw code는 디버그 영역으로 분리.
 - **Jo report sanitizer hardening:** markdown table 제거 보조 규칙 위에 heading whitelist sanitizer를 추가해 허용 섹션(`# 제목`, `## 요약`, `## 핵심 리스크`, `## 다음 행동`, `## 하지 말 것`, `## 모니터링 포인트`, `## 다음 점검 시점`)만 유지.
 - **Infographic source-text 2-step UX:** `POST /api/infographic/extract-source-text` 추가. URL/PDF 입력은 `원문 추출 -> preview/edit -> spec 생성` 흐름으로 분리. sourceMeta(`sourceTitle`, `extractedTextLength`, `extractionWarnings`) 노출 강화 및 viewport 기반 기본 모드(모바일 responsive / 데스크톱 export) 적용.

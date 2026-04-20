@@ -22,6 +22,10 @@ export default function InfographicClient() {
   const [renderMode, setRenderMode] = useState<'responsive' | 'export'>(() =>
     typeof window !== 'undefined' && window.innerWidth >= 1024 ? 'export' : 'responsive',
   );
+  const [isMobileViewport] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth < 1024 : true,
+  );
+  const [showMobileExportPreview, setShowMobileExportPreview] = useState(false);
   const [showRawDebug, setShowRawDebug] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
   const {
@@ -33,6 +37,7 @@ export default function InfographicClient() {
     generate,
     extractSourceText,
     sourcePreviewText,
+    sourcePreviewRawText,
     setSourcePreviewText,
     sourcePreviewMeta,
   } = useInfographicGenerator();
@@ -67,6 +72,7 @@ export default function InfographicClient() {
 
   const canGenerateSpec =
     sourceType === 'text' ? !!rawText.trim() : !!sourcePreviewText.trim();
+  const showInlineExportCanvas = !(isMobileViewport && renderMode === 'export');
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 text-slate-800">
@@ -78,6 +84,13 @@ export default function InfographicClient() {
         <p className="mt-1 text-xs text-slate-500">
           모바일은 읽기용(`responsive`)이 기본이고, 데스크톱은 저장용 미리보기(`export`)가 기본입니다. PNG 저장은 export 레이아웃 기준입니다.
         </p>
+        <ol className="mt-2 list-inside list-decimal text-xs text-slate-500">
+          <li>입력</li>
+          <li>원문 추출</li>
+          <li>텍스트 정리/검토</li>
+          <li>구조화 생성</li>
+          <li>읽기/저장</li>
+        </ol>
       </div>
 
       <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -200,6 +213,17 @@ export default function InfographicClient() {
               추출 메타: 길이 {sourcePreviewMeta.extractedTextLength.toLocaleString()}자
               {sourcePreviewMeta.sourceTitle ? ` · 제목 ${sourcePreviewMeta.sourceTitle}` : ''}
             </p>
+            <p className="mt-1">
+              raw {sourcePreviewMeta.rawExtractedTextLength.toLocaleString()}자 → cleaned {sourcePreviewMeta.cleanedTextLength.toLocaleString()}자
+              {sourcePreviewMeta.cleanupApplied ? ' · 자동 정리 적용됨' : ' · 자동 정리 없음'}
+            </p>
+            {sourcePreviewMeta.cleanupNotes.length > 0 ? (
+              <ul className="mt-1 list-inside list-disc text-slate-600">
+                {sourcePreviewMeta.cleanupNotes.map((n) => (
+                  <li key={n}>{n}</li>
+                ))}
+              </ul>
+            ) : null}
             {sourcePreviewMeta.sourceUrl ? <p className="mt-1 break-all text-slate-500">{sourcePreviewMeta.sourceUrl}</p> : null}
             {sourcePreviewMeta.extractionWarnings.length > 0 ? (
               <ul className="mt-1 list-inside list-disc text-amber-700">
@@ -226,12 +250,19 @@ export default function InfographicClient() {
             onClick={() => setShowRawDebug((v) => !v)}
             className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700"
           >
-            {showRawDebug ? '원시 추출 디버그 숨기기' : '원시 추출 디버그 보기'}
+            {showRawDebug ? '원본/디버그 숨기기' : '원본 추출 텍스트 보기'}
           </button>
           {showRawDebug && sourcePreviewMeta ? (
-            <pre className="max-h-[220px] overflow-auto rounded border border-slate-200 bg-slate-900 p-3 text-xs text-slate-100">
-              {JSON.stringify(sourcePreviewMeta, null, 2)}
-            </pre>
+            <div className="space-y-2">
+              <pre className="max-h-[220px] overflow-auto rounded border border-slate-200 bg-slate-900 p-3 text-xs text-slate-100">
+                {JSON.stringify(sourcePreviewMeta, null, 2)}
+              </pre>
+              <textarea
+                readOnly
+                className="min-h-[160px] w-full rounded border border-slate-300 bg-slate-50 px-3 py-2 text-xs"
+                value={sourcePreviewRawText}
+              />
+            </div>
           ) : null}
         </section>
       ) : null}
@@ -253,8 +284,42 @@ export default function InfographicClient() {
             >
               Export 보기
             </button>
+            {isMobileViewport ? (
+              <button
+                type="button"
+                onClick={() => setShowMobileExportPreview(true)}
+                className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700"
+              >
+                저장용 미리보기
+              </button>
+            ) : null}
           </div>
-          {renderMode === 'responsive' ? <ResponsiveInfographicView spec={activeSpec} /> : <InfographicCanvas spec={activeSpec} />}
+          {renderMode === 'responsive' ? (
+            <ResponsiveInfographicView spec={activeSpec} />
+          ) : showInlineExportCanvas ? (
+            <InfographicCanvas spec={activeSpec} />
+          ) : (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+              모바일에서는 저장용 미리보기를 눌러 export 레이아웃을 확인하세요.
+            </div>
+          )}
+          {isMobileViewport && showMobileExportPreview ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3">
+              <div className="max-h-[95vh] w-full max-w-md overflow-auto rounded-lg bg-white p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-sm font-semibold text-slate-800">저장용 미리보기 (export)</p>
+                  <button
+                    type="button"
+                    className="rounded border border-slate-300 bg-white px-2 py-1 text-xs"
+                    onClick={() => setShowMobileExportPreview(false)}
+                  >
+                    닫기
+                  </button>
+                </div>
+                <InfographicCanvas spec={activeSpec} />
+              </div>
+            </div>
+          ) : null}
           <button
             type="button"
             onClick={() => setShowDebug((v) => !v)}

@@ -94,18 +94,39 @@ const JO_REPORT_APPEND = `
 - 다음 점검 시점
 - SQL·원장 반영 초안 금지(이 응답은 보고서 전용).`;
 
-function sanitizeJoReportMarkdown(markdown: string): { markdown: string; warnings: string[] } {
+type JoReportSanitizeMeta = {
+  warnings: string[];
+  removedSectionTitles: string[];
+  removedBlockCount: number;
+  removedTableCount: number;
+  removedBucketLikeBlocks: number;
+  removedPreview: string[];
+};
+
+function sanitizeJoReportMarkdown(markdown: string): { markdown: string; meta: JoReportSanitizeMeta } {
   const warnings: string[] = [];
+  const removedSectionTitles: string[] = [];
+  const removedPreview: string[] = [];
+  let removedBlockCount = 0;
+  let removedTableCount = 0;
+  let removedBucketLikeBlocks = 0;
   const text = markdown.trim();
   const tableBlockPattern = /(^|\n)(\|[^\n]*\|\n\|[\s:-]+\|[\s\S]*?)(?=\n#|\n##|\n###|\n\n[A-Z가-힣]|\n$)/g;
   let base = text;
-  if (tableBlockPattern.test(base)) {
+  const tableBlocks = base.match(tableBlockPattern) ?? [];
+  if (tableBlocks.length > 0) {
     warnings.push('jo_report_table_removed');
+    removedTableCount += tableBlocks.length;
+    removedBlockCount += tableBlocks.length;
+    for (const block of tableBlocks.slice(0, 2)) {
+      removedPreview.push(block.slice(0, 120));
+    }
     base = base.replace(tableBlockPattern, '\n');
   }
   const forbiddenRowsPattern = /(유지\s*\/\s*확대\s*\/\s*감축\s*\/\s*관찰|유지 버킷|감축 검토 버킷)/i;
   if (forbiddenRowsPattern.test(base)) {
     warnings.push('jo_report_bucket_table_style_removed');
+    removedBucketLikeBlocks += 1;
     base = base.replace(/(유지\s*\/\s*확대\s*\/\s*감축\s*\/\s*관찰|유지 버킷|감축 검토 버킷)/gi, '운영 우선순위');
   }
   const allowedH2 = [
@@ -138,16 +159,22 @@ function sanitizeJoReportMarkdown(markdown: string): { markdown: string; warning
       } else {
         currentSection = null;
         warnings.push(`jo_report_section_removed:${heading}`);
+        removedSectionTitles.push(heading);
+        removedBlockCount += 1;
       }
       continue;
     }
     if (!currentSection) continue;
     if (/^\s*\|/.test(line)) {
       warnings.push('jo_report_table_line_removed');
+      removedTableCount += 1;
+      removedBlockCount += 1;
       continue;
     }
     if (forbiddenRowsPattern.test(line)) {
       warnings.push('jo_report_bucket_line_removed');
+      removedBucketLikeBlocks += 1;
+      removedBlockCount += 1;
       continue;
     }
     sections.get(currentSection)?.push(line);
@@ -169,7 +196,17 @@ function sanitizeJoReportMarkdown(markdown: string): { markdown: string; warning
     }
     ordered.push('');
   }
-  return { markdown: ordered.join('\n').trim(), warnings: Array.from(new Set(warnings)) };
+  return {
+    markdown: ordered.join('\n').trim(),
+    meta: {
+      warnings: Array.from(new Set(warnings)),
+      removedSectionTitles: Array.from(new Set(removedSectionTitles)),
+      removedBlockCount,
+      removedTableCount,
+      removedBucketLikeBlocks,
+      removedPreview: removedPreview.slice(0, 2),
+    },
+  };
 }
 
 async function loadLedgerSnapshot(supabase: SupabaseClient, userKey: OfficeUserKey): Promise<string> {
@@ -412,7 +449,10 @@ export async function runCommitteeDiscussionJoReport(params: {
   openAiApiKey?: string;
   topic: string;
   transcript: CommitteeDiscussionLineDto[];
-}): Promise<{ markdown: string }> {
+}): Promise<{
+  markdown: string;
+  sanitizeMeta: JoReportSanitizeMeta;
+}> {
   const def = resolveWebPersona('jo-il-hyeon');
   if (!def) throw new Error('jo-il-hyeon persona missing');
 
@@ -450,7 +490,7 @@ export async function runCommitteeDiscussionJoReport(params: {
         }),
     });
     const sanitized = sanitizeJoReportMarkdown(out.text.trim());
-    return { markdown: sanitized.markdown };
+    return { markdown: sanitized.markdown, sanitizeMeta: sanitized.meta };
   }
 
   const text = await generateGeminiPersonaReply({
@@ -460,5 +500,5 @@ export async function runCommitteeDiscussionJoReport(params: {
     contents,
   });
   const sanitized = sanitizeJoReportMarkdown(text.trim());
-  return { markdown: sanitized.markdown };
+  return { markdown: sanitized.markdown, sanitizeMeta: sanitized.meta };
 }

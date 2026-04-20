@@ -16,35 +16,59 @@ const jsonHeaders: HeadersInit = {
 
 const TOPIC_MAX = 8000;
 
-const WARNING_MESSAGE_MAP: Record<string, string> = {
-  parse_failed: "초안 추출 형식이 불안정해 복구를 시도했습니다.",
-  repair_succeeded: "일부 형식 문제를 자동 복구했습니다.",
-  fallback_used: "요약 내용을 바탕으로 후속작업 초안을 복구 생성했습니다.",
-  empty_items: "작업 항목이 비어 있어 최소 초안을 다시 만들었습니다.",
+const WARNING_MESSAGE_MAP: Record<string, { message: string; recommendedAction: string; severity: "warn" | "info" }> = {
+  parse_failed: {
+    message: "초안 추출 형식이 불안정해 복구를 시도했습니다.",
+    recommendedAction: "항목 제목과 완료 기준을 한 번 더 확인하세요.",
+    severity: "warn",
+  },
+  repair_succeeded: {
+    message: "일부 형식 문제를 자동 복구했습니다.",
+    recommendedAction: "자동 복구된 표현이 어색하지 않은지 검토하세요.",
+    severity: "info",
+  },
+  fallback_used: {
+    message: "요약 내용을 바탕으로 후속작업 초안을 복구 생성했습니다.",
+    recommendedAction: "자동 복구 초안이므로 저장 전에 우선순위·근거·완료 기준을 점검하세요.",
+    severity: "warn",
+  },
+  empty_items: {
+    message: "작업 항목이 비어 있어 최소 초안을 다시 만들었습니다.",
+    recommendedAction: "토론 요약을 바탕으로 핵심 작업 2~3개만 먼저 남기세요.",
+    severity: "warn",
+  },
 };
 
 function toWarningUi(warnings: string[]): {
   infoMessages: string[];
   warnMessages: string[];
+  recommendedActions: string[];
   rawCodes: string[];
   fallbackUsed: boolean;
 } {
   const uniq = Array.from(new Set(warnings));
-  const infoCodes = new Set(["repair_succeeded"]);
   const fallbackUsed = uniq.includes("fallback_used");
   const infoMessages: string[] = [];
   const warnMessages: string[] = [];
+  const recommendedActions: string[] = [];
   const rawCodes: string[] = [];
   for (const code of uniq) {
-    const message = WARNING_MESSAGE_MAP[code];
-    if (message) {
-      if (infoCodes.has(code)) infoMessages.push(message);
-      else warnMessages.push(message);
+    const mapped = WARNING_MESSAGE_MAP[code];
+    if (mapped) {
+      if (mapped.severity === "info") infoMessages.push(mapped.message);
+      else warnMessages.push(mapped.message);
+      recommendedActions.push(mapped.recommendedAction);
     } else {
       rawCodes.push(code);
     }
   }
-  return { infoMessages, warnMessages, rawCodes, fallbackUsed };
+  return {
+    infoMessages,
+    warnMessages,
+    recommendedActions: Array.from(new Set(recommendedActions)),
+    rawCodes,
+    fallbackUsed,
+  };
 }
 
 export function CommitteeDiscussionClient() {
@@ -54,6 +78,15 @@ export function CommitteeDiscussionClient() {
   const [phase, setPhase] = useState<"idle" | "loading_round" | "after_round" | "loading_closing" | "closed">("idle");
   const [error, setError] = useState<string | null>(null);
   const [reportMd, setReportMd] = useState<string | null>(null);
+  const [reportSanitizeMeta, setReportSanitizeMeta] = useState<{
+    warnings: string[];
+    removedSectionTitles: string[];
+    removedBlockCount: number;
+    removedTableCount: number;
+    removedBucketLikeBlocks: number;
+    removedPreview: string[];
+  } | null>(null);
+  const [showReportDebug, setShowReportDebug] = useState(false);
   const [loadingReport, setLoadingReport] = useState(false);
   const [committeeTurnId, setCommitteeTurnId] = useState<string | null>(null);
   const [committeeLongTerm, setCommitteeLongTerm] = useState<string | null>(null);
@@ -156,6 +189,7 @@ export function CommitteeDiscussionClient() {
     setError(null);
     setLoadingReport(true);
     setReportMd(null);
+    setReportSanitizeMeta(null);
     try {
       const res = await fetch("/api/committee-discussion/report", {
         method: "POST",
@@ -166,9 +200,21 @@ export function CommitteeDiscussionClient() {
           transcript,
         }),
       });
-      const data = (await res.json()) as { markdown?: string; error?: string };
+      const data = (await res.json()) as {
+        markdown?: string;
+        sanitizeMeta?: {
+          warnings: string[];
+          removedSectionTitles: string[];
+          removedBlockCount: number;
+          removedTableCount: number;
+          removedBucketLikeBlocks: number;
+          removedPreview: string[];
+        };
+        error?: string;
+      };
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
       setReportMd(data.markdown ?? "");
+      setReportSanitizeMeta(data.sanitizeMeta ?? null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "보고서 생성 실패");
     } finally {
@@ -233,6 +279,10 @@ export function CommitteeDiscussionClient() {
     if (!committeeTurnId) return;
     const draft = followupDrafts.find((d) => d.localId === localId);
     if (!draft || draft.savedId) return;
+    if (warningUi.fallbackUsed) {
+      const ok = window.confirm("자동 복구 초안입니다. 우선순위·근거·완료 기준을 확인한 뒤 저장하세요. 계속 저장할까요?");
+      if (!ok) return;
+    }
     setSavingFollowupId(localId);
     setError(null);
     try {
@@ -437,25 +487,39 @@ export function CommitteeDiscussionClient() {
         <div className="flex flex-col gap-2 rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold text-emerald-900">GPT Builder용 Markdown</h2>
-            <button
-              type="button"
-              className="rounded border border-emerald-700 bg-white px-3 py-1 text-xs text-emerald-900 hover:bg-emerald-100"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(reportMd);
-                } catch {
-                  setError("클립보드 복사에 실패했습니다.");
-                }
-              }}
-            >
-              전체 복사
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="rounded border border-emerald-700 bg-white px-3 py-1 text-xs text-emerald-900 hover:bg-emerald-100"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(reportMd);
+                  } catch {
+                    setError("클립보드 복사에 실패했습니다.");
+                  }
+                }}
+              >
+                전체 복사
+              </button>
+              <button
+                type="button"
+                className="rounded border border-emerald-300 bg-white px-3 py-1 text-xs text-emerald-900"
+                onClick={() => setShowReportDebug((v) => !v)}
+              >
+                {showReportDebug ? "정제 디버그 숨기기" : "정제 디버그 보기"}
+              </button>
+            </div>
           </div>
           <textarea
             readOnly
             className="min-h-[200px] w-full rounded border border-emerald-200 bg-white font-mono text-xs text-slate-800"
             value={reportMd}
           />
+          {showReportDebug && reportSanitizeMeta ? (
+            <pre className="max-h-[260px] overflow-auto rounded border border-emerald-200 bg-slate-900 p-3 text-[11px] text-slate-100">
+              {JSON.stringify(reportSanitizeMeta, null, 2)}
+            </pre>
+          ) : null}
         </div>
       ) : null}
 
@@ -475,6 +539,16 @@ export function CommitteeDiscussionClient() {
                 <li key={w}>{w}</li>
               ))}
             </ul>
+          ) : null}
+          {warningUi.recommendedActions.length > 0 ? (
+            <div className="mt-2 rounded border border-amber-200 bg-white/70 px-2 py-2 text-[11px] text-amber-900">
+              <p className="font-semibold">다음 확인 권장</p>
+              <ul className="mt-1 list-inside list-disc">
+                {warningUi.recommendedActions.map((action) => (
+                  <li key={action}>{action}</li>
+                ))}
+              </ul>
+            </div>
           ) : null}
           {warningUi.rawCodes.length > 0 ? (
             <div className="mt-2">
