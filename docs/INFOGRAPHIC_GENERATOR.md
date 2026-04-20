@@ -25,10 +25,19 @@
    - LLM JSON 추출 (`ai-office-engine`)
    - normalize + validation
 4. 클라이언트:
+   - `원문 추출` -> `미리보기/수정` -> `구조화 요약 생성` 2-step
    - `responsive` 읽기 뷰(모바일 우선)
    - `export` A4 SVG 뷰(저장용)
    - PNG 저장
    - JSON 디버그 패널(접기/펼치기)
+
+## API
+
+- `POST /api/infographic/extract-source-text`
+  - sourceType 기반 원문 추출 전용
+  - URL/PDF 입력의 추출 결과를 preview/edit 단계로 전달
+- `POST /api/infographic/extract`
+  - 최종 텍스트를 받아 `InfographicSpec` 생성
 
 ## JSON 스키마 핵심
 
@@ -57,6 +66,14 @@
 - 추정/가짜 수치 금지
 - fallback 발생 시 `warnings`에 사유 기록
 - URL/PDF 본문 추출 실패 또는 본문 과소 추출 시 `extractionWarnings` 기록
+
+## 렌더 모드 정책
+
+- 모바일(좁은 viewport) 초기 모드: `responsive`
+- 데스크톱(넓은 viewport) 초기 모드: `export`
+- `responsive`: 읽기 UX 중심
+- `export`: PNG 저장 기준 레이아웃
+- PNG 저장은 항상 export 기준으로 수행
 
 ## PNG 저장 방식
 

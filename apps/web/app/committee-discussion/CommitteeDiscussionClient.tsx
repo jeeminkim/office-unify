@@ -16,6 +16,37 @@ const jsonHeaders: HeadersInit = {
 
 const TOPIC_MAX = 8000;
 
+const WARNING_MESSAGE_MAP: Record<string, string> = {
+  parse_failed: "초안 추출 형식이 불안정해 복구를 시도했습니다.",
+  repair_succeeded: "일부 형식 문제를 자동 복구했습니다.",
+  fallback_used: "요약 내용을 바탕으로 후속작업 초안을 복구 생성했습니다.",
+  empty_items: "작업 항목이 비어 있어 최소 초안을 다시 만들었습니다.",
+};
+
+function toWarningUi(warnings: string[]): {
+  infoMessages: string[];
+  warnMessages: string[];
+  rawCodes: string[];
+  fallbackUsed: boolean;
+} {
+  const uniq = Array.from(new Set(warnings));
+  const infoCodes = new Set(["repair_succeeded"]);
+  const fallbackUsed = uniq.includes("fallback_used");
+  const infoMessages: string[] = [];
+  const warnMessages: string[] = [];
+  const rawCodes: string[] = [];
+  for (const code of uniq) {
+    const message = WARNING_MESSAGE_MAP[code];
+    if (message) {
+      if (infoCodes.has(code)) infoMessages.push(message);
+      else warnMessages.push(message);
+    } else {
+      rawCodes.push(code);
+    }
+  }
+  return { infoMessages, warnMessages, rawCodes, fallbackUsed };
+}
+
 export function CommitteeDiscussionClient() {
   const [topic, setTopic] = useState("");
   const [roundNote, setRoundNote] = useState("");
@@ -29,6 +60,7 @@ export function CommitteeDiscussionClient() {
   const [closingSummary, setClosingSummary] = useState<string | null>(null);
   const [followupDrafts, setFollowupDrafts] = useState<(CommitteeFollowupDraft & { localId: string; savedId?: string })[]>([]);
   const [followupWarnings, setFollowupWarnings] = useState<string[]>([]);
+  const [showWarningDebug, setShowWarningDebug] = useState(false);
   const [extractingFollowups, setExtractingFollowups] = useState(false);
   const [savingFollowupId, setSavingFollowupId] = useState<string | null>(null);
 
@@ -248,6 +280,7 @@ export function CommitteeDiscussionClient() {
   const busyClosing = phase === "loading_closing";
   const showContinue = phase === "after_round";
   const showClosed = phase === "closed";
+  const warningUi = toWarningUi(followupWarnings);
 
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col gap-4 bg-slate-50 p-6 text-slate-900">
@@ -428,12 +461,37 @@ export function CommitteeDiscussionClient() {
 
       {followupWarnings.length > 0 ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          <p className="font-semibold">후속작업 검증 경고</p>
-          <ul className="mt-1 list-disc pl-4">
-            {followupWarnings.map((w, i) => (
-              <li key={`${w}-${i}`}>{w}</li>
-            ))}
-          </ul>
+          <p className="font-semibold">후속작업 추출 안내</p>
+          {warningUi.warnMessages.length > 0 ? (
+            <ul className="mt-1 list-disc pl-4">
+              {warningUi.warnMessages.map((w) => (
+                <li key={w}>{w}</li>
+              ))}
+            </ul>
+          ) : null}
+          {warningUi.infoMessages.length > 0 ? (
+            <ul className="mt-1 list-disc pl-4 text-slate-700">
+              {warningUi.infoMessages.map((w) => (
+                <li key={w}>{w}</li>
+              ))}
+            </ul>
+          ) : null}
+          {warningUi.rawCodes.length > 0 ? (
+            <div className="mt-2">
+              <button
+                type="button"
+                className="rounded border border-amber-300 bg-white px-2 py-1 text-[11px] text-amber-900"
+                onClick={() => setShowWarningDebug((v) => !v)}
+              >
+                {showWarningDebug ? "디버그 코드 숨기기" : "디버그 코드 보기"}
+              </button>
+              {showWarningDebug ? (
+                <pre className="mt-1 overflow-auto rounded border border-amber-200 bg-amber-100/50 p-2 text-[11px]">
+                  {JSON.stringify(warningUi.rawCodes, null, 2)}
+                </pre>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -446,6 +504,11 @@ export function CommitteeDiscussionClient() {
               className={`rounded-lg border p-3 ${draft.savedId ? "border-emerald-300 bg-emerald-50" : "border-indigo-200 bg-white"}`}
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
+                {warningUi.fallbackUsed ? (
+                  <span className="rounded bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-900">
+                    자동 복구 초안
+                  </span>
+                ) : null}
                 <input
                   value={draft.title}
                   onChange={(e) => updateDraft(draft.localId, { title: e.target.value })}

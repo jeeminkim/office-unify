@@ -2,6 +2,11 @@
 
 import type { InfographicSpec } from '@office-unify/shared-types';
 
+function clampText(text: string, max = 110): { short: string; truncated: boolean } {
+  if (text.length <= max) return { short: text, truncated: false };
+  return { short: `${text.slice(0, max - 1)}…`, truncated: true };
+}
+
 export function ResponsiveInfographicView({ spec }: { spec: InfographicSpec }) {
   return (
     <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
@@ -40,9 +45,7 @@ export function ResponsiveInfographicView({ spec }: { spec: InfographicSpec }) {
           <p className="text-xs font-semibold text-slate-700">주요 플레이어</p>
           <ul className="mt-1 list-inside list-disc text-xs text-slate-700">
             {spec.lineup.slice(0, 5).map((item) => (
-              <li key={item.name}>
-                {item.name} ({item.category})
-              </li>
+              <li key={item.name}>{item.name} ({item.category})</li>
             ))}
           </ul>
         </div>
@@ -59,8 +62,35 @@ export function ResponsiveInfographicView({ spec }: { spec: InfographicSpec }) {
       <div className="rounded-md border border-slate-200 p-3">
         <p className="text-xs font-semibold text-slate-700">메모</p>
         <ul className="mt-1 list-inside list-disc text-xs text-slate-700">
-          {spec.notes.slice(0, 6).map((n) => (
-            <li key={n}>{n}</li>
+          {spec.notes.slice(0, 6).map((n, idx) => {
+            const clamped = clampText(n, 88);
+            return (
+              <li key={`${n}-${idx}`}>
+                {clamped.short}
+                {clamped.truncated ? (
+                  <details className="mt-1">
+                    <summary className="cursor-pointer text-[11px] text-slate-500">전체 보기</summary>
+                    <p className="mt-1 whitespace-pre-wrap text-[11px] text-slate-700">{n}</p>
+                  </details>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      <div className="rounded-md border border-slate-200 p-3">
+        <p className="text-xs font-semibold text-slate-700">차트 요약</p>
+        <ul className="mt-1 list-inside list-disc text-xs text-slate-700">
+          {spec.charts.bar.slice(0, 3).map((c) => (
+            <li key={`bar-${c.label}`}>
+              {c.label}: {c.value == null ? 'unknown' : c.value}
+            </li>
+          ))}
+          {spec.charts.pie.slice(0, 2).map((c) => (
+            <li key={`pie-${c.label}`}>
+              {c.label}: {c.value == null ? 'unknown' : c.value}
+            </li>
           ))}
         </ul>
       </div>

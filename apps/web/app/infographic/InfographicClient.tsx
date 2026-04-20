@@ -19,14 +19,28 @@ export default function InfographicClient() {
   const [sourceUrl, setSourceUrl] = useState('');
   const [pdfUrl, setPdfUrl] = useState('');
   const [pdfFile, setPdfFile] = useState<File | null>(null);
-  const [renderMode, setRenderMode] = useState<'responsive' | 'export'>('responsive');
+  const [renderMode, setRenderMode] = useState<'responsive' | 'export'>(() =>
+    typeof window !== 'undefined' && window.innerWidth >= 1024 ? 'export' : 'responsive',
+  );
+  const [showRawDebug, setShowRawDebug] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
-  const { loading, error, spec, warnings, setSpec, generate } = useInfographicGenerator();
+  const {
+    loading,
+    error,
+    spec,
+    warnings,
+    setSpec,
+    generate,
+    extractSourceText,
+    sourcePreviewText,
+    setSourcePreviewText,
+    sourcePreviewMeta,
+  } = useInfographicGenerator();
 
   const activeSpec = useMemo<InfographicSpec | null>(() => spec, [spec]);
 
-  const onGenerate = () =>
-    generate(
+  const onGenerateFromSource = () =>
+    extractSourceText(
       {
         industryName: industryName.trim(),
         sourceType,
@@ -37,6 +51,13 @@ export default function InfographicClient() {
       sourceType === 'pdf_upload' ? pdfFile : null,
     );
 
+  const onGenerateSpec = () =>
+    generate({
+      industryName: industryName.trim(),
+      sourceType: 'text',
+      rawText: (sourceType === 'text' ? rawText : sourcePreviewText).trim(),
+    });
+
   const canGenerate =
     !!industryName.trim() &&
     ((sourceType === 'text' && !!rawText.trim()) ||
@@ -44,12 +65,18 @@ export default function InfographicClient() {
       (sourceType === 'pdf_url' && !!pdfUrl.trim()) ||
       (sourceType === 'pdf_upload' && !!pdfFile));
 
+  const canGenerateSpec =
+    sourceType === 'text' ? !!rawText.trim() : !!sourcePreviewText.trim();
+
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 text-slate-800">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">산업 인포그래픽 생성기 (MVP)</h1>
         <p className="mt-2 text-sm text-slate-600">
           블로그/증권사 리포트/붙여넣은 원문을 구조화 JSON으로 정제한 뒤, 고정 템플릿 인포그래픽으로 렌더링합니다.
+        </p>
+        <p className="mt-1 text-xs text-slate-500">
+          모바일은 읽기용(`responsive`)이 기본이고, 데스크톱은 저장용 미리보기(`export`)가 기본입니다. PNG 저장은 export 레이아웃 기준입니다.
         </p>
       </div>
 
@@ -123,10 +150,20 @@ export default function InfographicClient() {
           ) : null}
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
+          {sourceType === 'text' ? null : (
+            <button
+              type="button"
+              onClick={() => void onGenerateFromSource()}
+              disabled={loading || !canGenerate}
+              className="rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-50"
+            >
+              {loading ? '원문 추출 중…' : '원문 추출'}
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => void onGenerate()}
-            disabled={loading || !canGenerate}
+            onClick={() => void onGenerateSpec()}
+            disabled={loading || !canGenerateSpec}
             className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
             {loading ? '구조화 요약 생성 중…' : '구조화 요약 생성'}
@@ -157,7 +194,47 @@ export default function InfographicClient() {
             ))}
           </ul>
         ) : null}
+        {sourceType !== 'text' && sourcePreviewMeta ? (
+          <div className="mt-3 rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+            <p>
+              추출 메타: 길이 {sourcePreviewMeta.extractedTextLength.toLocaleString()}자
+              {sourcePreviewMeta.sourceTitle ? ` · 제목 ${sourcePreviewMeta.sourceTitle}` : ''}
+            </p>
+            {sourcePreviewMeta.sourceUrl ? <p className="mt-1 break-all text-slate-500">{sourcePreviewMeta.sourceUrl}</p> : null}
+            {sourcePreviewMeta.extractionWarnings.length > 0 ? (
+              <ul className="mt-1 list-inside list-disc text-amber-700">
+                {sourcePreviewMeta.extractionWarnings.map((w) => (
+                  <li key={w}>{w}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
       </section>
+
+      {sourceType !== 'text' ? (
+        <section className="space-y-2 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-sm font-semibold text-slate-800">추출 원문 미리보기/수정</p>
+          <textarea
+            className="min-h-[220px] w-full rounded border border-slate-300 px-3 py-2 text-sm"
+            value={sourcePreviewText}
+            onChange={(e) => setSourcePreviewText(e.target.value)}
+            placeholder="먼저 '원문 추출'을 눌러 URL/PDF에서 추출한 텍스트를 확인하세요."
+          />
+          <button
+            type="button"
+            onClick={() => setShowRawDebug((v) => !v)}
+            className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700"
+          >
+            {showRawDebug ? '원시 추출 디버그 숨기기' : '원시 추출 디버그 보기'}
+          </button>
+          {showRawDebug && sourcePreviewMeta ? (
+            <pre className="max-h-[220px] overflow-auto rounded border border-slate-200 bg-slate-900 p-3 text-xs text-slate-100">
+              {JSON.stringify(sourcePreviewMeta, null, 2)}
+            </pre>
+          ) : null}
+        </section>
+      ) : null}
 
       {activeSpec ? (
         <section className="space-y-3">

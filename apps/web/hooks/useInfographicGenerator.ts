@@ -2,8 +2,10 @@
 
 import { useCallback, useState } from 'react';
 import type {
+  InfographicExtractSourceTextResponseBody,
   InfographicExtractRequestBody,
   InfographicExtractResponseBody,
+  InfographicInputSourceType,
   InfographicSpec,
 } from '@office-unify/shared-types';
 
@@ -16,6 +18,14 @@ export function useInfographicGenerator() {
   const [error, setError] = useState<string | null>(null);
   const [spec, setSpec] = useState<InfographicSpec | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [sourcePreviewText, setSourcePreviewText] = useState('');
+  const [sourcePreviewMeta, setSourcePreviewMeta] = useState<{
+    sourceType: InfographicInputSourceType;
+    sourceUrl?: string;
+    sourceTitle?: string;
+    extractionWarnings: string[];
+    extractedTextLength: number;
+  } | null>(null);
 
   const generate = useCallback(async (payload: InfographicExtractRequestBody, pdfFile?: File | null) => {
     setLoading(true);
@@ -60,13 +70,59 @@ export function useInfographicGenerator() {
     }
   }, []);
 
+  const extractSourceText = useCallback(async (payload: InfographicExtractRequestBody, pdfFile?: File | null) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const hasUpload = payload.sourceType === 'pdf_upload' && pdfFile instanceof File;
+      const requestInit: RequestInit = hasUpload
+        ? (() => {
+            const form = new FormData();
+            form.set('industryName', payload.industryName);
+            form.set('sourceType', payload.sourceType);
+            if (payload.rawText) form.set('rawText', payload.rawText);
+            if (payload.sourceUrl) form.set('sourceUrl', payload.sourceUrl);
+            if (payload.pdfUrl) form.set('pdfUrl', payload.pdfUrl);
+            form.set('pdfFile', pdfFile as File);
+            return {
+              method: 'POST',
+              credentials: 'same-origin',
+              body: form,
+            } as RequestInit;
+          })()
+        : {
+            method: 'POST',
+            headers: jsonHeaders,
+            credentials: 'same-origin',
+            body: JSON.stringify(payload),
+          };
+      const res = await fetch('/api/infographic/extract-source-text', requestInit);
+      const data = (await res.json()) as InfographicExtractSourceTextResponseBody & { error?: string };
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      setSourcePreviewText(data.rawText ?? '');
+      setSourcePreviewMeta(data.sourceMeta);
+      setWarnings(data.warnings ?? []);
+      return data;
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : '원문 추출 실패';
+      setError(message);
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   return {
     loading,
     error,
     spec,
     warnings,
     setSpec,
+    sourcePreviewText,
+    setSourcePreviewText,
+    sourcePreviewMeta,
     generate,
+    extractSourceText,
   };
 }
 

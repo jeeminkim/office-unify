@@ -254,6 +254,7 @@ export type {
   InfographicComparison,
   InfographicConfidence,
   InfographicExtractRequestBody,
+  InfographicExtractSourceTextResponseBody,
   InfographicExtractResponseBody,
   InfographicFlow,
   InfographicFlowType,

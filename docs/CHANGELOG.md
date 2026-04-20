@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Stabilization Phase 2 (UX-first):** followup warning code를 사용자 친화 문구로 매핑하고(`parse_failed`, `fallback_used` 등), `fallback_used` 초안에 `자동 복구 초안` 배지를 추가. raw code는 디버그 영역으로 분리.
+- **Jo report sanitizer hardening:** markdown table 제거 보조 규칙 위에 heading whitelist sanitizer를 추가해 허용 섹션(`# 제목`, `## 요약`, `## 핵심 리스크`, `## 다음 행동`, `## 하지 말 것`, `## 모니터링 포인트`, `## 다음 점검 시점`)만 유지.
+- **Infographic source-text 2-step UX:** `POST /api/infographic/extract-source-text` 추가. URL/PDF 입력은 `원문 추출 -> preview/edit -> spec 생성` 흐름으로 분리. sourceMeta(`sourceTitle`, `extractedTextLength`, `extractionWarnings`) 노출 강화 및 viewport 기반 기본 모드(모바일 responsive / 데스크톱 export) 적용.
 - **Committee Stabilization (real-use fixes):** Drucker 응답에서 `[형식 안내]`/`출력 형식` 등 메타 지시문 노출 제거(프롬프트+서버 후처리). 조일현 보고서를 행동 지침형 섹션으로 단순화하고 markdown table 패턴 제거 후처리 추가. followup extractor를 `strict parse -> repair parse -> heuristic fallback`으로 강화하고 warning code(`parse_failed`, `repair_succeeded`, `empty_items`, `fallback_used`)를 구조화.
 - **Infographic Generator hardening:** 입력 소스를 `text | url | pdf_upload | pdf_url`로 확장, URL/PDF 본문 추출 파이프라인 추가(파일 크기 제한/timeout/추출 warning). `sourceMeta`에 `sourceUrl/sourceTitle/extractionWarnings/extractedTextLength` 확장. 렌더 모드를 `responsive`(읽기용)와 `export`(A4 PNG 저장용)로 분리해 모바일 가독성 개선.
 - **Infographic Generator (MVP):** `/infographic` 페이지와 `POST /api/infographic/extract` 추가. 블로그/증권사 리포트/붙여넣은 원문을 `InfographicSpec` JSON으로 정제 후, 고정 SVG 템플릿(4개 zone + flow + 보조 패널 + bar/pie/line)으로 렌더링하고 PNG 저장 지원. DB 비저장, 숫자 추정 금지, `unknown/null/empty` fallback 및 warnings 기록 원칙 적용.

@@ -96,18 +96,80 @@ const JO_REPORT_APPEND = `
 
 function sanitizeJoReportMarkdown(markdown: string): { markdown: string; warnings: string[] } {
   const warnings: string[] = [];
-  let text = markdown.trim();
+  const text = markdown.trim();
   const tableBlockPattern = /(^|\n)(\|[^\n]*\|\n\|[\s:-]+\|[\s\S]*?)(?=\n#|\n##|\n###|\n\n[A-Z가-힣]|\n$)/g;
-  if (tableBlockPattern.test(text)) {
+  let base = text;
+  if (tableBlockPattern.test(base)) {
     warnings.push('jo_report_table_removed');
-    text = text.replace(tableBlockPattern, '\n');
+    base = base.replace(tableBlockPattern, '\n');
   }
-  const forbiddenRows = /(유지\s*\/\s*확대\s*\/\s*감축\s*\/\s*관찰|유지 버킷|감축 검토 버킷)/gi;
-  if (forbiddenRows.test(text)) {
+  const forbiddenRowsPattern = /(유지\s*\/\s*확대\s*\/\s*감축\s*\/\s*관찰|유지 버킷|감축 검토 버킷)/i;
+  if (forbiddenRowsPattern.test(base)) {
     warnings.push('jo_report_bucket_table_style_removed');
-    text = text.replace(forbiddenRows, '운영 우선순위');
+    base = base.replace(/(유지\s*\/\s*확대\s*\/\s*감축\s*\/\s*관찰|유지 버킷|감축 검토 버킷)/gi, '운영 우선순위');
   }
-  return { markdown: text.trim(), warnings };
+  const allowedH2 = [
+    '요약',
+    '핵심 리스크',
+    '다음 행동',
+    '하지 말 것',
+    '모니터링 포인트',
+    '다음 점검 시점',
+  ];
+
+  const lines = base.split('\n');
+  let title = '';
+  const sections = new Map<string, string[]>();
+  let currentSection: string | null = null;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd();
+    if (!title && /^#\s+/.test(line)) {
+      title = line;
+      currentSection = null;
+      continue;
+    }
+    const h2 = line.match(/^##\s+(.+)$/);
+    if (h2) {
+      const heading = h2[1].trim();
+      if (allowedH2.includes(heading)) {
+        currentSection = heading;
+        if (!sections.has(heading)) sections.set(heading, []);
+      } else {
+        currentSection = null;
+        warnings.push(`jo_report_section_removed:${heading}`);
+      }
+      continue;
+    }
+    if (!currentSection) continue;
+    if (/^\s*\|/.test(line)) {
+      warnings.push('jo_report_table_line_removed');
+      continue;
+    }
+    if (forbiddenRowsPattern.test(line)) {
+      warnings.push('jo_report_bucket_line_removed');
+      continue;
+    }
+    sections.get(currentSection)?.push(line);
+  }
+
+  if (!title) {
+    title = '# 투자위원회 행동 지침 요약';
+    warnings.push('jo_report_title_fallback_used');
+  }
+
+  const ordered = [title, ''];
+  for (const section of allowedH2) {
+    const sectionLines = (sections.get(section) ?? []).filter((v) => v.trim().length > 0);
+    ordered.push(`## ${section}`);
+    if (sectionLines.length === 0) {
+      ordered.push('- (요약 정보 없음)');
+    } else {
+      ordered.push(...sectionLines);
+    }
+    ordered.push('');
+  }
+  return { markdown: ordered.join('\n').trim(), warnings: Array.from(new Set(warnings)) };
 }
 
 async function loadLedgerSnapshot(supabase: SupabaseClient, userKey: OfficeUserKey): Promise<string> {

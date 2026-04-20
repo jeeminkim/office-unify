@@ -107,3 +107,16 @@ export type InfographicExtractResponseBody = {
   warnings: string[];
 };
 
+export type InfographicExtractSourceTextResponseBody = {
+  ok: boolean;
+  rawText: string;
+  warnings: string[];
+  sourceMeta: {
+    sourceType: InfographicInputSourceType;
+    sourceUrl?: string;
+    sourceTitle?: string;
+    extractionWarnings: string[];
+    extractedTextLength: number;
+  };
+};
+
