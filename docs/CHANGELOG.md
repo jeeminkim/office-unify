@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Quote no-data correctness fix:** quote 전부 실패 시 총 평가금액/손익/손익률을 0/-100%로 계산하지 않고 NO_DATA로 반환하도록 수정. 비중은 매입금액 기준 fallback만 유지.
+- **Google Sheets quote provider:** `GOOGLEFINANCE` read-back 기반 quote provider를 추가하고 수동 새로고침 API(`POST /api/portfolio/quotes/refresh`) 및 상태 API(`GET /api/portfolio/quotes/status`)를 추가.
+- **Provider priority meta expansion:** portfolio summary `dataQuality`에 providerUsed/delayed/fxAvailable/missingQuoteSymbols/readBackSucceeded/quoteFallbackUsed를 추가.
 - **Portfolio status dashboard route:** `/portfolio` 화면을 추가해 총 평가/손익/비중/종목 테이블/진단 경고를 점검 전용으로 제공하고, 루틴의 portfolio 단계를 원장 화면이 아닌 현황 대시보드로 연결.
 - **Ledger UX for post-trade reflection:** `/portfolio-ledger`에 보유 목록 빠른 수정, buy/sell/correct 사후 반영, 전량 매도 시 watchlist 이동 옵션을 추가(주문 실행 기능 없음).
 - **Holdings management APIs:** `GET /api/portfolio/holdings`, `PATCH|DELETE /api/portfolio/holdings/[id]`, `POST /api/portfolio/holdings/apply-trade`를 추가.

@@ -92,6 +92,12 @@
   - sell: 수량 감소(전량 시 삭제, 옵션으로 watchlist 이동)
   - correct: 수량/평단 직접 정정
 
+Quote read-back 운영 메모:
+
+- `portfolio_quotes`(기본 탭명)에는 `GOOGLEFINANCE` 수식이 저장되고 서버는 계산 결과를 read-back 한다.
+- `PORTFOLIO_QUOTES_SHEET_NAME` 환경변수로 탭명을 바꿀 수 있다.
+- 시세 계산 불가(`NO_DATA`)와 평가금액 0은 다른 의미로 취급한다.
+
 ## 미적용 시 동작 (Trend memory)
 
 DDL을 적용하지 않으면 `trend_report_runs` 조회가 실패하고, 엔진은 **SQL memory만 끄고** 리포트 본문·OpenAI/Gemini 경로는 그대로 둔다. 응답 `meta.memoryEnabled=false`, `warnings`에 안내 문자열.

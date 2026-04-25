@@ -32,6 +32,15 @@ type SummaryResponse = {
     staleQuoteCount: number;
     missingMetadataCount: number;
     source: string;
+    providerUsed?: "google_sheets_googlefinance" | "yahoo" | "none";
+    delayed?: boolean;
+    delayMinutes?: number;
+    missingQuoteSymbols?: string[];
+    fxAvailable?: boolean;
+    fxProviderUsed?: "google_sheets_googlefinance" | "yahoo" | "none";
+    quoteFallbackUsed?: boolean;
+    readBackSucceeded?: boolean;
+    refreshRequested?: boolean;
   };
 };
 
@@ -45,14 +54,20 @@ function fmt(v?: number): string {
 export function PortfolioDashboardClient() {
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+  const [refreshingQuote, setRefreshingQuote] = useState(false);
+
+  const loadSummary = async () => {
+    const res = await fetch("/api/portfolio/summary", { credentials: "same-origin" });
+    const data = (await res.json()) as SummaryResponse & { error?: string };
+    if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+    setSummary(data);
+  };
 
   useEffect(() => {
     void (async () => {
       try {
-        const res = await fetch("/api/portfolio/summary", { credentials: "same-origin" });
-        const data = (await res.json()) as SummaryResponse & { error?: string };
-        if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-        setSummary(data);
+        await loadSummary();
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : "포트폴리오 요약 로드 실패");
       }
@@ -76,10 +91,39 @@ export function PortfolioDashboardClient() {
         <div className="flex gap-2 text-xs">
           <Link href="/" className="rounded border border-slate-300 bg-white px-3 py-1.5">홈</Link>
           <Link href="/portfolio-ledger" className="rounded border border-slate-300 bg-white px-3 py-1.5">보유 종목 관리</Link>
+          <button
+            type="button"
+            className="rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-blue-900 disabled:opacity-50"
+            disabled={refreshingQuote}
+            onClick={() => {
+              void (async () => {
+                setRefreshingQuote(true);
+                setError(null);
+                setInfo(null);
+                try {
+                  const refresh = await fetch("/api/portfolio/quotes/refresh", {
+                    method: "POST",
+                    credentials: "same-origin",
+                  });
+                  const r = (await refresh.json()) as { message?: string; error?: string };
+                  if (!refresh.ok) throw new Error(r.error ?? `HTTP ${refresh.status}`);
+                  setInfo(r.message ?? "Google Sheets 계산 반영 후 다시 조회하세요.");
+                  await loadSummary();
+                } catch (e: unknown) {
+                  setError(e instanceof Error ? e.message : "시세 새로고침 요청 실패");
+                } finally {
+                  setRefreshingQuote(false);
+                }
+              })();
+            }}
+          >
+            {refreshingQuote ? "요청 중..." : "시세 새로고침 요청"}
+          </button>
         </div>
       </div>
 
       {error ? <div className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div> : null}
+      {info ? <div className="mb-4 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">{info}</div> : null}
 
       <section className="mb-4 grid gap-3 md:grid-cols-3 lg:grid-cols-6">
         <div className="rounded border border-slate-200 bg-white p-3"><p className="text-xs text-slate-500">총 평가금액</p><p className="mt-1 font-semibold">{fmt(summary?.totalValueKrw)}</p></div>
@@ -95,6 +139,12 @@ export function PortfolioDashboardClient() {
         {!summary?.dataQuality.quoteAvailable ? (
           <p className="mt-2 inline-flex rounded bg-amber-100 px-2 py-0.5 text-[11px] text-amber-900">시세 미연동: 매입금액 기준 비중 fallback</p>
         ) : null}
+        <div className="mt-2 flex flex-wrap gap-1 text-[11px]">
+          <span className="rounded bg-slate-200 px-2 py-0.5 text-slate-800">{summary?.dataQuality.providerUsed ?? "none"}</span>
+          {summary?.dataQuality.delayed ? <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-900">googlefinance delayed</span> : null}
+          {summary?.dataQuality.quoteFallbackUsed ? <span className="rounded bg-blue-100 px-2 py-0.5 text-blue-900">yahoo fallback</span> : null}
+          {summary?.dataQuality.fxAvailable === false ? <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-900">fx_missing</span> : null}
+        </div>
         <div className="mt-3 space-y-2">
           {(summary?.topPositions ?? []).slice(0, 10).map((row) => (
             <div key={`${row.market}-${row.symbol}`} className="text-xs">
@@ -127,7 +177,19 @@ export function PortfolioDashboardClient() {
                   <td className="px-2 py-1 text-right">{fmt(row.valueKrw)}</td>
                   <td className="px-2 py-1 text-right">{row.pnlRate == null ? "NO_DATA" : `${row.pnlRate.toFixed(2)}%`}</td>
                   <td className="px-2 py-1 text-right">{row.weight == null ? "NO_DATA" : `${row.weight.toFixed(1)}%`}</td>
-                  <td className="px-2 py-1">{row.stale ? <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-900">stale/missing</span> : <span className="rounded bg-emerald-100 px-2 py-0.5 text-emerald-900">ok</span>}</td>
+                  <td className="px-2 py-1">
+                    {row.market === "US" && summary?.dataQuality.fxAvailable === false ? (
+                      <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-900">fx_missing</span>
+                    ) : row.currentPrice == null ? (
+                      <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-900">stale/missing</span>
+                    ) : summary?.dataQuality.providerUsed === "google_sheets_googlefinance" ? (
+                      <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-900">googlefinance delayed</span>
+                    ) : summary?.dataQuality.providerUsed === "yahoo" ? (
+                      <span className="rounded bg-blue-100 px-2 py-0.5 text-blue-900">yahoo</span>
+                    ) : (
+                      <span className="rounded bg-emerald-100 px-2 py-0.5 text-emerald-900">ok</span>
+                    )}
+                  </td>
                   <td className="px-2 py-1"><Link href="/portfolio-ledger" className="rounded border border-slate-300 bg-white px-2 py-0.5">관리</Link></td>
                 </tr>
               ))}

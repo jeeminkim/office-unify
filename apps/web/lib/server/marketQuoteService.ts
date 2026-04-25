@@ -1,8 +1,14 @@
 import 'server-only';
+import {
+  isGoogleFinanceQuoteConfigured,
+  readGoogleFinanceQuoteSheetRows,
+  syncGoogleFinanceQuoteSheetRows,
+} from '@/lib/server/googleFinanceSheetQuoteService';
 
 type HoldingInput = {
   market: string;
   symbol: string;
+  displayName?: string;
 };
 
 export type HoldingQuote = {
@@ -12,6 +18,22 @@ export type HoldingQuote = {
   currency?: string;
   stale: boolean;
   sourceSymbol?: string;
+  provider?: 'google_sheets_googlefinance' | 'yahoo' | 'none';
+  delayed?: boolean;
+  delayMinutes?: number;
+};
+
+export type QuoteProviderMeta = {
+  providerUsed: 'google_sheets_googlefinance' | 'yahoo' | 'none';
+  delayed: boolean;
+  delayMinutes?: number;
+  readBackSucceeded: boolean;
+  refreshRequested?: boolean;
+  missingSymbols: string[];
+  warnings: string[];
+  fxAvailable: boolean;
+  fxProviderUsed: 'google_sheets_googlefinance' | 'yahoo' | 'none';
+  quoteFallbackUsed: boolean;
 };
 
 export type QuoteBundle = {
@@ -19,6 +41,7 @@ export type QuoteBundle = {
   usdKrwRate?: number;
   warnings: string[];
   quoteAvailable: boolean;
+  providerMeta: QuoteProviderMeta;
 };
 
 const YAHOO_QUOTE_URL = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=';
@@ -70,9 +93,71 @@ async function fetchYahooQuotes(symbols: string[]): Promise<Map<string, YahooQuo
   }
 }
 
-export async function loadHoldingQuotes(holdings: HoldingInput[]): Promise<QuoteBundle> {
+function computeMissingSymbols(holdings: HoldingInput[], map: Map<string, HoldingQuote>): string[] {
+  return holdings
+    .filter((holding) => !map.get(holdingKey(holding.market, holding.symbol))?.currentPrice)
+    .map((holding) => `${holding.market}:${holding.symbol.toUpperCase()}`);
+}
+
+export async function loadHoldingQuotes(
+  holdings: HoldingInput[],
+  options?: { requestRefresh?: boolean },
+): Promise<QuoteBundle> {
   const warnings: string[] = [];
   const quoteByHolding = new Map<string, HoldingQuote>();
+
+  if (isGoogleFinanceQuoteConfigured()) {
+    try {
+      if (options?.requestRefresh) {
+        await syncGoogleFinanceQuoteSheetRows(holdings);
+      }
+      const sheet = await readGoogleFinanceQuoteSheetRows();
+      holdings.forEach((holding) => {
+        const key = holdingKey(holding.market, holding.symbol);
+        const row = sheet.rows.find((it) => it.market === holding.market && it.symbol === holding.symbol.toUpperCase());
+        quoteByHolding.set(key, {
+          market: holding.market,
+          symbol: holding.symbol.toUpperCase(),
+          currentPrice: row?.price,
+          currency: row?.currency,
+          stale: !row?.price,
+          provider: row?.price ? 'google_sheets_googlefinance' : 'none',
+          delayed: row?.datadelay != null ? row.datadelay > 0 : true,
+          delayMinutes: row?.datadelay,
+        });
+      });
+      const matched = Array.from(quoteByHolding.values()).filter((row) => row.currentPrice != null).length;
+      if (matched > 0) {
+        const delayMinutes = Array.from(quoteByHolding.values())
+          .map((row) => row.delayMinutes ?? 0)
+          .filter((v) => Number.isFinite(v));
+        const maxDelay = delayMinutes.length > 0 ? Math.max(...delayMinutes) : undefined;
+        return {
+          quoteByHolding,
+          usdKrwRate: sheet.fxRate,
+          warnings,
+          quoteAvailable: true,
+          providerMeta: {
+            providerUsed: 'google_sheets_googlefinance',
+            delayed: true,
+            delayMinutes: maxDelay,
+            readBackSucceeded: sheet.readBackSucceeded,
+            refreshRequested: options?.requestRefresh === true,
+            missingSymbols: computeMissingSymbols(holdings, quoteByHolding),
+            warnings,
+            fxAvailable: sheet.fxRate != null,
+            fxProviderUsed: sheet.fxRate != null ? 'google_sheets_googlefinance' : 'none',
+            quoteFallbackUsed: false,
+          },
+        };
+      }
+      warnings.push('googlefinance_readback_empty');
+    } catch {
+      warnings.push('googlefinance_readback_failed');
+    }
+  } else {
+    warnings.push('googlefinance_not_configured');
+  }
 
   const symbolCandidates = new Map<string, string[]>();
   holdings.forEach((holding) => {
@@ -104,6 +189,8 @@ export async function loadHoldingQuotes(holdings: HoldingInput[]): Promise<Quote
       currency: row?.currency,
       stale: valid ? stale : true,
       sourceSymbol: row?.symbol,
+      provider: valid ? 'yahoo' : 'none',
+      delayed: stale,
     });
   });
 
@@ -119,6 +206,17 @@ export async function loadHoldingQuotes(holdings: HoldingInput[]): Promise<Quote
     usdKrwRate,
     warnings,
     quoteAvailable: matchedCount > 0,
+    providerMeta: {
+      providerUsed: matchedCount > 0 ? 'yahoo' : 'none',
+      delayed: true,
+      readBackSucceeded: false,
+      refreshRequested: options?.requestRefresh === true,
+      missingSymbols: computeMissingSymbols(holdings, quoteByHolding),
+      warnings,
+      fxAvailable: usdKrwRate != null,
+      fxProviderUsed: usdKrwRate != null ? 'yahoo' : 'none',
+      quoteFallbackUsed: true,
+    },
   };
 }
 

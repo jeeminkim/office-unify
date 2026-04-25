@@ -45,6 +45,9 @@
 
 ## 포트폴리오 시세/환율 조회 (서버 런타임)
 
-- `/api/portfolio/summary`는 서버에서 공개 시세 엔드포인트(Yahoo quote, `KRW=X`)를 사용해 현재가/평가금액을 계산할 수 있다.
-- 별도 API key를 요구하지 않는 경로를 우선 사용하며, 실패 시 `quoteAvailable=false` + warning으로 degrade한다.
+- `/api/portfolio/summary`는 Google Sheets `GOOGLEFINANCE` 수식 결과 read-back을 1순위 provider로 사용한다.
+- Google Finance 직접 API 호출은 사용하지 않는다.
+- Sheets read-back 실패 시 Yahoo quote(`KRW=X` 포함)를 fallback provider로 사용한다.
+- Sheets 계산 직후에는 값이 비어 있을 수 있어 지연(delayed) 상태를 표시한다.
 - 시세/환율 실패 시 임의 가격을 생성하지 않는다.
+- 시세 실패는 손실과 다르므로 손익률을 -100% 같은 값으로 계산하지 않고 NO_DATA로 처리한다.

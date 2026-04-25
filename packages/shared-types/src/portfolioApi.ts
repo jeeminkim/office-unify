@@ -62,5 +62,14 @@ export type PortfolioSummaryEnhancedResponseBody = {
     staleQuoteCount: number;
     missingMetadataCount: number;
     source: string;
+    providerUsed?: 'google_sheets_googlefinance' | 'yahoo' | 'none';
+    delayed?: boolean;
+    delayMinutes?: number;
+    missingQuoteSymbols?: string[];
+    fxAvailable?: boolean;
+    fxProviderUsed?: 'google_sheets_googlefinance' | 'yahoo' | 'none';
+    quoteFallbackUsed?: boolean;
+    readBackSucceeded?: boolean;
+    refreshRequested?: boolean;
   };
 };

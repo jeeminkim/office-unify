@@ -41,6 +41,15 @@ type EnhancedPortfolioSummaryResponse = {
     staleQuoteCount: number;
     missingMetadataCount: number;
     source: string;
+    providerUsed?: 'google_sheets_googlefinance' | 'yahoo' | 'none';
+    delayed?: boolean;
+    delayMinutes?: number;
+    missingQuoteSymbols?: string[];
+    fxAvailable?: boolean;
+    fxProviderUsed?: 'google_sheets_googlefinance' | 'yahoo' | 'none';
+    quoteFallbackUsed?: boolean;
+    readBackSucceeded?: boolean;
+    refreshRequested?: boolean;
   };
 };
 
@@ -82,7 +91,11 @@ export async function GET(req: Request) {
 
   try {
     const holdings = await listWebPortfolioHoldingsForUser(supabase, userKey);
-    const quoteBundle = await loadHoldingQuotes(holdings.map((holding) => ({ market: holding.market, symbol: holding.symbol })));
+    const quoteBundle = await loadHoldingQuotes(holdings.map((holding) => ({
+      market: holding.market,
+      symbol: holding.symbol,
+      displayName: holding.name,
+    })));
     const quoteWarnings = [...quoteBundle.warnings];
 
     const topPositionsRaw = holdings.map((holding) => {
@@ -110,50 +123,75 @@ export async function GET(req: Request) {
         weight: undefined,
         pnlRate,
         stale: quote?.stale ?? true,
+        provider: quote?.provider ?? 'none',
+        delayed: quote?.delayed ?? true,
+        delayMinutes: quote?.delayMinutes,
         sector: holding.sector ?? 'unknown',
         totalCostKrw: avgCostKrw,
         pnlKrw,
       };
     });
-    const totalCostKrw = topPositionsRaw.reduce((acc, row) => acc + (row.totalCostKrw ?? 0), 0);
-    const totalValueKrw = topPositionsRaw.reduce((acc, row) => acc + (row.valueKrw ?? 0), 0);
-    const totalPnlKrw = totalValueKrw - totalCostKrw;
-    const totalPnlRate = totalCostKrw > 0 ? (totalPnlKrw / totalCostKrw) * 100 : undefined;
+    const hasAnyCost = topPositionsRaw.some((row) => row.totalCostKrw != null);
+    const totalCostKrw = hasAnyCost
+      ? topPositionsRaw.reduce((acc, row) => acc + (row.totalCostKrw ?? 0), 0)
+      : undefined;
+    const hasAnyValuation = topPositionsRaw.some((row) => row.valueKrw != null);
+    const totalValueKrw = hasAnyValuation
+      ? topPositionsRaw.reduce((acc, row) => acc + (row.valueKrw ?? 0), 0)
+      : undefined;
+    const totalPnlKrw = totalValueKrw != null && totalCostKrw != null ? totalValueKrw - totalCostKrw : undefined;
+    const totalPnlRate =
+      totalValueKrw != null && totalCostKrw != null && totalCostKrw > 0 && totalPnlKrw != null
+        ? (totalPnlKrw / totalCostKrw) * 100
+        : undefined;
+    const weightBaseKrw = hasAnyValuation
+      ? totalValueKrw
+      : hasAnyCost
+        ? topPositionsRaw.reduce((acc, row) => acc + (row.totalCostKrw ?? 0), 0)
+        : undefined;
     const topPositions = [...topPositionsRaw]
-      .sort((a, b) => (b.valueKrw ?? 0) - (a.valueKrw ?? 0))
+      .sort((a, b) => ((b.valueKrw ?? b.totalCostKrw ?? 0) - (a.valueKrw ?? a.totalCostKrw ?? 0)))
       .slice(0, 10)
       .map((row) => ({
         ...row,
-        weight: totalValueKrw > 0 && row.valueKrw != null ? (row.valueKrw / totalValueKrw) * 100 : undefined,
+        weight:
+          weightBaseKrw && weightBaseKrw > 0
+            ? (((hasAnyValuation ? row.valueKrw : row.totalCostKrw) ?? 0) / weightBaseKrw) * 100
+            : undefined,
       }));
     const byMarket = Array.from(
       topPositionsRaw.reduce((map, row) => {
         const key = row.market ?? 'unknown';
-        map.set(key, (map.get(key) ?? 0) + (row.valueKrw ?? 0));
+        map.set(key, (map.get(key) ?? 0) + ((hasAnyValuation ? row.valueKrw : row.totalCostKrw) ?? 0));
         return map;
       }, new Map<string, number>()).entries(),
-    ).map(([key, valueKrw]) => ({ key, valueKrw, weight: totalValueKrw > 0 ? valueKrw / totalValueKrw : 0 }));
+    ).map(([key, valueKrw]) => ({ key, valueKrw, weight: weightBaseKrw && weightBaseKrw > 0 ? valueKrw / weightBaseKrw : 0 }));
     const byCurrency = Array.from(
       topPositionsRaw.reduce((map, row) => {
         const key = row.currency ?? 'unknown';
-        map.set(key, (map.get(key) ?? 0) + (row.valueKrw ?? 0));
+        map.set(key, (map.get(key) ?? 0) + ((hasAnyValuation ? row.valueKrw : row.totalCostKrw) ?? 0));
         return map;
       }, new Map<string, number>()).entries(),
-    ).map(([key, valueKrw]) => ({ key, valueKrw, weight: totalValueKrw > 0 ? valueKrw / totalValueKrw : 0 }));
+    ).map(([key, valueKrw]) => ({ key, valueKrw, weight: weightBaseKrw && weightBaseKrw > 0 ? valueKrw / weightBaseKrw : 0 }));
     const bySector = Array.from(
       topPositionsRaw.reduce((map, row) => {
         const key = row.sector ?? 'unknown';
-        map.set(key, (map.get(key) ?? 0) + (row.valueKrw ?? 0));
+        map.set(key, (map.get(key) ?? 0) + ((hasAnyValuation ? row.valueKrw : row.totalCostKrw) ?? 0));
         return map;
       }, new Map<string, number>()).entries(),
-    ).map(([key, valueKrw]) => ({ key, valueKrw, weight: totalValueKrw > 0 ? valueKrw / totalValueKrw : 0 }));
+    ).map(([key, valueKrw]) => ({ key, valueKrw, weight: weightBaseKrw && weightBaseKrw > 0 ? valueKrw / weightBaseKrw : 0 }));
 
     const warnings: EnhancedPortfolioSummaryResponse['warnings'] = [];
     if (!quoteBundle.quoteAvailable) {
       warnings.push({
         code: 'quote_unavailable',
         severity: 'warn',
-        message: '시세 조회에 실패했습니다. 원장 평균단가 기준 정보만 사용할 수 있습니다.',
+        message: '시세 조회 실패로 평가손익을 계산하지 않았습니다.',
+      });
+      warnings.push({
+        code: 'weight_fallback_cost_basis',
+        severity: 'info',
+        message: '현재 비중은 매입금액 기준입니다.',
       });
     }
     if (quoteWarnings.includes('usdkrw_rate_unavailable') && holdings.some((row) => row.market === 'US')) {
@@ -167,7 +205,7 @@ export async function GET(req: Request) {
       warnings.push({
         code: 'quote_stale_or_missing',
         severity: 'warn',
-        message: '일부 종목 시세가 오래되었거나 누락되었습니다.',
+        message: 'GOOGLEFINANCE 값은 지연될 수 있으며 일부 종목은 누락될 수 있습니다.',
       });
     }
     if (topPositions.some((p) => (p.weight ?? 0) >= 30)) {
@@ -208,7 +246,21 @@ export async function GET(req: Request) {
         quoteAvailable: quoteBundle.quoteAvailable,
         staleQuoteCount: topPositionsRaw.filter((row) => row.stale).length,
         missingMetadataCount,
-        source: quoteBundle.quoteAvailable ? 'yahoo_quote_plus_web_portfolio_holdings' : 'web_portfolio_holdings_without_realtime_quotes',
+        source:
+          quoteBundle.providerMeta.providerUsed === 'google_sheets_googlefinance'
+            ? 'google_sheets_googlefinance_readback'
+            : quoteBundle.quoteAvailable
+              ? 'yahoo_quote_plus_web_portfolio_holdings'
+              : 'web_portfolio_holdings_without_realtime_quotes',
+        providerUsed: quoteBundle.providerMeta.providerUsed,
+        delayed: quoteBundle.providerMeta.delayed,
+        delayMinutes: quoteBundle.providerMeta.delayMinutes,
+        missingQuoteSymbols: quoteBundle.providerMeta.missingSymbols,
+        fxAvailable: quoteBundle.providerMeta.fxAvailable,
+        fxProviderUsed: quoteBundle.providerMeta.fxProviderUsed,
+        quoteFallbackUsed: quoteBundle.providerMeta.quoteFallbackUsed,
+        readBackSucceeded: quoteBundle.providerMeta.readBackSucceeded,
+        refreshRequested: quoteBundle.providerMeta.refreshRequested,
       },
     };
     if (searchParams.get('format') === 'legacy') {

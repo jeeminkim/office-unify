@@ -26,14 +26,19 @@
   - NO_DATA / fallback 상태를 명시
 - `/api/portfolio/summary`
   - 개인 콘솔용 확장 요약
-  - Yahoo quote + `KRW=X` 환율 조회를 우선 사용
-  - quote/환율 실패 시 `dataQuality.quoteAvailable=false` 및 warning으로 degrade
+  - quote provider 우선순위: Google Sheets `GOOGLEFINANCE` read-back -> Yahoo fallback -> none
+  - Google Finance는 직접 API 호출이 아니라 시트 수식 결과 read-back
+  - quote/환율 실패 시 평가손익 계산을 생략(NO_DATA)하고 비중만 매입금액 기준 fallback
 - `/api/portfolio/holdings`
   - 보유/관심 목록 조회
 - `/api/portfolio/holdings/[id]`
   - 보유 종목 빠른 수정(PATCH) / 삭제(DELETE)
 - `/api/portfolio/holdings/apply-trade`
   - buy/sell/correct 사후 반영(주문 실행 아님)
+- `/api/portfolio/quotes/refresh`
+  - 시세 시트 row/formula 동기화 요청 (지연 반영)
+- `/api/portfolio/quotes/status`
+  - 시트 read-back 상태/지연 상태 점검
 - 기존 투자 도구 API
   - `/api/private-banker/message`
   - `/api/committee-discussion/*`
