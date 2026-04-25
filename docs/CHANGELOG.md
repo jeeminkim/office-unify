@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Lint green recovery:** `InfographicClient`의 `useEffect` 내 `setState`를 제거하고 `effectiveRenderMode` derived state 패턴으로 전환해 `react-hooks/set-state-in-effect` 오류를 해소.
+- **Portfolio quote/fx integration:** `/api/portfolio/summary`에 서버 quote 서비스(`marketQuoteService`)를 연결해 현재가/평가금액/손익률 계산을 추가. quote/환율 실패 시 임의값 없이 warning + dataQuality degrade 유지.
+- **Badge consistency across result screens:** Private Banker/Committee/Trend/Research 결과에 outputQuality/modelUsage/fallback/memory/sheets 상태 배지를 일관 노출.
+- **Personal investment dashboard home:** `/`를 개인용 투자 대시보드 중심으로 전환하고, 기존 개발 보조 흐름은 `/dev-assistant`로 분리.
+- **System status board:** `/api/system/status` + `/system-status`를 추가해 env/DB 접근 상태를 섹션 단위(`ok|warn|error|not_configured`)로 점검.
+- **Dashboard overview API:** `/api/dashboard/overview` 추가. 포트폴리오 요약, 하루 10분 루틴, Trend 기억 요약, 포트폴리오-신호 연결, 모델/도구 배지를 한 번에 제공.
+- **Portfolio summary upgrade:** `/api/portfolio/summary`를 개인 콘솔 중심 요약 계약으로 확장하고, quote 미연동 시 `dataQuality.quoteAvailable=false`를 명시.
+- **PB/Committee output contract check:** 서버 후처리 검증/보정(`validate/normalizeInvestmentAssistantOutput`)을 추가해 출력 섹션 형식 누락을 완화하고 `outputQuality` 메타를 반환.
 - **Trade Journal structured executor hardening:** 구조 규칙 실행기를 명확화해 `target_metric + operator` 기반 자동 평가를 우선 적용하고, 코드 내부에서는 `operator`를 `comparisonOperator` alias로 해석. 판정 불가 시 기존 텍스트 휴리스틱/수동 판정으로 fallback.
 - **Sell checklist deepening:** `exit_type`별(thesis_broken/target_reached/risk_reduction/stop_loss/event_avoidance) 점검 근거를 강화하고 기본 원칙 seed에 sell 전용 구조화 규칙을 추가.
 - **Structured evidence persistence:** `trade_journal_check_results`에 `evidence_json` 저장을 추가해 explanation 텍스트 + 구조 근거를 함께 보존.

@@ -100,11 +100,7 @@ export default function InfographicClient() {
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
-  useEffect(() => {
-    if (isMobileViewport && renderMode === 'export') {
-      setRenderMode('responsive');
-    }
-  }, [isMobileViewport, renderMode]);
+  const effectiveRenderMode: 'responsive' | 'export' = isMobileViewport ? 'responsive' : renderMode;
 
   const onGenerateFromSource = () =>
     extractSourceText(
@@ -142,7 +138,7 @@ export default function InfographicClient() {
 
   const canGenerateSpec =
     sourceType === 'text' ? !!rawText.trim() : !!sourcePreviewText.trim();
-  const showInlineExportCanvas = !isMobileViewport && renderMode === 'export';
+  const showInlineExportCanvas = !isMobileViewport && effectiveRenderMode === 'export';
   const cleanupSeverity: 'light' | 'moderate' | 'heavy' | null = sourcePreviewMeta
     ? sourcePreviewMeta.cleanupNotes.length >= 8
       ? 'heavy'
@@ -556,7 +552,7 @@ export default function InfographicClient() {
             </div>
           ) : null}
           <div className="rounded border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-            보기 모드: {renderMode === 'responsive' ? '읽기용' : '저장용'} · 결과 유형: {resultModeLabel}
+            보기 모드: {effectiveRenderMode === 'responsive' ? '읽기용' : '저장용'} · 결과 유형: {resultModeLabel}
           </div>
           {articlePattern === 'opinion_editorial' || articlePattern === 'market_commentary' ? (
             <div className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
@@ -576,7 +572,7 @@ export default function InfographicClient() {
             <button
               type="button"
               onClick={() => setRenderMode('responsive')}
-              className={`rounded px-3 py-1.5 text-xs ${renderMode === 'responsive' ? 'bg-slate-900 text-white' : 'border border-slate-300 bg-white text-slate-700'}`}
+                className={`rounded px-3 py-1.5 text-xs ${effectiveRenderMode === 'responsive' ? 'bg-slate-900 text-white' : 'border border-slate-300 bg-white text-slate-700'}`}
             >
               Responsive 보기
             </button>
@@ -584,7 +580,7 @@ export default function InfographicClient() {
               <button
                 type="button"
                 onClick={() => setRenderMode('export')}
-                className={`rounded px-3 py-1.5 text-xs ${renderMode === 'export' ? 'bg-slate-900 text-white' : 'border border-slate-300 bg-white text-slate-700'}`}
+                className={`rounded px-3 py-1.5 text-xs ${effectiveRenderMode === 'export' ? 'bg-slate-900 text-white' : 'border border-slate-300 bg-white text-slate-700'}`}
               >
                 Export 보기
               </button>
@@ -614,7 +610,7 @@ export default function InfographicClient() {
               </>
             ) : null}
           </div>
-          {renderMode === 'responsive' ? (
+          {effectiveRenderMode === 'responsive' ? (
             <ResponsiveInfographicView spec={activeSpec} />
           ) : showInlineExportCanvas ? (
             <InfographicCanvas spec={activeSpec} />

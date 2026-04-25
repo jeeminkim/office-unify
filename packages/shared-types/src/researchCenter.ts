@@ -52,4 +52,12 @@ export type ResearchCenterGenerateResponseBody = {
   sheetsAppended: boolean;
   warnings: string[];
   reportRef: string;
+  meta?: {
+    providerUsed: 'gemini_only';
+    fallbackUsed: boolean;
+    includeSheetContext: boolean;
+    sheetsAppendAttempted: boolean;
+    sheetsAppendSucceeded: boolean;
+    noData: boolean;
+  };
 };

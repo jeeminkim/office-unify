@@ -335,6 +335,21 @@ export function ResearchCenterClient() {
               {result.sheetsAppended ? (
                 <p className="mt-1 text-xs text-emerald-700">Google Sheets에 요약이 저장되었습니다.</p>
               ) : null}
+              <div className="mt-2 flex flex-wrap gap-1">
+                <span className="rounded bg-slate-200 px-2 py-0.5 text-[11px] text-slate-800">
+                  {result.meta?.providerUsed ?? "gemini_only"}
+                </span>
+                <span className={`rounded px-2 py-0.5 text-[11px] ${result.meta?.includeSheetContext ? "bg-blue-100 text-blue-900" : "bg-slate-200 text-slate-600"}`}>
+                  sheet-context
+                </span>
+                {result.meta?.sheetsAppendAttempted ? (
+                  <span className={`rounded px-2 py-0.5 text-[11px] ${result.meta?.sheetsAppendSucceeded ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-900"}`}>
+                    sheets-append:{result.meta?.sheetsAppendSucceeded ? "ok" : "fail"}
+                  </span>
+                ) : null}
+                {result.meta?.fallbackUsed ? <span className="rounded bg-amber-100 px-2 py-0.5 text-[11px] text-amber-900">fallback</span> : null}
+                {result.meta?.noData ? <span className="rounded bg-amber-100 px-2 py-0.5 text-[11px] text-amber-900">NO_DATA</span> : null}
+              </div>
             </div>
             <button
               type="button"

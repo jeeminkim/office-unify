@@ -151,6 +151,7 @@ export { parseOfficeUserKey } from './domainIds';
 export type {
   AccountSummaryDto,
   PortfolioAccountsResponseBody,
+  PortfolioSummaryEnhancedResponseBody,
   PortfolioSummaryDto,
   PortfolioSummaryResponseBody,
 } from './portfolioApi';

@@ -6,6 +6,7 @@ import {
   executeCommitteeDiscussionJoReport,
   resolvePersonaChatLlmEnv,
 } from '@/lib/server/runCommitteeDiscussion';
+import { normalizeInvestmentAssistantOutput } from '@/lib/server/investmentAssistantOutputFormat';
 
 type Body = {
   topic?: string;
@@ -58,7 +59,16 @@ export async function POST(req: Request) {
       topic,
       transcript,
     });
-    return NextResponse.json({ markdown, sanitizeMeta });
+    const normalized = normalizeInvestmentAssistantOutput(markdown);
+    return NextResponse.json({
+      markdown: normalized.text,
+      sanitizeMeta,
+      outputQuality: normalized.quality,
+      modelUsage: {
+        providerUsed: 'gemini_openai_committee_report',
+        fallbackUsed: false,
+      },
+    });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error';
     return NextResponse.json({ error: message }, { status: 500 });

@@ -74,6 +74,15 @@
 - `trade_journal_reviews`는 `entry_snapshot_json`/`evaluation_snapshot_json`으로 리뷰 시점의 상태를 고정 저장한다.
 - `trade_journal_check_results`는 `evidence_json`으로 구조화된 판정 근거를 저장한다.
 
+## Personal Dashboard runtime dependencies
+
+개인 투자 대시보드 API는 아래 테이블 접근 가능 여부를 상태판에서 진단한다.
+
+- `web_portfolio_holdings`
+- `web_persona_chat_requests`
+- `trend_memory_topics`
+- `trade_journal_entries`
+
 ## 미적용 시 동작 (Trend memory)
 
 DDL을 적용하지 않으면 `trend_report_runs` 조회가 실패하고, 엔진은 **SQL memory만 끄고** 리포트 본문·OpenAI/Gemini 경로는 그대로 둔다. 응답 `meta.memoryEnabled=false`, `warnings`에 안내 문자열.

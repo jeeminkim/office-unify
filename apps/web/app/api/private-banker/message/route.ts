@@ -3,6 +3,7 @@ import type { PersonaChatMessageRequestBody } from '@office-unify/shared-types';
 import { requirePersonaChatAuth } from '@/lib/server/persona-chat-auth';
 import { buildPrivateBankerContentHash, runPrivateBankerMessageWithDbIdempotency } from '@/lib/server/runPrivateBankerMessage';
 import { getServiceSupabase } from '@/lib/server/supabase-service';
+import { normalizeInvestmentAssistantOutput } from '@/lib/server/investmentAssistantOutputFormat';
 
 /**
  * POST /api/private-banker/message
@@ -76,8 +77,19 @@ export async function POST(req: Request) {
       );
     }
 
+    const normalized = normalizeInvestmentAssistantOutput(result.body.assistantMessage.content);
+    const fallbackUsed = Boolean(result.body.llmProviderNote && result.body.llmProviderNote.toLowerCase().includes('gemini'));
     return NextResponse.json({
       ...result.body,
+      assistantMessage: {
+        ...result.body.assistantMessage,
+        content: normalized.text,
+      },
+      outputQuality: normalized.quality,
+      modelUsage: {
+        providerUsed: fallbackUsed ? 'gemini_fallback_after_openai' : 'openai_primary',
+        fallbackUsed,
+      },
       deduplicated: result.deduplicated,
     });
   } catch (e: unknown) {

@@ -20,6 +20,13 @@ export function PrivateBankerClient() {
   const [loadingSend, setLoadingSend] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [outputQuality, setOutputQuality] = useState<{
+    formatValid: boolean;
+    missingSections: string[];
+    normalized: boolean;
+    warnings: string[];
+  } | null>(null);
+  const [modelUsage, setModelUsage] = useState<{ providerUsed: string; fallbackUsed: boolean } | null>(null);
 
   const sendInFlightRef = useRef(false);
   const idempotencyKeyRef = useRef<string | null>(null);
@@ -88,6 +95,13 @@ export function PrivateBankerClient() {
         longTermMemorySummary?: string | null;
         deduplicated?: boolean;
         pbFormatNote?: string;
+        outputQuality?: {
+          formatValid: boolean;
+          missingSections: string[];
+          normalized: boolean;
+          warnings: string[];
+        };
+        modelUsage?: { providerUsed: string; fallbackUsed: boolean };
         error?: string;
         code?: string;
       };
@@ -114,6 +128,8 @@ export function PrivateBankerClient() {
       lastAttemptContentRef.current = "";
       setInput("");
       if (data.longTermMemorySummary) setLongTerm(data.longTermMemorySummary);
+      setOutputQuality(data.outputQuality ?? null);
+      setModelUsage(data.modelUsage ?? null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "전송 실패");
     } finally {
@@ -172,6 +188,29 @@ export function PrivateBankerClient() {
 
       {info ? (
         <div className="rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-xs text-slate-700">{info}</div>
+      ) : null}
+      {(outputQuality || modelUsage) ? (
+        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
+          <div className="flex flex-wrap gap-1">
+            {outputQuality ? (
+              <>
+                <span className={`rounded px-2 py-0.5 ${outputQuality.formatValid ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-900"}`}>
+                  outputQuality:{outputQuality.formatValid ? "valid" : "warn"}
+                </span>
+                {outputQuality.normalized ? <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-900">normalized</span> : null}
+              </>
+            ) : null}
+            {modelUsage ? (
+              <>
+                <span className="rounded bg-slate-200 px-2 py-0.5 text-slate-800">{modelUsage.providerUsed}</span>
+                {modelUsage.fallbackUsed ? <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-900">fallback</span> : null}
+              </>
+            ) : null}
+          </div>
+          {outputQuality?.missingSections?.length ? (
+            <p className="mt-1 text-[11px] text-amber-800">누락 섹션: {outputQuality.missingSections.join(", ")}</p>
+          ) : null}
+        </div>
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-3">

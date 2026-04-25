@@ -19,3 +19,32 @@
 - `GEMINI_API_KEY`: 서버에서만 Gemini 호출 — **Dev_Support** (`/api/generate`)와 **persona-chat** 공통. 브라우저·`NEXT_PUBLIC_`로 노출하지 않는다.
 - `OPENAI_API_KEY`: 서버에서만 OpenAI 호출 (**Private Banker / J. Pierpont** 전용)
 - `OFFICE_UNIFY_PORTFOLIO_READ_SECRET` 등: 포트폴리오 등 **다른 API**용 Bearer(선택)
+
+## 시스템 상태판 (`/system-status`)
+
+개인용 투자 콘솔은 `/api/system/status`로 아래 항목의 존재/접근 가능 여부를 진단한다.
+
+- Env 존재 여부:
+  - `SUPABASE_URL`
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  - `SUPABASE_SERVICE_ROLE_KEY`
+  - `OPENAI_API_KEY`
+  - `GEMINI_API_KEY`
+  - `GOOGLE_SERVICE_ACCOUNT_JSON`
+  - `GOOGLE_SHEETS_SPREADSHEET_ID`
+  - `OFFICE_UNIFY_PORTFOLIO_READ_SECRET`
+- 단일 사용자 게이트:
+  - `allowed-user.ts`의 허용 계정 상수 체크
+- DB 테이블 접근:
+  - `web_portfolio_holdings`
+  - `web_persona_chat_requests`
+  - `trend_memory_topics`
+  - `trade_journal_entries`
+
+응답은 값 자체를 반환하지 않고 상태(`ok|warn|error|not_configured`)만 노출한다.
+
+## 포트폴리오 시세/환율 조회 (서버 런타임)
+
+- `/api/portfolio/summary`는 서버에서 공개 시세 엔드포인트(Yahoo quote, `KRW=X`)를 사용해 현재가/평가금액을 계산할 수 있다.
+- 별도 API key를 요구하지 않는 경로를 우선 사용하며, 실패 시 `quoteAvailable=false` + warning으로 degrade한다.
+- 시세/환율 실패 시 임의 가격을 생성하지 않는다.

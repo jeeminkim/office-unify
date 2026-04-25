@@ -155,6 +155,20 @@ export function CommitteeDiscussionClient() {
   const [showWarningDebug, setShowWarningDebug] = useState(false);
   const [extractingFollowups, setExtractingFollowups] = useState(false);
   const [savingFollowupId, setSavingFollowupId] = useState<string | null>(null);
+  const [roundOutputQuality, setRoundOutputQuality] = useState<{
+    formatValid: boolean;
+    missingSections: string[];
+    normalized: boolean;
+    warnings: string[];
+  } | null>(null);
+  const [roundModelUsage, setRoundModelUsage] = useState<{ providerUsed: string; fallbackUsed: boolean } | null>(null);
+  const [reportOutputQuality, setReportOutputQuality] = useState<{
+    formatValid: boolean;
+    missingSections: string[];
+    normalized: boolean;
+    warnings: string[];
+  } | null>(null);
+  const [reportModelUsage, setReportModelUsage] = useState<{ providerUsed: string; fallbackUsed: boolean } | null>(null);
 
   const loadCommitteeMemory = useCallback(async () => {
     try {
@@ -191,11 +205,20 @@ export function CommitteeDiscussionClient() {
         const data = (await res.json()) as {
           lines?: CommitteeDiscussionLineDto[];
           committeeTurnId?: string;
+          outputQuality?: {
+            formatValid: boolean;
+            missingSections: string[];
+            normalized: boolean;
+            warnings: string[];
+          };
+          modelUsage?: { providerUsed: string; fallbackUsed: boolean };
           error?: string;
         };
         if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
         const lines = data.lines ?? [];
         if (data.committeeTurnId) setCommitteeTurnId(data.committeeTurnId);
+        setRoundOutputQuality(data.outputQuality ?? null);
+        setRoundModelUsage(data.modelUsage ?? null);
         setTranscript((prev) => [...prev, ...lines]);
         setRoundNote("");
         setPhase("after_round");
@@ -272,11 +295,20 @@ export function CommitteeDiscussionClient() {
                   keptSectionCount: number;
                   sanitationSeverity: "low" | "medium" | "high";
         };
+        outputQuality?: {
+          formatValid: boolean;
+          missingSections: string[];
+          normalized: boolean;
+          warnings: string[];
+        };
+        modelUsage?: { providerUsed: string; fallbackUsed: boolean };
         error?: string;
       };
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
       setReportMd(data.markdown ?? "");
       setReportSanitizeMeta(data.sanitizeMeta ?? null);
+      setReportOutputQuality(data.outputQuality ?? null);
+      setReportModelUsage(data.modelUsage ?? null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "보고서 생성 실패");
     } finally {
@@ -452,6 +484,19 @@ export function CommitteeDiscussionClient() {
       {error ? (
         <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>
       ) : null}
+      {(roundOutputQuality || roundModelUsage) ? (
+        <div className="rounded border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
+          <div className="flex flex-wrap gap-1">
+            {roundOutputQuality ? (
+              <span className={`rounded px-2 py-0.5 ${roundOutputQuality.formatValid ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-900"}`}>
+                round-format:{roundOutputQuality.formatValid ? "valid" : "warn"}
+              </span>
+            ) : null}
+            {roundModelUsage ? <span className="rounded bg-slate-200 px-2 py-0.5 text-slate-800">{roundModelUsage.providerUsed}</span> : null}
+            {roundModelUsage?.fallbackUsed ? <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-900">fallback</span> : null}
+          </div>
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <h2 className="text-sm font-semibold text-slate-800">기록</h2>
@@ -556,6 +601,18 @@ export function CommitteeDiscussionClient() {
 
       {reportMd !== null ? (
         <div className="flex flex-col gap-2 rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-sm">
+          {(reportOutputQuality || reportModelUsage) ? (
+            <div className="flex flex-wrap gap-1 text-[11px]">
+              {reportOutputQuality ? (
+                <span className={`rounded px-2 py-0.5 ${reportOutputQuality.formatValid ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-900"}`}>
+                  report-format:{reportOutputQuality.formatValid ? "valid" : "warn"}
+                </span>
+              ) : null}
+              {reportOutputQuality?.normalized ? <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-900">normalized</span> : null}
+              {reportModelUsage ? <span className="rounded bg-slate-200 px-2 py-0.5 text-slate-800">{reportModelUsage.providerUsed}</span> : null}
+              {reportModelUsage?.fallbackUsed ? <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-900">fallback</span> : null}
+            </div>
+          ) : null}
           {reportSanitizeMeta ? (
             <div className="rounded border border-emerald-200 bg-white px-2 py-1 text-[11px] text-emerald-900">
               품질 요약: {reportSanitizeMeta.sanitationSeverity === "high"

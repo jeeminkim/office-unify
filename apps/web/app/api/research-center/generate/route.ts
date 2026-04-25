@@ -122,6 +122,14 @@ export async function POST(req: Request) {
           {
             ...result,
             sheetsAppended: false,
+            meta: {
+              providerUsed: 'gemini_only',
+              fallbackUsed: false,
+              includeSheetContext: body.includeSheetContext === true,
+              sheetsAppendAttempted: true,
+              sheetsAppendSucceeded: false,
+              noData: false,
+            },
             warnings: [
               ...result.warnings,
               'saveToSheets 요청이 있었으나 Google Sheets(GOOGLE_SERVICE_ACCOUNT_JSON / GOOGLE_SHEETS_SPREADSHEET_ID)가 설정되지 않았습니다.',
@@ -132,13 +140,32 @@ export async function POST(req: Request) {
       }
       try {
         await appendResearchCenterSheets({ body, result, desks });
-        return NextResponse.json({ ...result, sheetsAppended: true });
+        return NextResponse.json({
+          ...result,
+          sheetsAppended: true,
+          meta: {
+            providerUsed: 'gemini_only',
+            fallbackUsed: false,
+            includeSheetContext: body.includeSheetContext === true,
+            sheetsAppendAttempted: true,
+            sheetsAppendSucceeded: true,
+            noData: false,
+          },
+        });
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : 'Sheets append failed';
         return NextResponse.json(
           {
             ...result,
             sheetsAppended: false,
+            meta: {
+              providerUsed: 'gemini_only',
+              fallbackUsed: false,
+              includeSheetContext: body.includeSheetContext === true,
+              sheetsAppendAttempted: true,
+              sheetsAppendSucceeded: false,
+              noData: false,
+            },
             warnings: [...result.warnings, `시트 저장 실패: ${message}`],
           },
           { status: 200 },
@@ -146,7 +173,17 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json(result);
+    return NextResponse.json({
+      ...result,
+      meta: {
+        providerUsed: 'gemini_only',
+        fallbackUsed: false,
+        includeSheetContext: body.includeSheetContext === true,
+        sheetsAppendAttempted: false,
+        sheetsAppendSucceeded: false,
+        noData: false,
+      },
+    });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error';
     return NextResponse.json({ error: message }, { status: 500 });

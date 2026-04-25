@@ -12,6 +12,7 @@ import {
   executeCommitteeDiscussionRound,
   resolvePersonaChatLlmEnv,
 } from '@/lib/server/runCommitteeDiscussion';
+import { validateInvestmentAssistantOutput } from '@/lib/server/investmentAssistantOutputFormat';
 
 type Body = {
   topic?: string;
@@ -92,7 +93,20 @@ export async function POST(req: Request) {
     const excerpt = buildCommitteeTranscriptExcerpt(topic, fullTranscript);
     await updateWebCommitteeTurnExcerpt(supabase, userKey, committeeTurnId, excerpt);
 
-    const res: CommitteeDiscussionRoundResponseBody = { lines, committeeTurnId };
+    const merged = lines.map((line) => `## ${line.displayName}\n${line.content}`).join('\n\n');
+    const outputQuality = validateInvestmentAssistantOutput(merged);
+    const res: CommitteeDiscussionRoundResponseBody & {
+      outputQuality?: ReturnType<typeof validateInvestmentAssistantOutput>;
+      modelUsage?: { providerUsed: string; fallbackUsed: boolean };
+    } = {
+      lines,
+      committeeTurnId,
+      outputQuality,
+      modelUsage: {
+        providerUsed: 'gemini_openai_committee_round',
+        fallbackUsed: false,
+      },
+    };
     return NextResponse.json(res);
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error';

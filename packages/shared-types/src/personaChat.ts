@@ -122,4 +122,16 @@ export type PersonaChatMessageResponseBody = {
   personaFormatNote?: string;
   /** OpenAI 예산/폴백 등으로 Gemini를 썼을 때 서버 안내(선택). */
   llmProviderNote?: string;
+  /** 형식 계약 검증 메타 (PB/위원회 확장) */
+  outputQuality?: {
+    formatValid: boolean;
+    missingSections: string[];
+    normalized: boolean;
+    warnings: string[];
+  };
+  /** 모델 경로/폴백 배지용 메타 */
+  modelUsage?: {
+    providerUsed: string;
+    fallbackUsed: boolean;
+  };
 };

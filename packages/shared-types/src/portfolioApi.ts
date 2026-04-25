@@ -22,3 +22,45 @@ export type PortfolioSummaryDto = {
 export type PortfolioSummaryResponseBody = {
   summary: PortfolioSummaryDto;
 };
+
+/** 개인 투자 콘솔 확장 요약 응답 */
+export type PortfolioSummaryEnhancedResponseBody = {
+  ok: boolean;
+  generatedAt: string;
+  totalPositions: number;
+  totalCostKrw?: number;
+  totalValueKrw?: number;
+  totalPnlKrw?: number;
+  totalPnlRate?: number;
+  cashKrw?: number;
+  cashWeight?: number;
+  topPositions: Array<{
+    symbol: string;
+    displayName?: string;
+    market?: string;
+    currency?: string;
+    quantity?: number;
+    avgPrice?: number;
+    currentPrice?: number;
+    valueKrw?: number;
+    weight?: number;
+    pnlRate?: number;
+    stale?: boolean;
+  }>;
+  exposures?: {
+    byMarket?: Array<{ key: string; valueKrw: number; weight: number }>;
+    byCurrency?: Array<{ key: string; valueKrw: number; weight: number }>;
+    bySector?: Array<{ key: string; valueKrw: number; weight: number }>;
+  };
+  warnings: Array<{
+    code: string;
+    severity: 'info' | 'warn' | 'danger';
+    message: string;
+  }>;
+  dataQuality: {
+    quoteAvailable: boolean;
+    staleQuoteCount: number;
+    missingMetadataCount: number;
+    source: string;
+  };
+};

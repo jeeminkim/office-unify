@@ -493,6 +493,23 @@ export function TrendAnalysisClient() {
 
           <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2 text-xs text-slate-700">
             <p className="font-medium text-slate-800">최신성·도구 요약</p>
+            <div className="mt-2 flex flex-wrap gap-1">
+              <span className="rounded bg-slate-200 px-2 py-0.5 text-[11px] text-slate-800">{result.meta.providerUsed}</span>
+              <span className={`rounded px-2 py-0.5 text-[11px] ${result.toolUsage.webSearchUsed ? "bg-blue-100 text-blue-900" : "bg-slate-200 text-slate-600"}`}>
+                webSearch
+              </span>
+              <span className={`rounded px-2 py-0.5 text-[11px] ${result.toolUsage.dataAnalysisUsed ? "bg-violet-100 text-violet-900" : "bg-slate-200 text-slate-600"}`}>
+                dataAnalysis
+              </span>
+              <span className={`rounded px-2 py-0.5 text-[11px] ${result.meta.memoryReadSucceeded ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-900"}`}>
+                memory-read:{result.meta.memoryReadSucceeded ? "ok" : "fail"}
+              </span>
+              <span className={`rounded px-2 py-0.5 text-[11px] ${result.meta.memoryWriteSucceeded ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-900"}`}>
+                memory-write:{result.meta.memoryWriteSucceeded ? "ok" : "fail"}
+              </span>
+              {result.meta.fallbackUsed ? <span className="rounded bg-amber-100 px-2 py-0.5 text-[11px] text-amber-900">fallback</span> : null}
+              {result.confidence === "NO_DATA" ? <span className="rounded bg-amber-100 px-2 py-0.5 text-[11px] text-amber-900">NO_DATA</span> : null}
+            </div>
             <ul className="mt-1 list-inside list-disc text-slate-600">
               <li>
                 {result.toolUsage.webSearchUsed
