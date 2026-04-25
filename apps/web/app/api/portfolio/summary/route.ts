@@ -30,6 +30,8 @@ type EnhancedPortfolioSummaryResponse = {
     weight?: number;
     pnlRate?: number;
     stale?: boolean;
+    /** google_ticker 미설정 시 시트 GOOGLEFINANCE 매핑 전 단계 */
+    needsTickerRecommendation?: boolean;
   }>;
   exposures?: {
     byMarket?: Array<{ key: string; valueKrw: number; weight: number }>;
@@ -132,6 +134,7 @@ export async function GET(req: Request) {
         sector: holding.sector ?? 'unknown',
         totalCostKrw: avgCostKrw,
         pnlKrw,
+        needsTickerRecommendation: !holding.google_ticker?.trim(),
       };
     });
     const hasAnyCost = topPositionsRaw.some((row) => row.totalCostKrw != null);
@@ -219,6 +222,14 @@ export async function GET(req: Request) {
     }
     if (holdings.length === 0) {
       warnings.push({ code: 'portfolio_no_data', severity: 'info', message: '포트폴리오 데이터가 없습니다.' });
+    }
+    if (holdings.some((row) => !row.google_ticker?.trim())) {
+      warnings.push({
+        code: 'google_ticker_missing',
+        severity: 'info',
+        message:
+          'google_ticker가 비어 있는 보유 종목이 있습니다. /portfolio 또는 원장에서 「추천 ticker 찾기」로 Google Sheets 후보를 검증한 뒤 적용할 수 있습니다.',
+      });
     }
     if (topPositions.slice(0, 3).some((p) => (p.pnlRate ?? 0) <= -10)) {
       warnings.push({ code: 'loss_over_10_exists', severity: 'danger', message: '손실률 -10% 이하 종목이 존재합니다.' });

@@ -91,7 +91,14 @@ export async function POST(req: Request) {
         target_price: asNumber(current?.target_price) ?? null,
         judgment_memo: current?.judgment_memo ?? null,
       });
-      return NextResponse.json({ ok: true, action: 'buy', newQuantity: newQty, newAveragePrice: newAvg });
+      const suggestTickerResolver = !current?.google_ticker?.trim();
+      return NextResponse.json({
+        ok: true,
+        action: 'buy',
+        newQuantity: newQty,
+        newAveragePrice: newAvg,
+        ...(suggestTickerResolver ? { suggestTickerResolver: true as const } : {}),
+      });
     }
 
     if (body.action === 'sell') {

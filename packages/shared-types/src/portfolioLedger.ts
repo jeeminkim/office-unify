@@ -20,6 +20,8 @@ export type PortfolioLedgerWatchlistInput = {
   market: 'KR' | 'US';
   symbol: string;
   name: string;
+  google_ticker?: string | null;
+  quote_symbol?: string | null;
   sector?: string | null;
   investment_memo?: string | null;
   interest_reason?: string | null;

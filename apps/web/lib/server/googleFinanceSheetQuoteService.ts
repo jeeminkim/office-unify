@@ -64,15 +64,15 @@ function toGoogleTicker(input: HoldingInput): string {
   return primary ?? input.symbol.trim().toUpperCase();
 }
 
-function asString(v: unknown): string {
+export function googleSheetCellAsString(v: unknown): string {
   if (v == null) return '';
   return String(v).trim();
 }
 
-function parseSheetNumber(v: unknown): number | undefined {
+export function parseGoogleFinanceSheetNumber(v: unknown): number | undefined {
   if (v == null) return undefined;
   if (typeof v === 'number') return Number.isFinite(v) ? v : undefined;
-  const raw = asString(v);
+  const raw = googleSheetCellAsString(v);
   if (!raw) return undefined;
   const upper = raw.toUpperCase();
   if (['#N/A', 'N/A', 'LOADING...', '#ERROR!', '#VALUE!', '#REF!'].includes(upper)) return undefined;
@@ -229,14 +229,14 @@ export async function readGoogleFinanceQuoteSheetRows(): Promise<{
   const rows: GoogleFinanceQuoteRow[] = [];
   let fxRate: number | undefined;
   values.forEach((row) => {
-    const market = asString(row[0]).toUpperCase();
-    const symbol = asString(row[1]).toUpperCase();
+    const market = googleSheetCellAsString(row[0]).toUpperCase();
+    const symbol = googleSheetCellAsString(row[1]).toUpperCase();
     if (!market || !symbol) return;
-    const googleTicker = asString(row[4]) || toGoogleTickerLegacy(market, symbol);
-    const priceFormula = asString(row[5]);
-    const rawPrice = asString(row[6]);
-    const price = parseSheetNumber(row[6]);
-    const datadelay = parseSheetNumber(row[12]);
+    const googleTicker = googleSheetCellAsString(row[4]) || toGoogleTickerLegacy(market, symbol);
+    const priceFormula = googleSheetCellAsString(row[5]);
+    const rawPrice = googleSheetCellAsString(row[6]);
+    const price = parseGoogleFinanceSheetNumber(row[6]);
+    const datadelay = parseGoogleFinanceSheetNumber(row[12]);
     const rowStatus = classifyRowStatus(rawPrice, price);
     if (market === 'FX' && symbol === 'USDKRW') {
       fxRate = price;
@@ -245,20 +245,20 @@ export async function readGoogleFinanceQuoteSheetRows(): Promise<{
     rows.push({
       market,
       symbol,
-      normalizedKey: asString(row[3]) || normalizeQuoteKey(market, symbol),
+      normalizedKey: googleSheetCellAsString(row[3]) || normalizeQuoteKey(market, symbol),
       googleTicker,
       priceFormula,
       rawPrice,
       price,
-      currency: asString(row[8]) || undefined,
-      rawCurrency: asString(row[8]) || undefined,
-      tradetime: asString(row[10]) || undefined,
-      rawTradeTime: asString(row[10]) || undefined,
+      currency: googleSheetCellAsString(row[8]) || undefined,
+      rawCurrency: googleSheetCellAsString(row[8]) || undefined,
+      tradetime: googleSheetCellAsString(row[10]) || undefined,
+      rawTradeTime: googleSheetCellAsString(row[10]) || undefined,
       datadelay,
-      rawDelay: asString(row[12]) || undefined,
+      rawDelay: googleSheetCellAsString(row[12]) || undefined,
       rowStatus,
       message: messageForStatus(rowStatus),
-      updatedAt: asString(row[14]) || undefined,
+      updatedAt: googleSheetCellAsString(row[14]) || undefined,
     });
   });
   return {

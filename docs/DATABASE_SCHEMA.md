@@ -96,6 +96,8 @@
 - `web_portfolio_holdings`의 `google_ticker`/`quote_symbol`은 시세 연동 수동 보정 필드:
   - `google_ticker`: Google Sheets `GOOGLEFINANCE` read-back용 우선 ticker
   - `quote_symbol`: Yahoo fallback 등 일반 quote provider용 우선 심볼
+- `web_portfolio_watchlist`에도 동일한 `google_ticker`/`quote_symbol` override를 둘 수 있다(마이그레이션: `docs/sql/append_web_portfolio_watchlist_quote_overrides.sql`).
+- **Ticker 추천(자동 저장 없음):** 스프레드시트 탭 `portfolio_quote_candidates`(기본명, `PORTFOLIO_TICKER_CANDIDATES_SHEET_NAME`로 변경 가능)에 후보별 수식을 쌓고, API가 read-back하여 추천 후보를 보여 준다. DB 반영은 사용자가 `POST /api/portfolio/ticker-resolver/apply`로 승인할 때만 수행한다.
 
 ## Realized PnL + Financial Goals
 

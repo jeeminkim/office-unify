@@ -24,6 +24,8 @@ export type WebPortfolioWatchlistRow = {
   market: string;
   symbol: string;
   name: string;
+  google_ticker: string | null;
+  quote_symbol: string | null;
   sector: string | null;
   investment_memo: string | null;
   interest_reason: string | null;
@@ -56,7 +58,7 @@ export async function listWebPortfolioWatchlistForUser(
   const { data, error } = await client
     .from('web_portfolio_watchlist')
     .select(
-      'market,symbol,name,sector,investment_memo,interest_reason,desired_buy_range,observation_points,priority,updated_at',
+      'market,symbol,name,google_ticker,quote_symbol,sector,investment_memo,interest_reason,desired_buy_range,observation_points,priority,updated_at',
     )
     .eq('user_key', userKey as string)
     .order('market', { ascending: true })
@@ -100,22 +102,26 @@ export async function upsertPortfolioWatchlist(
   row: PortfolioLedgerWatchlistInput,
 ): Promise<void> {
   const pk = userKey as string;
-  const { error } = await client.from('web_portfolio_watchlist').upsert(
-    {
-      user_key: pk,
-      market: row.market,
-      symbol: row.symbol.trim(),
-      name: row.name.trim(),
-      sector: row.sector ?? null,
-      investment_memo: row.investment_memo ?? null,
-      interest_reason: row.interest_reason ?? null,
-      desired_buy_range: row.desired_buy_range ?? null,
-      observation_points: row.observation_points ?? null,
-      priority: row.priority ?? null,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'user_key,market,symbol' },
-  );
+  const payload: Record<string, unknown> = {
+    user_key: pk,
+    market: row.market,
+    symbol: row.symbol.trim(),
+    name: row.name.trim(),
+    sector: row.sector ?? null,
+    investment_memo: row.investment_memo ?? null,
+    interest_reason: row.interest_reason ?? null,
+    desired_buy_range: row.desired_buy_range ?? null,
+    observation_points: row.observation_points ?? null,
+    priority: row.priority ?? null,
+    updated_at: new Date().toISOString(),
+  };
+  if (row.google_ticker !== undefined) {
+    payload.google_ticker = row.google_ticker?.trim() || null;
+  }
+  if (row.quote_symbol !== undefined) {
+    payload.quote_symbol = row.quote_symbol?.trim() || null;
+  }
+  const { error } = await client.from('web_portfolio_watchlist').upsert(payload, { onConflict: 'user_key,market,symbol' });
   if (error) throw error;
 }
 
@@ -143,6 +149,52 @@ export async function deletePortfolioWatchlist(
   const { error } = await client
     .from('web_portfolio_watchlist')
     .delete()
+    .eq('user_key', userKey as string)
+    .eq('market', market)
+    .eq('symbol', symbol.trim());
+  if (error) throw error;
+}
+
+export async function patchPortfolioHoldingTickers(
+  client: SupabaseClient,
+  userKey: OfficeUserKey,
+  market: 'KR' | 'US',
+  symbol: string,
+  fields: { google_ticker: string | null; quote_symbol?: string | null },
+): Promise<void> {
+  const patch: Record<string, unknown> = {
+    google_ticker: fields.google_ticker,
+    updated_at: new Date().toISOString(),
+  };
+  if (fields.quote_symbol !== undefined) {
+    patch.quote_symbol = fields.quote_symbol;
+  }
+  const { error } = await client
+    .from('web_portfolio_holdings')
+    .update(patch)
+    .eq('user_key', userKey as string)
+    .eq('market', market)
+    .eq('symbol', symbol.trim());
+  if (error) throw error;
+}
+
+export async function patchPortfolioWatchlistTickers(
+  client: SupabaseClient,
+  userKey: OfficeUserKey,
+  market: 'KR' | 'US',
+  symbol: string,
+  fields: { google_ticker: string | null; quote_symbol?: string | null },
+): Promise<void> {
+  const patch: Record<string, unknown> = {
+    google_ticker: fields.google_ticker,
+    updated_at: new Date().toISOString(),
+  };
+  if (fields.quote_symbol !== undefined) {
+    patch.quote_symbol = fields.quote_symbol;
+  }
+  const { error } = await client
+    .from('web_portfolio_watchlist')
+    .update(patch)
     .eq('user_key', userKey as string)
     .eq('market', market)
     .eq('symbol', symbol.trim());

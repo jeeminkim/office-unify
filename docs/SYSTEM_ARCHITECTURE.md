@@ -46,6 +46,11 @@
   - 시트 read-back 상태/지연 상태 점검
   - 종목별 `googleTicker/rawPrice/parsedPrice/rowStatus` 진단 제공
   - mismatch 종목 ticker 보정 전/후 확인
+- `/api/portfolio/ticker-resolver/refresh|status|apply`
+  - `portfolio_quote_candidates` 탭에 `GOOGLEFINANCE` 후보 수식을 쌓고 read-back으로 검증
+  - **자동 DB 저장 없음** — 적용은 `apply`에서 사용자가 명시적으로 승인할 때만 `google_ticker`/`quote_symbol` 반영
+- `/api/portfolio/watchlist/[id]` (PATCH)
+  - 관심종목 메타 + `google_ticker`/`quote_symbol` 수동 보정
 - 기존 투자 도구 API
   - `/api/private-banker/message`
   - `/api/committee-discussion/*`

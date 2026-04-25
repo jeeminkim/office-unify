@@ -25,6 +25,7 @@ type SummaryResponse = {
     weight?: number;
     pnlRate?: number;
     stale?: boolean;
+    needsTickerRecommendation?: boolean;
   }>;
   warnings: Array<{ code: string; severity: "info" | "warn" | "danger"; message: string }>;
   dataQuality: {
@@ -42,6 +43,32 @@ type SummaryResponse = {
     readBackSucceeded?: boolean;
     refreshRequested?: boolean;
   };
+};
+
+type TickerResolverRowDto = {
+  targetType: string;
+  market: string;
+  symbol: string;
+  name?: string;
+  candidateTicker: string;
+  rawPrice?: string;
+  parsedPrice?: number;
+  currency?: string;
+  googleName?: string;
+  status: string;
+  confidence: string;
+  message?: string;
+};
+
+type TickerResolverRecommendationDto = {
+  targetType: string;
+  market: string;
+  symbol: string;
+  name?: string;
+  recommendedGoogleTicker?: string;
+  recommendedQuoteSymbol?: string;
+  confidence: string;
+  reason: string;
 };
 
 const krw = new Intl.NumberFormat("ko-KR");
@@ -74,6 +101,13 @@ export function PortfolioDashboardClient() {
     warnings?: string[];
   } | null>(null);
   const [tickerEditDraft, setTickerEditDraft] = useState<{ key: string; googleTicker: string; quoteSymbol: string } | null>(null);
+  const [tickerResolverRequestId, setTickerResolverRequestId] = useState<string | null>(null);
+  const [tickerResolverBusy, setTickerResolverBusy] = useState(false);
+  const [tickerResolverStatusBusy, setTickerResolverStatusBusy] = useState(false);
+  const [tickerResolverData, setTickerResolverData] = useState<{
+    rows: TickerResolverRowDto[];
+    recommendations: TickerResolverRecommendationDto[];
+  } | null>(null);
 
   const loadSummary = async () => {
     const [portfolioRes, realizedRes] = await Promise.all([
@@ -186,6 +220,79 @@ export function PortfolioDashboardClient() {
             }}
           >
             {checkingQuoteStatus ? "확인 중..." : "시세 상태 확인"}
+          </button>
+          <button
+            type="button"
+            className="rounded border border-violet-300 bg-violet-50 px-3 py-1.5 text-violet-900 disabled:opacity-50"
+            disabled={tickerResolverBusy}
+            onClick={() => {
+              void (async () => {
+                setTickerResolverBusy(true);
+                setError(null);
+                setTickerResolverData(null);
+                try {
+                  const res = await fetch("/api/portfolio/ticker-resolver/refresh", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "same-origin",
+                    body: JSON.stringify({ targetType: "holding" }),
+                  });
+                  const data = (await res.json()) as {
+                    ok?: boolean;
+                    requestId?: string;
+                    candidateCount?: number;
+                    message?: string;
+                    error?: string;
+                  };
+                  if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+                  if (data.requestId) setTickerResolverRequestId(data.requestId);
+                  setInfo(
+                    data.message
+                      ?? "Google Sheets portfolio_quote_candidates 탭에 후보 수식을 썼습니다. 30~90초 뒤 「추천 결과 확인」을 누르세요.",
+                  );
+                } catch (e: unknown) {
+                  setError(e instanceof Error ? e.message : "추천 ticker 요청 실패");
+                } finally {
+                  setTickerResolverBusy(false);
+                }
+              })();
+            }}
+          >
+            {tickerResolverBusy ? "작성 중..." : "추천 ticker 찾기"}
+          </button>
+          <button
+            type="button"
+            className="rounded border border-violet-200 bg-white px-3 py-1.5 text-violet-900 disabled:opacity-50"
+            disabled={tickerResolverStatusBusy || !tickerResolverRequestId}
+            onClick={() => {
+              void (async () => {
+                if (!tickerResolverRequestId) return;
+                setTickerResolverStatusBusy(true);
+                setError(null);
+                try {
+                  const res = await fetch(
+                    `/api/portfolio/ticker-resolver/status?requestId=${encodeURIComponent(tickerResolverRequestId)}`,
+                    { credentials: "same-origin" },
+                  );
+                  const data = (await res.json()) as {
+                    rows?: TickerResolverRowDto[];
+                    recommendations?: TickerResolverRecommendationDto[];
+                    error?: string;
+                  };
+                  if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+                  setTickerResolverData({
+                    rows: data.rows ?? [],
+                    recommendations: data.recommendations ?? [],
+                  });
+                } catch (e: unknown) {
+                  setError(e instanceof Error ? e.message : "추천 결과 로드 실패");
+                } finally {
+                  setTickerResolverStatusBusy(false);
+                }
+              })();
+            }}
+          >
+            {tickerResolverStatusBusy ? "읽는 중..." : "추천 결과 확인"}
           </button>
         </div>
       </div>
@@ -307,6 +414,104 @@ export function PortfolioDashboardClient() {
         </section>
       ) : null}
 
+      {tickerResolverData ? (
+        <section className="mb-4 rounded border border-violet-200 bg-violet-50/40 p-3 text-xs">
+          <p className="font-semibold text-violet-950">GOOGLEFINANCE ticker 후보 (승인 전까지 DB 미반영)</p>
+          <p className="mt-1 text-violet-900/90">
+            requestId: {tickerResolverRequestId ?? "-"} · 행 {(tickerResolverData.rows ?? []).length}개 · Google Sheets 계산 지연 시 상태가 pending일 수 있습니다.
+          </p>
+          {(tickerResolverData.recommendations ?? []).length > 0 ? (
+            <ul className="mt-2 list-inside list-disc text-violet-900">
+              {(tickerResolverData.recommendations ?? []).map((rec) => (
+                <li key={`${rec.targetType}-${rec.market}-${rec.symbol}`}>
+                  <span className="font-medium">{rec.name ?? rec.symbol}</span> ({rec.market}:{rec.symbol}) — {rec.reason}
+                  {rec.recommendedGoogleTicker ? (
+                    <span className="ml-1 rounded bg-white/80 px-1">추천: {rec.recommendedGoogleTicker}</span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <div className="mt-2 overflow-auto">
+            <table className="min-w-full">
+              <thead>
+                <tr className="border-b border-violet-200 text-violet-800">
+                  <th className="px-2 py-1 text-left">종목명</th>
+                  <th className="px-2 py-1 text-left">심볼</th>
+                  <th className="px-2 py-1 text-left">후보 ticker</th>
+                  <th className="px-2 py-1 text-right">현재가</th>
+                  <th className="px-2 py-1 text-left">currency</th>
+                  <th className="px-2 py-1 text-left">googleName</th>
+                  <th className="px-2 py-1 text-left">상태</th>
+                  <th className="px-2 py-1 text-left">confidence</th>
+                  <th className="px-2 py-1 text-left">메모</th>
+                  <th className="px-2 py-1 text-left">적용</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(tickerResolverData.rows ?? []).map((row) => (
+                  <tr key={`${row.targetType}-${row.market}-${row.symbol}-${row.candidateTicker}`} className="border-b border-violet-100">
+                    <td className="px-2 py-1">{row.name ?? "-"}</td>
+                    <td className="px-2 py-1">{row.market}:{row.symbol}</td>
+                    <td className="px-2 py-1 font-mono text-[11px]">{row.candidateTicker}</td>
+                    <td className="px-2 py-1 text-right">{row.parsedPrice == null ? "NO_DATA" : fmt(row.parsedPrice)}</td>
+                    <td className="px-2 py-1">{row.currency ?? "NO_DATA"}</td>
+                    <td className="px-2 py-1">{row.googleName ?? "-"}</td>
+                    <td className="px-2 py-1">{row.status}</td>
+                    <td className="px-2 py-1">{row.confidence}</td>
+                    <td className="px-2 py-1 max-w-[200px]">{row.message ?? "-"}</td>
+                    <td className="px-2 py-1">
+                      <button
+                        type="button"
+                        className="rounded border border-violet-400 bg-white px-2 py-0.5 text-violet-900 disabled:opacity-40"
+                        disabled={row.status !== "ok"}
+                        onClick={() => {
+                          void (async () => {
+                            setError(null);
+                            try {
+                              const apply = await fetch("/api/portfolio/ticker-resolver/apply", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                credentials: "same-origin",
+                                body: JSON.stringify({
+                                  targetType: row.targetType === "watchlist" ? "watchlist" : "holding",
+                                  market: row.market,
+                                  symbol: row.symbol,
+                                  googleTicker: row.candidateTicker,
+                                  quoteSymbol: row.market === "KR"
+                                    ? `${row.symbol.replace(/\D/g, "").padStart(6, "0")}.KS`
+                                    : undefined,
+                                }),
+                              });
+                              const ar = (await apply.json()) as { error?: string; message?: string };
+                              if (!apply.ok) throw new Error(ar.error ?? `HTTP ${apply.status}`);
+                              const qref = await fetch("/api/portfolio/quotes/refresh", {
+                                method: "POST",
+                                credentials: "same-origin",
+                              });
+                              const qr = (await qref.json()) as { error?: string };
+                              if (!qref.ok) throw new Error(qr.error ?? "시세 새로고침 요청 실패");
+                              setInfo(
+                                `${ar.message ?? "저장됨"} · 시세 새로고침을 요청했습니다. 30~90초 뒤 「시세 상태 확인」으로 검증하세요.`,
+                              );
+                              await loadSummary();
+                            } catch (e: unknown) {
+                              setError(e instanceof Error ? e.message : "적용 실패");
+                            }
+                          })();
+                        }}
+                      >
+                        적용
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+
       <section className="mb-4 grid gap-3 md:grid-cols-3 lg:grid-cols-6">
         <div className="rounded border border-slate-200 bg-white p-3"><p className="text-xs text-slate-500">총 평가금액</p><p className="mt-1 font-semibold">{fmt(summary?.totalValueKrw)}</p></div>
         <div className="rounded border border-slate-200 bg-white p-3"><p className="text-xs text-slate-500">총 매입금액</p><p className="mt-1 font-semibold">{fmt(summary?.totalCostKrw)}</p></div>
@@ -372,17 +577,22 @@ export function PortfolioDashboardClient() {
                   <td className="px-2 py-1 text-right">{row.pnlRate == null ? "NO_DATA" : `${row.pnlRate.toFixed(2)}%`}</td>
                   <td className="px-2 py-1 text-right">{row.weight == null ? "NO_DATA" : `${row.weight.toFixed(1)}%`}</td>
                   <td className="px-2 py-1">
-                    {row.market === "US" && summary?.dataQuality.fxAvailable === false ? (
-                      <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-900">fx_missing</span>
-                    ) : row.currentPrice == null ? (
-                      <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-900">stale/missing</span>
-                    ) : summary?.dataQuality.providerUsed === "google_sheets_googlefinance" ? (
-                      <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-900">googlefinance delayed</span>
-                    ) : summary?.dataQuality.providerUsed === "yahoo" ? (
-                      <span className="rounded bg-blue-100 px-2 py-0.5 text-blue-900">yahoo</span>
-                    ) : (
-                      <span className="rounded bg-emerald-100 px-2 py-0.5 text-emerald-900">ok</span>
-                    )}
+                    <div className="flex flex-wrap gap-1">
+                      {row.needsTickerRecommendation ? (
+                        <span className="rounded bg-violet-100 px-2 py-0.5 text-violet-900">ticker 추천 필요</span>
+                      ) : null}
+                      {row.market === "US" && summary?.dataQuality.fxAvailable === false ? (
+                        <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-900">fx_missing</span>
+                      ) : row.currentPrice == null ? (
+                        <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-900">stale/missing</span>
+                      ) : summary?.dataQuality.providerUsed === "google_sheets_googlefinance" ? (
+                        <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-900">googlefinance delayed</span>
+                      ) : summary?.dataQuality.providerUsed === "yahoo" ? (
+                        <span className="rounded bg-blue-100 px-2 py-0.5 text-blue-900">yahoo</span>
+                      ) : (
+                        <span className="rounded bg-emerald-100 px-2 py-0.5 text-emerald-900">ok</span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-2 py-1"><Link href="/portfolio-ledger" className="rounded border border-slate-300 bg-white px-2 py-0.5">관리</Link></td>
                 </tr>

@@ -34,8 +34,9 @@
 | `committee_input_summary` | 투자위원회용 문장 (`summary_line` 열) |
 | `ledger_change_queue` | 조일현 JSON 대기열 (DB 아님) |
 | `research_price_targets` | **수동 전용** — 리포트 목표가 적재 (API 미동기화) |
+| `portfolio_quote_candidates` (기본명) | **ticker 추천 전용** — `POST /api/portfolio/ticker-resolver/refresh`가 후보별 `GOOGLEFINANCE` 수식을 append·update 하고, 서버가 read-back으로 검증한다. **DB 자동 반영 없음** — 적용은 사용자가 API/UI에서 승인할 때만 한다. 탭명은 `PORTFOLIO_TICKER_CANDIDATES_SHEET_NAME`으로 바꿀 수 있다. |
 
-동기화 API는 **앞 4개 탭만** 덮어씁니다. `ledger_change_queue`는 API로 **한 줄 append**만 합니다.
+동기화 API는 **앞 4개 탭만** 덮어씁니다. `ledger_change_queue`는 API로 **한 줄 append**만 합니다. `portfolio_quote_candidates`는 ticker-resolver API가 별도로 관리한다.
 
 ## 환경 변수 (Vercel)
 

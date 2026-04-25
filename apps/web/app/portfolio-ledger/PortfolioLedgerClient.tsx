@@ -23,7 +23,13 @@ type HoldingRow = {
   judgment_memo: string | null;
 };
 
-type WatchlistRow = { market: "KR" | "US"; symbol: string; name: string };
+type WatchlistRow = {
+  market: "KR" | "US";
+  symbol: string;
+  name: string;
+  google_ticker: string | null;
+  quote_symbol: string | null;
+};
 type GoalRow = {
   id: string;
   goalName: string;
@@ -62,6 +68,24 @@ export function PortfolioLedgerClient() {
   const [goals, setGoals] = useState<GoalRow[]>([]);
   const [loadingSnapshot, setLoadingSnapshot] = useState(false);
   const [tradeInfo, setTradeInfo] = useState<string | null>(null);
+  const [ledgerTickerReqId, setLedgerTickerReqId] = useState<string | null>(null);
+  const [ledgerTickerBusy, setLedgerTickerBusy] = useState(false);
+  const [ledgerTickerStatusBusy, setLedgerTickerStatusBusy] = useState(false);
+  const [ledgerTickerRows, setLedgerTickerRows] = useState<
+    Array<{
+      targetType: string;
+      market: string;
+      symbol: string;
+      name?: string;
+      candidateTicker: string;
+      parsedPrice?: number;
+      currency?: string;
+      googleName?: string;
+      status: string;
+      confidence: string;
+      message?: string;
+    }>
+  >([]);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<{
     name: string;
@@ -165,7 +189,11 @@ export function PortfolioLedgerClient() {
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
       setSnapshot({
         holdings: data.holdings ?? [],
-        watchlist: data.watchlist ?? [],
+        watchlist: (data.watchlist ?? []).map((w) => ({
+          ...w,
+          google_ticker: w.google_ticker ?? null,
+          quote_symbol: w.quote_symbol ?? null,
+        })),
       });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "보유 목록 로드 실패");
@@ -173,6 +201,70 @@ export function PortfolioLedgerClient() {
       setLoadingSnapshot(false);
     }
   }, []);
+
+  const suggestLedgerTicker = useCallback(
+    async (targetType: "holding" | "watchlist", market: "KR" | "US", symbol: string) => {
+      setLedgerTickerBusy(true);
+      setError(null);
+      setLedgerTickerRows([]);
+      try {
+        const res = await fetch("/api/portfolio/ticker-resolver/refresh", {
+          method: "POST",
+          headers: jsonHeaders,
+          credentials: "same-origin",
+          body: JSON.stringify({
+            targetType,
+            symbols: [{ market, symbol }],
+          }),
+        });
+        const data = (await res.json()) as { requestId?: string; error?: string; message?: string };
+        if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+        if (data.requestId) setLedgerTickerReqId(data.requestId);
+        setTradeInfo(
+          data.message ?? "Sheets portfolio_quote_candidates 탭에 후보 수식을 작성했습니다. 30~90초 후 「추천 결과」를 누르세요.",
+        );
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "ticker 추천 요청 실패");
+      } finally {
+        setLedgerTickerBusy(false);
+      }
+    },
+    [],
+  );
+
+  const loadLedgerTickerStatus = useCallback(async () => {
+    if (!ledgerTickerReqId) return;
+    setLedgerTickerStatusBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/portfolio/ticker-resolver/status?requestId=${encodeURIComponent(ledgerTickerReqId)}`,
+        { credentials: "same-origin" },
+      );
+      const data = (await res.json()) as {
+        rows?: Array<{
+          targetType: string;
+          market: string;
+          symbol: string;
+          name?: string;
+          candidateTicker: string;
+          parsedPrice?: number;
+          currency?: string;
+          googleName?: string;
+          status: string;
+          confidence: string;
+          message?: string;
+        }>;
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      setLedgerTickerRows(data.rows ?? []);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "추천 결과 로드 실패");
+    } finally {
+      setLedgerTickerStatusBusy(false);
+    }
+  }, [ledgerTickerReqId]);
 
   const loadGoals = useCallback(async () => {
     try {
@@ -300,10 +392,13 @@ export function PortfolioLedgerClient() {
         tradeReason: "",
         allocationAmountKrw: "",
       }));
+      const suggest = (data as { suggestTickerResolver?: boolean }).suggestTickerResolver === true;
       if (data.realizedEvent?.id) {
         const lines = ["실현손익이 기록되었습니다."];
         if (data.realizedEvent.linkedGoalId) lines.push("목표에 배분되었습니다.");
         setTradeInfo(lines.join(" "));
+      } else if (suggest) {
+        setTradeInfo("google_ticker가 비어 있습니다. 아래 「ticker 추천」으로 Google Sheets 후보를 검증한 뒤 적용하세요.");
       } else {
         setTradeInfo(null);
       }
@@ -486,6 +581,14 @@ export function PortfolioLedgerClient() {
                           )}
                           <button type="button" className="rounded border border-red-300 bg-red-50 px-2 py-0.5 text-red-800" onClick={() => void removeHolding(key)}>삭제</button>
                           <button type="button" className="rounded border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-emerald-800" onClick={() => setTradeDraft((prev) => ({ ...prev, key }))}>매수/매도 반영</button>
+                          <button
+                            type="button"
+                            className="rounded border border-violet-300 bg-violet-50 px-2 py-0.5 text-violet-900 disabled:opacity-50"
+                            disabled={ledgerTickerBusy}
+                            onClick={() => void suggestLedgerTicker("holding", row.market, row.symbol)}
+                          >
+                            ticker 추천
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -497,6 +600,140 @@ export function PortfolioLedgerClient() {
         ) : (
           <p className="mt-2 text-slate-500">보유 목록을 먼저 불러오세요.</p>
         )}
+        {snapshot?.watchlist?.length ? (
+          <div className="mt-4">
+            <p className="font-semibold text-slate-800">관심 종목</p>
+            <div className="mt-2 overflow-auto">
+              <table className="min-w-full text-[11px]">
+                <thead>
+                  <tr className="border-b border-slate-200 text-slate-500">
+                    <th className="px-2 py-1 text-left">종목</th>
+                    <th className="px-2 py-1 text-left">google_ticker</th>
+                    <th className="px-2 py-1 text-left">quote_symbol</th>
+                    <th className="px-2 py-1 text-left">관리</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {snapshot.watchlist.map((row) => {
+                    const key = `${row.market}:${row.symbol}`;
+                    return (
+                      <tr key={key} className="border-b border-slate-100">
+                        <td className="px-2 py-1">
+                          <p className="font-medium">{row.name}</p>
+                          <p className="text-slate-500">{key}</p>
+                        </td>
+                        <td className="px-2 py-1">{row.google_ticker ?? "-"}</td>
+                        <td className="px-2 py-1">{row.quote_symbol ?? "-"}</td>
+                        <td className="px-2 py-1">
+                          <button
+                            type="button"
+                            className="rounded border border-violet-300 bg-violet-50 px-2 py-0.5 text-violet-900 disabled:opacity-50"
+                            disabled={ledgerTickerBusy}
+                            onClick={() => void suggestLedgerTicker("watchlist", row.market, row.symbol)}
+                          >
+                            ticker 추천
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : null}
+        {ledgerTickerReqId || ledgerTickerRows.length > 0 ? (
+          <div className="mt-4 rounded border border-violet-200 bg-violet-50/50 p-3 text-[11px] text-violet-950">
+            <p className="font-semibold">GOOGLEFINANCE ticker 후보 (승인 후 DB 반영)</p>
+            <p className="mt-1 text-violet-900/90">
+              requestId: {ledgerTickerReqId ?? "—"} · Google Sheets 계산까지 30~90초 걸릴 수 있습니다. 자동 저장 없음.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="rounded border border-violet-400 bg-white px-2 py-1 disabled:opacity-50"
+                disabled={ledgerTickerStatusBusy || !ledgerTickerReqId}
+                onClick={() => void loadLedgerTickerStatus()}
+              >
+                {ledgerTickerStatusBusy ? "읽는 중…" : "추천 결과"}
+              </button>
+            </div>
+            {ledgerTickerRows.length > 0 ? (
+              <div className="mt-2 overflow-auto">
+                <table className="min-w-full">
+                  <thead>
+                    <tr className="border-b border-violet-200 text-violet-800">
+                      <th className="px-2 py-1 text-left">종목</th>
+                      <th className="px-2 py-1 text-left">후보 ticker</th>
+                      <th className="px-2 py-1 text-right">가격</th>
+                      <th className="px-2 py-1 text-left">통화</th>
+                      <th className="px-2 py-1 text-left">googleName</th>
+                      <th className="px-2 py-1 text-left">상태</th>
+                      <th className="px-2 py-1 text-left">적용</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ledgerTickerRows.map((row) => (
+                      <tr key={`${row.targetType}-${row.market}-${row.symbol}-${row.candidateTicker}`}>
+                        <td className="px-2 py-1">{row.name ?? row.symbol}</td>
+                        <td className="px-2 py-1 font-mono">{row.candidateTicker}</td>
+                        <td className="px-2 py-1 text-right">{row.parsedPrice == null ? "—" : row.parsedPrice.toLocaleString("ko-KR")}</td>
+                        <td className="px-2 py-1">{row.currency ?? "—"}</td>
+                        <td className="px-2 py-1">{row.googleName ?? "—"}</td>
+                        <td className="px-2 py-1">{row.status}</td>
+                        <td className="px-2 py-1">
+                          <button
+                            type="button"
+                            className="rounded border border-violet-500 bg-white px-2 py-0.5 disabled:opacity-40"
+                            disabled={row.status !== "ok"}
+                            onClick={() => {
+                              void (async () => {
+                                setError(null);
+                                try {
+                                  const apply = await fetch("/api/portfolio/ticker-resolver/apply", {
+                                    method: "POST",
+                                    headers: jsonHeaders,
+                                    credentials: "same-origin",
+                                    body: JSON.stringify({
+                                      targetType: row.targetType === "watchlist" ? "watchlist" : "holding",
+                                      market: row.market,
+                                      symbol: row.symbol,
+                                      googleTicker: row.candidateTicker,
+                                      quoteSymbol:
+                                        row.market === "KR"
+                                          ? `${row.symbol.replace(/\D/g, "").padStart(6, "0")}.KS`
+                                          : undefined,
+                                    }),
+                                  });
+                                  const ar = (await apply.json()) as { error?: string; message?: string };
+                                  if (!apply.ok) throw new Error(ar.error ?? `HTTP ${apply.status}`);
+                                  const qref = await fetch("/api/portfolio/quotes/refresh", {
+                                    method: "POST",
+                                    credentials: "same-origin",
+                                  });
+                                  if (!qref.ok) {
+                                    const qr = (await qref.json()) as { error?: string };
+                                    throw new Error(qr.error ?? "시세 새로고침 실패");
+                                  }
+                                  setTradeInfo(ar.message ?? "저장 및 시세 새로고침 요청 완료. 30~90초 후 /portfolio에서 확인하세요.");
+                                  await loadSnapshot();
+                                } catch (e: unknown) {
+                                  setError(e instanceof Error ? e.message : "적용 실패");
+                                }
+                              })();
+                            }}
+                          >
+                            적용
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         {tradeDraft.key ? (
           <div className="mt-3 rounded border border-slate-200 bg-slate-50 p-3">
             <p className="font-medium text-slate-800">선택 종목: {tradeDraft.key}</p>

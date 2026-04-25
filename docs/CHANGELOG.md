@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **승인 기반 ticker 추천(GOOGLEFINANCE):** `portfolio_quote_candidates` 시트에 후보별 `GOOGLEFINANCE` 수식을 쓰고 read-back으로 검증한 뒤, 사용자가 적용할 때만 `web_portfolio_holdings`/`web_portfolio_watchlist`에 `google_ticker`/`quote_symbol`을 저장한다. API: `POST/GET /api/portfolio/ticker-resolver/*`, `PATCH /api/portfolio/watchlist/[id]`. SQL: `docs/sql/append_web_portfolio_watchlist_quote_overrides.sql`.
 - **Ticker override for KR mismatch:** `web_portfolio_holdings`에 `google_ticker`/`quote_symbol` 수동 보정 컬럼을 도입하고 quote 우선순위를 override 기반으로 확장.
 - **Inline ticker fix UX:** `/portfolio` 시세 상태 테이블에서 mismatch/empty/parse_failed 종목에 대해 ticker 수정/저장을 직접 지원하고 refresh 재요청 안내를 추가.
 - **Ledger override edit:** `/portfolio-ledger` 빠른 수정에 `google_ticker`/`quote_symbol` 입력 칸을 추가.

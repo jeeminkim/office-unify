@@ -5,8 +5,8 @@ Next.js(App Router) + TypeScript + Tailwind입니다. **저장소 루트(`../..`
 ## 이 폴더에서 하는 일
 
 - **투자 대시보드** (`/`): 시스템 상태, 포트폴리오 요약, 일일 루틴, Trend 기억 요약, 신호 연결.
-- **포트폴리오 현황 대시보드** (`/portfolio`): 보유 평가/손익/비중/경고 점검 화면.
-- **포트폴리오 원장 관리** (`/portfolio-ledger`): 보유 종목 수정/삭제/사후 매수·매도 기록 반영(주문 실행 아님).
+- **포트폴리오 현황 대시보드** (`/portfolio`): 보유 평가/손익/비중/경고 점검 화면. Google Sheets `GOOGLEFINANCE` 기반 **추천 ticker 찾기**(후보 수식 → 지연 read-back → 사용자 승인 시에만 DB 저장) 지원.
+- **포트폴리오 원장 관리** (`/portfolio-ledger`): 보유 종목 수정/삭제/사후 매수·매도 기록 반영(주문 실행 아님). 보유/관심별 **ticker 추천** 버튼으로 동일 흐름을 종목 단위로 실행 가능.
 - **실현손익 대시보드** (`/realized-pnl`): 기간/종목/최근 매도 이벤트 기준 실현손익 추적.
 - **목표 자금 관리** (`/financial-goals`): 목표 생성, 실현손익 연결, 목표 달성률 추적.
 - **Dev Assistant** (`/dev-assistant`): Flow/ Mermaid, SQL, TypeScript 생성 — Gemini는 UI 설정 또는 서버 `GEMINI_API_KEY` 사용.

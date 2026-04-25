@@ -9,6 +9,8 @@ export {
   deletePortfolioWatchlist,
   listWebPortfolioHoldingsForUser,
   listWebPortfolioWatchlistForUser,
+  patchPortfolioHoldingTickers,
+  patchPortfolioWatchlistTickers,
   upsertPortfolioHolding,
   upsertPortfolioWatchlist,
 } from './portfolioLedgerRepository';
