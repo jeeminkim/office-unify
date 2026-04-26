@@ -4,6 +4,8 @@ import { getServiceSupabase } from '@/lib/server/supabase-service';
 import { listWebPortfolioHoldingsForUser } from '@office-unify/supabase-access';
 import { loadHoldingQuotes } from '@/lib/server/marketQuoteService';
 
+export const dynamic = 'force-dynamic';
+
 type DailyRoutineStep = {
   key: 'portfolio' | 'trend' | 'private_banker' | 'committee' | 'trade_journal';
   title: string;

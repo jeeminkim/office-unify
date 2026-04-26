@@ -8,7 +8,8 @@ Next.js(App Router) + TypeScript + Tailwind입니다. **저장소 루트(`../..`
 - **포트폴리오 현황 대시보드** (`/portfolio`): 보유 평가/손익/비중/경고 점검 화면. Google Sheets `GOOGLEFINANCE` 기반 **추천 ticker 찾기**(후보 수식 → 지연 read-back → 사용자 승인 시에만 DB 저장) 지원.
 - **Quote recovery panel** (`/portfolio`): 미설정 ticker 감지 → 후보 검증 → 선택/일괄 승인 저장 → 시세 refresh → status 재확인까지 단계형 복구 흐름 제공. Sheets 후보가 **pending**이면 **검증 전 기본 추천**(KRX 숫자 등)을 사용자 버튼으로만 저장한 뒤 시세 refresh로 `portfolio_quotes` 행을 만들 수 있음(`apply-bulk`의 `source: default_unverified`).
 - **종목 dossier** (`/portfolio/[symbol]`): 매수 이유, 목표/손절, PB/위원회/Journal 근거, thesis health, active alerts를 종목 단위로 점검.
-- **포트폴리오 원장 관리** (`/portfolio-ledger`): 보유/관심 종목을 SQL 없이 직접 추가/수정/삭제하고, 사후 매수·매도·정정 반영(주문 실행 아님)과 종목별 거래 이력 조회를 제공. 보유/관심별 **ticker 추천** 버튼으로 동일 흐름을 종목 단위로 실행 가능.
+- **포트폴리오 원장 관리** (`/portfolio-ledger`): 기본 모드(보유/관심 등록, 매수·매도 반영, 거래 이력, ticker 추천)와 고급(SQL) 모드를 분리해 운영. SQL 블록은 기본 숨김이며 `localStorage.portfolioLedgerAdvancedMode`로 기억됩니다.
+- **원장 자동 동기화 체인**: 보유/관심 등록 및 `apply-trade` 성공 시 `quotes/refresh -> quotes/status -> snapshot/goals/history reload -> dashboard overview reload`를 자동 실행해 화면 상태를 즉시 최신화합니다.
 - **실현손익 대시보드** (`/realized-pnl`): 기간/종목/최근 매도 이벤트 기준 실현손익 추적.
 - **목표 자금 관리** (`/financial-goals`): 목표 생성, 실현손익 연결, 목표 달성률 추적.
 - **Trade Journal 패턴 분석** (`/api/trade-journal/pattern-analysis` + Trade Journal 화면): 반복 위반/반성 패턴과 현재 위험 매칭을 표시.

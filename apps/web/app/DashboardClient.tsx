@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type StatusSection = {
   key: string;
@@ -127,41 +127,56 @@ export function DashboardClient() {
   const [pattern, setPattern] = useState<PatternAnalysisResponse | null>(null);
   const [portfolioAlerts, setPortfolioAlerts] = useState<Array<{ id: string; symbol: string; title: string; body: string; severity: string }>>([]);
   const [error, setError] = useState<string | null>(null);
+  const [reloading, setReloading] = useState(false);
+
+  const loadOverview = useCallback(async () => {
+    setReloading(true);
+    try {
+      const [statusRes, overviewRes, briefRes, profitGoalRes, patternRes, alertsRes] = await Promise.all([
+        fetch("/api/system/status", { credentials: "same-origin" }),
+        fetch("/api/dashboard/overview", { credentials: "same-origin" }),
+        fetch("/api/dashboard/today-brief", { credentials: "same-origin" }),
+        fetch("/api/dashboard/profit-goal-summary", { credentials: "same-origin" }),
+        fetch("/api/trade-journal/pattern-analysis", { credentials: "same-origin" }),
+        fetch("/api/portfolio/alerts", { credentials: "same-origin" }),
+      ]);
+      const statusJson = (await statusRes.json()) as { sections?: StatusSection[]; error?: string };
+      const overviewJson = (await overviewRes.json()) as DashboardResponse & { error?: string };
+      const briefJson = (await briefRes.json()) as TodayBriefResponse & { error?: string };
+      const profitGoalJson = (await profitGoalRes.json()) as ProfitGoalSummaryResponse & { error?: string };
+      const patternJson = (await patternRes.json()) as PatternAnalysisResponse & { error?: string };
+      const alertsJson = (await alertsRes.json()) as { alerts?: Array<{ id: string; symbol: string; title: string; body: string; severity: string }>; error?: string };
+      if (!statusRes.ok) throw new Error(statusJson.error ?? `HTTP ${statusRes.status}`);
+      if (!overviewRes.ok) throw new Error(overviewJson.error ?? `HTTP ${overviewRes.status}`);
+      if (!briefRes.ok) throw new Error(briefJson.error ?? `HTTP ${briefRes.status}`);
+      if (!profitGoalRes.ok) throw new Error(profitGoalJson.error ?? `HTTP ${profitGoalRes.status}`);
+      if (!patternRes.ok) throw new Error(patternJson.error ?? `HTTP ${patternRes.status}`);
+      if (!alertsRes.ok) throw new Error(alertsJson.error ?? `HTTP ${alertsRes.status}`);
+      setStatusSections(statusJson.sections ?? []);
+      setOverview(overviewJson);
+      setTodayBrief(briefJson);
+      setProfitGoal(profitGoalJson);
+      setPattern(patternJson);
+      setPortfolioAlerts(alertsJson.alerts ?? []);
+      setError(null);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "대시보드 로드 실패");
+    } finally {
+      setReloading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    void (async () => {
-      try {
-        const [statusRes, overviewRes, briefRes, profitGoalRes, patternRes, alertsRes] = await Promise.all([
-          fetch("/api/system/status", { credentials: "same-origin" }),
-          fetch("/api/dashboard/overview", { credentials: "same-origin" }),
-          fetch("/api/dashboard/today-brief", { credentials: "same-origin" }),
-          fetch("/api/dashboard/profit-goal-summary", { credentials: "same-origin" }),
-          fetch("/api/trade-journal/pattern-analysis", { credentials: "same-origin" }),
-          fetch("/api/portfolio/alerts", { credentials: "same-origin" }),
-        ]);
-        const statusJson = (await statusRes.json()) as { sections?: StatusSection[]; error?: string };
-        const overviewJson = (await overviewRes.json()) as DashboardResponse & { error?: string };
-        const briefJson = (await briefRes.json()) as TodayBriefResponse & { error?: string };
-        const profitGoalJson = (await profitGoalRes.json()) as ProfitGoalSummaryResponse & { error?: string };
-        const patternJson = (await patternRes.json()) as PatternAnalysisResponse & { error?: string };
-        const alertsJson = (await alertsRes.json()) as { alerts?: Array<{ id: string; symbol: string; title: string; body: string; severity: string }>; error?: string };
-        if (!statusRes.ok) throw new Error(statusJson.error ?? `HTTP ${statusRes.status}`);
-        if (!overviewRes.ok) throw new Error(overviewJson.error ?? `HTTP ${overviewRes.status}`);
-        if (!briefRes.ok) throw new Error(briefJson.error ?? `HTTP ${briefRes.status}`);
-        if (!profitGoalRes.ok) throw new Error(profitGoalJson.error ?? `HTTP ${profitGoalRes.status}`);
-        if (!patternRes.ok) throw new Error(patternJson.error ?? `HTTP ${patternRes.status}`);
-        if (!alertsRes.ok) throw new Error(alertsJson.error ?? `HTTP ${alertsRes.status}`);
-        setStatusSections(statusJson.sections ?? []);
-        setOverview(overviewJson);
-        setTodayBrief(briefJson);
-        setProfitGoal(profitGoalJson);
-        setPattern(patternJson);
-        setPortfolioAlerts(alertsJson.alerts ?? []);
-      } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : "대시보드 로드 실패");
-      }
-    })();
-  }, []);
+    void loadOverview();
+  }, [loadOverview]);
+
+  useEffect(() => {
+    const onLedgerUpdate = () => {
+      void loadOverview();
+    };
+    window.addEventListener("portfolio-ledger:updated", onLedgerUpdate);
+    return () => window.removeEventListener("portfolio-ledger:updated", onLedgerUpdate);
+  }, [loadOverview]);
 
   const statusSummary = useMemo(() => {
     const errors = statusSections.filter((s) => s.status === "error").length;
@@ -178,6 +193,14 @@ export function DashboardClient() {
           <p className="mt-1 text-sm text-slate-600">오늘의 상태 · 신호 · 다음 행동을 한 화면에서 확인합니다.</p>
         </div>
         <div className="flex gap-2 text-xs">
+          <button
+            type="button"
+            className="rounded border border-slate-300 bg-white px-3 py-1.5"
+            onClick={() => void loadOverview()}
+            disabled={reloading}
+          >
+            {reloading ? "새로고침 중..." : "요약 새로고침"}
+          </button>
           <Link href="/dev-assistant" className="rounded border border-slate-300 bg-white px-3 py-1.5">Dev Assistant</Link>
           <Link href="/portfolio" className="rounded border border-slate-300 bg-white px-3 py-1.5">Portfolio</Link>
           <Link href="/portfolio-ledger" className="rounded border border-slate-300 bg-white px-3 py-1.5">Portfolio Ledger</Link>

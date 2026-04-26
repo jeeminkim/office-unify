@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Portfolio Ledger 모드 분리 + 자동 동기화:** `/portfolio-ledger`를 기본 모드/고급(SQL) 모드로 분리하고 SQL 블록 기본 숨김을 적용. 신규 보유/관심 등록 및 `apply-trade` 성공 후 `quotes/refresh -> quotes/status -> snapshot/goals/history/dashboard` 자동 동기화 체인을 추가.
+- **등록 직후 ticker 추천 연계:** 보유/관심 등록 시 `google_ticker`가 비어 있으면 KR(`KRX:{pad6}`)/US(symbol) 기본 후보와 quote symbol(`.KS/.KQ` 또는 US symbol)을 채워 요청하고 `ticker-resolver/refresh`를 백그라운드로 연계(자동 DB 확정 없음, 승인 구조 유지).
+- **Dashboard 즉시 반영 UX:** ledger 업데이트 시 홈 대시보드가 custom event 기반으로 overview를 재로딩하고, `/api/dashboard/overview`를 `force-dynamic`으로 설정해 stale 응답 가능성을 낮춤.
 - **Portfolio UX 실사용 개선:** `/portfolio` 요약 계산에서 US 종목은 USD/KRW 환율 read-back이 있을 때 KRW 평가금액/비중에 포함하고, 환율 누락 시 `fx_missing` 경고 + NO_DATA 처리로 명확화.
 - **Ledger no-SQL 등록 플로우:** `/portfolio-ledger`에 보유 종목 추가/관심종목 추가 폼을 추가하고 `POST /api/portfolio/holdings`, `POST /api/portfolio/watchlist`를 도입해 SQL 입력 없이 등록 가능하게 개선.
 - **사후 반영 이력 계층:** `docs/sql/append_web_portfolio_trade_events.sql` 추가, `web_portfolio_trade_events`에 buy/sell/correct 이력을 저장하고 `GET /api/portfolio/holdings/[id]/events` + ledger/dossier 이력 UI를 연결.

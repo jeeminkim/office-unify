@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type {
   PortfolioLedgerApplyResponseBody,
   PortfolioLedgerValidateResponseBody,
@@ -69,12 +70,20 @@ DELETE FROM web_portfolio_watchlist WHERE symbol = 'NFLX' AND market = 'US';
 `;
 
 export function PortfolioLedgerClient() {
+  const router = useRouter();
   const [sql, setSql] = useState(EXAMPLE_SQL);
   const [validateResult, setValidateResult] = useState<PortfolioLedgerValidateResponseBody | null>(null);
   const [applyResult, setApplyResult] = useState<PortfolioLedgerApplyResponseBody | null>(null);
   const [loadingV, setLoadingV] = useState(false);
   const [loadingA, setLoadingA] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [quoteSyncStatus, setQuoteSyncStatus] = useState<{
+    kind: "success" | "warning" | "error" | "info";
+    message: string;
+  } | null>(null);
+  const [advancedMode, setAdvancedMode] = useState(false);
+  const [quoteRefreshBusy, setQuoteRefreshBusy] = useState(false);
+  const [quoteStatusBusy, setQuoteStatusBusy] = useState(false);
   const [sheetsPreview, setSheetsPreview] = useState<string | null>(null);
   const [loadingSheets, setLoadingSheets] = useState(false);
   const [queueJson, setQueueJson] = useState(
@@ -182,6 +191,17 @@ export function PortfolioLedgerClient() {
   const [eventsOpenKey, setEventsOpenKey] = useState<string | null>(null);
   const [eventsBusyKey, setEventsBusyKey] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = window.localStorage.getItem("portfolioLedgerAdvancedMode");
+    setAdvancedMode(saved === "true");
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("portfolioLedgerAdvancedMode", advancedMode ? "true" : "false");
+  }, [advancedMode]);
+
   const parseQty = (v: unknown): number => {
     const n = Number(String(v ?? "").replace(/,/g, ""));
     return Number.isFinite(n) ? n : 0;
@@ -190,6 +210,22 @@ export function PortfolioLedgerClient() {
   const parseAvg = (v: unknown): number => {
     const n = Number(String(v ?? "").replace(/,/g, ""));
     return Number.isFinite(n) ? n : 0;
+  };
+
+  const getDefaultGoogleTicker = (market: "KR" | "US", symbol: string): string => {
+    const normalized = symbol.trim().toUpperCase();
+    if (market === "KR") return `KRX:${normalized.replace(/\D/g, "").padStart(6, "0")}`;
+    return normalized;
+  };
+
+  const getDefaultQuoteSymbol = (
+    market: "KR" | "US",
+    symbol: string,
+    krQuoteMarket: "KOSPI" | "KOSDAQ",
+  ): string => {
+    const normalized = symbol.trim().toUpperCase();
+    if (market === "US") return normalized;
+    return `${normalized.replace(/\D/g, "").padStart(6, "0")}.${krQuoteMarket === "KOSDAQ" ? "KQ" : "KS"}`;
   };
 
   const openApplyTradePanel = useCallback((row: HoldingRow) => {
@@ -391,6 +427,64 @@ export function PortfolioLedgerClient() {
     }
   }, []);
 
+  const notifyDashboardReload = useCallback(() => {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new CustomEvent("portfolio-ledger:updated"));
+  }, []);
+
+  const requestQuoteRefresh = useCallback(async () => {
+    setQuoteRefreshBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/portfolio/quotes/refresh", {
+        method: "POST",
+        credentials: "same-origin",
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      setQuoteSyncStatus({ kind: "success", message: "시세 동기화 요청 완료" });
+      return true;
+    } catch {
+      setQuoteSyncStatus({ kind: "warning", message: "등록은 완료됐지만 시세 동기화 실패" });
+      return false;
+    } finally {
+      setQuoteRefreshBusy(false);
+    }
+  }, []);
+
+  const loadQuoteStatus = useCallback(async () => {
+    setQuoteStatusBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/portfolio/quotes/status", { credentials: "same-origin" });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      return true;
+    } catch {
+      setQuoteSyncStatus({ kind: "warning", message: "시세 상태 확인에 실패했습니다." });
+      return false;
+    } finally {
+      setQuoteStatusBusy(false);
+    }
+  }, []);
+
+  const loadTradeHistory = useCallback(async () => {
+    if (!eventsOpenKey) return;
+    setEventsBusyKey(eventsOpenKey);
+    try {
+      const res = await fetch(`/api/portfolio/holdings/${encodeURIComponent(eventsOpenKey)}/events`, {
+        credentials: "same-origin",
+      });
+      const data = (await res.json()) as { events?: TradeEventRow[]; error?: string };
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      setEventsByKey((prev) => ({ ...prev, [eventsOpenKey]: data.events ?? [] }));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "거래 이력 로드 실패");
+    } finally {
+      setEventsBusyKey(null);
+    }
+  }, [eventsOpenKey]);
+
   const startEdit = (row: HoldingRow) => {
     const key = `${row.market}:${row.symbol}`;
     setEditingKey(key);
@@ -548,11 +642,18 @@ export function PortfolioLedgerClient() {
       const realizedId = data.realizedEventId ?? data.realizedEvent?.id;
       let msg = "반영 완료.";
       if (realizedId) {
-        msg = "반영 완료. 실현손익이 기록되었습니다.";
+        msg = "실현손익 기록됨";
         if (data.realizedEvent?.linkedGoalId) msg += " 목표에 배분되었습니다.";
-      } else if (suggest) {
+      } else if (tradeDraft.action === "buy") {
+        msg = "매수 반영 완료";
+      } else if (tradeDraft.action === "sell") {
+        msg = "매도 반영 완료";
+      } else if (tradeDraft.action === "correct") {
+        msg = "보유 정정 완료";
+      }
+      if (suggest) {
         msg =
-          "반영 완료. google_ticker가 비어 있으면 아래 「ticker 추천」으로 후보를 검증한 뒤 적용하세요.";
+          `${msg}. google_ticker가 비어 있으면 아래 「ticker 추천」으로 후보를 검증한 뒤 적용하세요.`;
       }
 
       setLedgerTradeBanner({
@@ -577,12 +678,27 @@ export function PortfolioLedgerClient() {
       });
       await loadSnapshot();
       await loadGoals();
+      await loadTradeHistory();
+      await requestQuoteRefresh();
+      await loadQuoteStatus();
+      notifyDashboardReload();
+      router.refresh();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "매수/매도 반영 실패");
     } finally {
       setApplyTradeBusy(false);
     }
-  }, [tradeDraft, snapshot, loadSnapshot, loadGoals]);
+  }, [
+    tradeDraft,
+    snapshot,
+    loadSnapshot,
+    loadGoals,
+    loadTradeHistory,
+    requestQuoteRefresh,
+    loadQuoteStatus,
+    notifyDashboardReload,
+    router,
+  ]);
 
   const createHolding = useCallback(async () => {
     const quantity = Number(holdingCreateDraft.quantity);
@@ -598,13 +714,24 @@ export function PortfolioLedgerClient() {
     setCreateBusy("holding");
     setError(null);
     setLedgerTradeBanner(null);
+    setQuoteSyncStatus(null);
     try {
+      const normalizedSymbol = holdingCreateDraft.symbol.trim().toUpperCase();
+      const googleTicker =
+        holdingCreateDraft.googleTicker.trim() ||
+        getDefaultGoogleTicker(holdingCreateDraft.market, normalizedSymbol);
+      const quoteSymbol =
+        holdingCreateDraft.quoteSymbol.trim() ||
+        getDefaultQuoteSymbol(holdingCreateDraft.market, normalizedSymbol, holdingCreateDraft.krQuoteMarket);
       const res = await fetch("/api/portfolio/holdings", {
         method: "POST",
         headers: jsonHeaders,
         credentials: "same-origin",
         body: JSON.stringify({
           ...holdingCreateDraft,
+          symbol: normalizedSymbol,
+          googleTicker,
+          quoteSymbol,
           quantity,
           avgPrice,
           targetPrice: holdingCreateDraft.targetPrice.trim() ? Number(holdingCreateDraft.targetPrice) : undefined,
@@ -621,16 +748,29 @@ export function PortfolioLedgerClient() {
         avgPrice: "",
       }));
       setLedgerTradeBanner({
-        kind: "info",
-        message: (data.message ?? "보유 종목을 추가했습니다.") + " 시세 새로고침 요청과 Trade Journal 기록을 권장합니다.",
+        kind: "success",
+        message: data.message ?? "보유 종목 등록 완료",
       });
+      const refreshOk = await requestQuoteRefresh();
+      await loadQuoteStatus();
       await loadSnapshot();
+      notifyDashboardReload();
+      router.refresh();
+      if (!holdingCreateDraft.googleTicker.trim()) {
+        void suggestLedgerTicker("holding", holdingCreateDraft.market, normalizedSymbol);
+      }
+      if (refreshOk) {
+        setQuoteSyncStatus({
+          kind: "info",
+          message: "Google Sheets 계산 반영 대기 (30~90초)",
+        });
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "보유 종목 추가 실패");
     } finally {
       setCreateBusy(null);
     }
-  }, [holdingCreateDraft, loadSnapshot]);
+  }, [holdingCreateDraft, loadSnapshot, requestQuoteRefresh, loadQuoteStatus, notifyDashboardReload, router, suggestLedgerTicker]);
 
   const createWatchlist = useCallback(async () => {
     if (!watchCreateDraft.symbol.trim() || !watchCreateDraft.name.trim()) {
@@ -640,24 +780,45 @@ export function PortfolioLedgerClient() {
     setCreateBusy("watchlist");
     setError(null);
     setLedgerTradeBanner(null);
+    setQuoteSyncStatus(null);
     try {
+      const normalizedSymbol = watchCreateDraft.symbol.trim().toUpperCase();
+      const googleTicker =
+        watchCreateDraft.googleTicker.trim() ||
+        getDefaultGoogleTicker(watchCreateDraft.market, normalizedSymbol);
+      const quoteSymbol =
+        watchCreateDraft.quoteSymbol.trim() ||
+        getDefaultQuoteSymbol(watchCreateDraft.market, normalizedSymbol, watchCreateDraft.krQuoteMarket);
       const res = await fetch("/api/portfolio/watchlist", {
         method: "POST",
         headers: jsonHeaders,
         credentials: "same-origin",
-        body: JSON.stringify(watchCreateDraft),
+        body: JSON.stringify({
+          ...watchCreateDraft,
+          symbol: normalizedSymbol,
+          googleTicker,
+          quoteSymbol,
+        }),
       });
       const data = (await res.json()) as { error?: string; message?: string };
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
       setWatchCreateDraft((prev) => ({ ...prev, symbol: "", name: "" }));
-      setLedgerTradeBanner({ kind: "success", message: data.message ?? "관심종목을 추가했습니다." });
+      setLedgerTradeBanner({ kind: "success", message: data.message ?? "관심종목 등록 완료" });
+      await requestQuoteRefresh();
+      await loadQuoteStatus();
       await loadSnapshot();
+      notifyDashboardReload();
+      router.refresh();
+      if (!watchCreateDraft.googleTicker.trim()) {
+        void suggestLedgerTicker("watchlist", watchCreateDraft.market, normalizedSymbol);
+      }
+      setQuoteSyncStatus({ kind: "success", message: "시세 후보 동기화 완료" });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "관심종목 추가 실패");
     } finally {
       setCreateBusy(null);
     }
-  }, [watchCreateDraft, loadSnapshot]);
+  }, [watchCreateDraft, loadSnapshot, requestQuoteRefresh, loadQuoteStatus, notifyDashboardReload, router, suggestLedgerTicker]);
 
   const toggleHoldingEvents = useCallback(async (key: string) => {
     if (eventsOpenKey === key) {
@@ -766,6 +927,22 @@ export function PortfolioLedgerClient() {
           ← 홈
         </Link>
       </div>
+      <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-2 text-xs">
+        <button
+          type="button"
+          onClick={() => setAdvancedMode(false)}
+          className={`rounded px-3 py-1 ${!advancedMode ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-700"}`}
+        >
+          기본 모드
+        </button>
+        <button
+          type="button"
+          onClick={() => setAdvancedMode(true)}
+          className={`rounded px-3 py-1 ${advancedMode ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-700"}`}
+        >
+          고급(SQL)
+        </button>
+      </div>
 
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
         Supabase에 <code className="rounded bg-amber-100 px-1">docs/sql/append_web_portfolio_ledger.sql</code> 적용 후
@@ -774,6 +951,21 @@ export function PortfolioLedgerClient() {
       <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
         이 화면은 <strong>주문 실행이 아니라 기록 반영</strong>입니다. 실제 매수/매도는 외부 증권사에서 수행한 뒤 여기서 수량/평단을 사후 반영하세요.
       </div>
+      {quoteSyncStatus ? (
+        <div
+          className={`rounded-lg border px-3 py-2 text-sm ${
+            quoteSyncStatus.kind === "success"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+              : quoteSyncStatus.kind === "warning"
+                ? "border-amber-200 bg-amber-50 text-amber-900"
+                : quoteSyncStatus.kind === "error"
+                  ? "border-red-200 bg-red-50 text-red-900"
+                  : "border-blue-200 bg-blue-50 text-blue-900"
+          }`}
+        >
+          {quoteSyncStatus.message}
+        </div>
+      ) : null}
 
       <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-700">
         <p className="font-semibold text-slate-900">보유 종목 추가 (외부 매수 완료 후 기록용)</p>
@@ -792,9 +984,9 @@ export function PortfolioLedgerClient() {
           <input className="rounded border border-slate-300 bg-white px-2 py-1" placeholder="quote_symbol(선택)" value={holdingCreateDraft.quoteSymbol} onChange={(e) => setHoldingCreateDraft({ ...holdingCreateDraft, quoteSymbol: e.target.value })} />
         </div>
         <div className="mt-2 flex flex-wrap gap-2">
-          <button type="button" className="rounded border border-violet-300 bg-violet-50 px-2 py-1 text-violet-900" onClick={() => void suggestLedgerTicker("holding", holdingCreateDraft.market, holdingCreateDraft.symbol.trim().toUpperCase())}>ticker 자동 추천</button>
-          <button type="button" className="rounded border border-blue-600 bg-blue-600 px-3 py-1 text-white disabled:opacity-50" disabled={createBusy === "holding"} onClick={() => void createHolding()}>{createBusy === "holding" ? "저장 중..." : "보유 종목 추가"}</button>
-          <button type="button" className="rounded border border-slate-300 bg-white px-2 py-1" onClick={() => void fetch("/api/portfolio/quotes/refresh", { method: "POST", credentials: "same-origin" })}>시세 새로고침 요청</button>
+          <button type="button" className="rounded border border-violet-300 bg-violet-50 px-2 py-1 text-violet-900 disabled:opacity-50" disabled={ledgerTickerBusy} onClick={() => void suggestLedgerTicker("holding", holdingCreateDraft.market, holdingCreateDraft.symbol.trim().toUpperCase())}>{ledgerTickerBusy ? "Finding ticker..." : "ticker 자동 추천"}</button>
+          <button type="button" className="rounded border border-blue-600 bg-blue-600 px-3 py-1 text-white disabled:opacity-50" disabled={createBusy === "holding" || quoteRefreshBusy || quoteStatusBusy} onClick={() => void createHolding()}>{createBusy === "holding" ? "Submitting..." : "보유 종목 추가"}</button>
+          <button type="button" className="rounded border border-slate-300 bg-white px-2 py-1 disabled:opacity-50" disabled={quoteRefreshBusy} onClick={() => void requestQuoteRefresh()}>{quoteRefreshBusy ? "Syncing quotes..." : "시세 새로고침 요청"}</button>
           <Link href="/trade-journal" className="rounded border border-slate-300 bg-white px-2 py-1">Trade Journal 기록</Link>
         </div>
       </div>
@@ -813,8 +1005,8 @@ export function PortfolioLedgerClient() {
           <input className="rounded border border-slate-300 bg-white px-2 py-1" placeholder="quote_symbol(선택)" value={watchCreateDraft.quoteSymbol} onChange={(e) => setWatchCreateDraft({ ...watchCreateDraft, quoteSymbol: e.target.value })} />
         </div>
         <div className="mt-2 flex flex-wrap gap-2">
-          <button type="button" className="rounded border border-violet-300 bg-violet-50 px-2 py-1 text-violet-900" onClick={() => void suggestLedgerTicker("watchlist", watchCreateDraft.market, watchCreateDraft.symbol.trim().toUpperCase())}>ticker 자동 추천</button>
-          <button type="button" className="rounded border border-blue-600 bg-blue-600 px-3 py-1 text-white disabled:opacity-50" disabled={createBusy === "watchlist"} onClick={() => void createWatchlist()}>{createBusy === "watchlist" ? "저장 중..." : "관심종목 추가"}</button>
+          <button type="button" className="rounded border border-violet-300 bg-violet-50 px-2 py-1 text-violet-900 disabled:opacity-50" disabled={ledgerTickerBusy} onClick={() => void suggestLedgerTicker("watchlist", watchCreateDraft.market, watchCreateDraft.symbol.trim().toUpperCase())}>{ledgerTickerBusy ? "Finding ticker..." : "ticker 자동 추천"}</button>
+          <button type="button" className="rounded border border-blue-600 bg-blue-600 px-3 py-1 text-white disabled:opacity-50" disabled={createBusy === "watchlist" || quoteRefreshBusy || quoteStatusBusy} onClick={() => void createWatchlist()}>{createBusy === "watchlist" ? "Submitting..." : "관심종목 추가"}</button>
         </div>
       </div>
 
@@ -1183,7 +1375,7 @@ export function PortfolioLedgerClient() {
                     }
                     onClick={() => void applyTrade()}
                   >
-                    {applyTradeBusy ? "저장 중…" : "반영 저장"}
+                    {applyTradeBusy ? "Applying..." : "반영 저장"}
                   </button>
                 </div>
               </div>
@@ -1372,87 +1564,87 @@ export function PortfolioLedgerClient() {
         ) : null}
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800">
-        <p className="font-semibold text-slate-900">Google Sheets 운영 대시보드 (보조)</p>
-        <p className="mt-1 text-slate-600">
-          원장은 항상 Supabase가 기준입니다. 시트는 동기화·요약용이며, 시트만 고쳐서 DB가 바뀌지는 않습니다. 반영은 아래 SQL
-          검증/적용 또는 조일현 → validate/apply 흐름을 사용하세요.
-        </p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="rounded border border-slate-300 bg-white px-3 py-1.5 text-slate-800 disabled:opacity-50"
-            disabled={loadingSheets || loadingQueue}
-            onClick={() => void fetchSheetsPreview()}
-          >
-            {loadingSheets ? "불러오는 중…" : "시트용 JSON 미리보기"}
-          </button>
-          <button
-            type="button"
-            className="rounded border border-emerald-600 bg-emerald-50 px-3 py-1.5 text-emerald-900 disabled:opacity-50"
-            disabled={loadingSheets || loadingQueue}
-            onClick={() => void runSheetsSync()}
-          >
-            Sheets 동기화 (4탭)
-          </button>
+      {advancedMode ? (
+        <div className="rounded-lg border border-slate-300 bg-slate-50 p-3 text-xs text-slate-800">
+          <p className="font-semibold text-slate-900">고급(SQL) 운영 기능</p>
+          <p className="mt-1 text-slate-600">
+            SQL 검증/반영, raw JSON preview, ledger queue append는 운영자 전용입니다.
+          </p>
+          <div className="mt-3">
+            <textarea
+              className="min-h-[220px] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-xs text-slate-800"
+              value={sql}
+              onChange={(e) => setSql(e.target.value)}
+              spellCheck={false}
+            />
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="rounded-md bg-slate-800 px-4 py-2 text-sm text-white disabled:opacity-50"
+                onClick={() => void runValidate()}
+                disabled={loadingV || loadingA}
+              >
+                {loadingV ? "검사 중…" : "SQL 정합성 검사"}
+              </button>
+              <button
+                type="button"
+                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm text-slate-800 disabled:opacity-50"
+                onClick={() => void runApply()}
+                disabled={loadingA || loadingV || !canApply}
+                title={!canApply ? "먼저 정합성 검사를 통과해야 합니다." : undefined}
+              >
+                {loadingA ? "반영 중…" : "원장 반영"}
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800">
+            <p className="font-semibold text-slate-900">Google Sheets 운영 대시보드 (보조)</p>
+            <p className="mt-1 text-slate-600">
+              원장은 항상 Supabase가 기준입니다. 시트는 동기화·요약용이며, 시트만 고쳐서 DB가 바뀌지는 않습니다.
+              반영은 SQL 검증/적용 또는 조일현 → validate/apply 흐름을 사용하세요.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="rounded border border-slate-300 bg-white px-3 py-1.5 text-slate-800 disabled:opacity-50"
+                disabled={loadingSheets || loadingQueue}
+                onClick={() => void fetchSheetsPreview()}
+              >
+                {loadingSheets ? "불러오는 중…" : "시트용 JSON 미리보기"}
+              </button>
+              <button
+                type="button"
+                className="rounded border border-emerald-600 bg-emerald-50 px-3 py-1.5 text-emerald-900 disabled:opacity-50"
+                disabled={loadingSheets || loadingQueue}
+                onClick={() => void runSheetsSync()}
+              >
+                Sheets 동기화 (4탭)
+              </button>
+            </div>
+            <label className="mt-3 block text-[11px] font-medium text-slate-700">ledger_change_queue에 append (jo_ledger_v1 JSON)</label>
+            <textarea
+              className="mt-1 min-h-[72px] w-full rounded border border-slate-200 bg-white px-2 py-1 font-mono text-[11px]"
+              value={queueJson}
+              onChange={(e) => setQueueJson(e.target.value)}
+              spellCheck={false}
+            />
+            <button
+              type="button"
+              className="mt-1 rounded border border-slate-300 bg-white px-3 py-1.5 text-slate-800 disabled:opacity-50"
+              disabled={loadingQueue || loadingSheets}
+              onClick={() => void appendQueue()}
+            >
+              {loadingQueue ? "추가 중…" : "큐에 한 줄 추가 (DB 미변경)"}
+            </button>
+            {sheetsPreview ? (
+              <pre className="mt-2 max-h-40 overflow-auto rounded border border-slate-200 bg-white p-2 text-[10px] text-slate-700">
+                {sheetsPreview}
+              </pre>
+            ) : null}
+          </div>
         </div>
-        <p className="mt-2 text-[11px] text-slate-500">
-          동기화는 Vercel 환경변수 <code className="rounded bg-slate-200 px-1">GOOGLE_SERVICE_ACCOUNT_JSON</code>,{" "}
-          <code className="rounded bg-slate-200 px-1">GOOGLE_SHEETS_SPREADSHEET_ID</code> 및 스프레드시트에 서비스 계정 공유가
-          필요합니다. 시세·환율은 <strong>GOOGLEFINANCE 수식</strong>(준실시간, 지연·#N/A 가능)으로 주입됩니다.{" "}
-          <strong>리포트 평균 목표가</strong>는 <code className="rounded bg-slate-200 px-1">research_price_targets</code> 탭에
-          수동 입력한 뒤 <code className="rounded bg-slate-200 px-1">holdings_dashboard</code>·
-          <code className="rounded bg-slate-200 px-1">portfolio_summary</code>에서 집계됩니다(참고용, 유일한 근거 아님). 자세한
-          내용은 <code className="rounded bg-slate-200 px-1">docs/google-sheets-portfolio-dashboard.md</code> 참고.
-        </p>
-        <label className="mt-3 block text-[11px] font-medium text-slate-700">ledger_change_queue에 append (jo_ledger_v1 JSON)</label>
-        <textarea
-          className="mt-1 min-h-[72px] w-full rounded border border-slate-200 bg-white px-2 py-1 font-mono text-[11px]"
-          value={queueJson}
-          onChange={(e) => setQueueJson(e.target.value)}
-          spellCheck={false}
-        />
-        <button
-          type="button"
-          className="mt-1 rounded border border-slate-300 bg-white px-3 py-1.5 text-slate-800 disabled:opacity-50"
-          disabled={loadingQueue || loadingSheets}
-          onClick={() => void appendQueue()}
-        >
-          {loadingQueue ? "추가 중…" : "큐에 한 줄 추가 (DB 미변경)"}
-        </button>
-        {sheetsPreview ? (
-          <pre className="mt-2 max-h-40 overflow-auto rounded border border-slate-200 bg-white p-2 text-[10px] text-slate-700">
-            {sheetsPreview}
-          </pre>
-        ) : null}
-      </div>
-
-      <textarea
-        className="min-h-[220px] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-xs text-slate-800"
-        value={sql}
-        onChange={(e) => setSql(e.target.value)}
-        spellCheck={false}
-      />
-
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          className="rounded-md bg-slate-800 px-4 py-2 text-sm text-white disabled:opacity-50"
-          onClick={() => void runValidate()}
-          disabled={loadingV || loadingA}
-        >
-          {loadingV ? "검사 중…" : "SQL 정합성 검사"}
-        </button>
-        <button
-          type="button"
-          className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm text-slate-800 disabled:opacity-50"
-          onClick={() => void runApply()}
-          disabled={loadingA || loadingV || !canApply}
-          title={!canApply ? "먼저 정합성 검사를 통과해야 합니다." : undefined}
-        >
-          {loadingA ? "반영 중…" : "원장 반영"}
-        </button>
-      </div>
+      ) : null}
 
       {error ? (
         <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 whitespace-pre-wrap">
@@ -1460,7 +1652,7 @@ export function PortfolioLedgerClient() {
         </div>
       ) : null}
 
-      {validateResult ? (
+      {advancedMode && validateResult ? (
         <div className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
           <p className="font-semibold text-slate-800">검사 결과: {validateResult.ok ? "통과" : "실패"}</p>
           <ul className="mt-2 list-inside list-disc text-xs text-slate-600">
@@ -1479,7 +1671,7 @@ export function PortfolioLedgerClient() {
         </div>
       ) : null}
 
-      {applyResult?.ok ? (
+      {advancedMode && applyResult?.ok ? (
         <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">
           원장 반영 완료: {applyResult.applied}건 처리
         </div>

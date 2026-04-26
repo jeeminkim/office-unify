@@ -15,6 +15,9 @@
 - `/dev-assistant` : 기존 개발 보조 기능 분리 진입점
 - `/portfolio` : 포트폴리오 현황 대시보드(점검 전용)
 - `/portfolio-ledger` : 보유 종목 관리/원장 반영(사후 기록 반영 전용)
+  - 기본 모드(default): 보유/관심 추가, 보유 목록, 매수·매도 반영, 거래 이력, ticker 추천
+  - 고급(SQL) 모드: SQL validate/apply, raw JSON preview, ledger queue append
+  - 고급 모드 표시 상태는 `localStorage.portfolioLedgerAdvancedMode`로 유지
 - `/realized-pnl` : 실현손익 대시보드(기간/종목/이벤트)
 - `/financial-goals` : 목표 자금 관리(목표 생성/배분/달성률)
 
@@ -53,12 +56,14 @@
   - buy/sell/correct 사후 반영(주문 실행 아님)
   - sell 반영 시 실현손익 이벤트 자동 기록(손실 포함)
   - 모든 반영 이벤트를 `web_portfolio_trade_events`에 별도 저장
+  - 성공 시 quote refresh/status + snapshot/goals/trade history 재동기화 트리거
 - `/api/portfolio/holdings/[id]/events`
   - 종목별 사후 반영 이력 조회
 - `/api/portfolio/quotes/refresh`
   - 시세 시트 row/formula 동기화 요청 (지연 반영)
   - 응답에 권장 재조회 시간(약 60초) 포함
   - 응답 메타: `holdingsTotal`, `holdingsWithGoogleTicker`, `holdingsMissingGoogleTicker`, `refreshedCount`, `missingTickerSymbols` (DB에 `google_ticker` 없으면 시트 행을 만들 수 없음)
+  - portfolio-ledger 신규 등록/반영 성공 직후 자동 호출
 - `/api/portfolio/quotes/status`
   - 시트 read-back 상태/지연 상태 점검
   - 종목별 `googleTicker/rawPrice/parsedPrice/rowStatus` 진단 제공
@@ -67,6 +72,7 @@
   - `portfolio_quote_candidates` 탭에 `GOOGLEFINANCE` 후보 수식을 쌓고 read-back으로 검증
   - **자동 DB 저장 없음** — 적용은 `apply`에서 사용자가 명시적으로 승인할 때만 `google_ticker`/`quote_symbol` 반영
   - `status` 응답의 추천 항목에 **검증 전 기본 후보**(`defaultApplyCandidate`, `canApplyDefaultBeforeVerification`)를 포함할 수 있음 — Sheets가 `pending`이어도 사용자가 UI에서 「검증 전 기본 추천 적용」으로 저장 가능 (여전히 버튼 승인 필요, `verified` 아님)
+  - 신규 등록 시 `google_ticker` 미입력 항목은 기본 후보 생성 후 resolver refresh를 백그라운드로 연계
 - `/api/portfolio/ticker-resolver/apply-bulk`
   - 사용자가 승인한 항목만 일괄 저장 (부분 실패 허용, `failedItems` 반환)
   - `items[].source`: `verified_googlefinance`(기본) | `default_unverified` — 후자는 GOOGLEFINANCE 검증 전 규칙 기반 저장이며, 응답 `warnings`로 안내
