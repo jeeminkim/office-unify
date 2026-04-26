@@ -7,6 +7,8 @@ export { getPortfolioSummaryRead } from './portfolioSummaryReadRepository';
 export {
   deletePortfolioHolding,
   deletePortfolioWatchlist,
+  insertPortfolioTradeEvent,
+  listPortfolioTradeEventsForSymbol,
   listWebPortfolioHoldingsForUser,
   listWebPortfolioWatchlistForUser,
   patchPortfolioHoldingTickers,
@@ -14,7 +16,11 @@ export {
   upsertPortfolioHolding,
   upsertPortfolioWatchlist,
 } from './portfolioLedgerRepository';
-export type { WebPortfolioHoldingRow, WebPortfolioWatchlistRow } from './portfolioLedgerRepository';
+export type {
+  WebPortfolioHoldingRow,
+  WebPortfolioTradeEventRow,
+  WebPortfolioWatchlistRow,
+} from './portfolioLedgerRepository';
 export {
   getOrCreateWebPersonaSession,
   getPreviousKstDayAssistantHint,

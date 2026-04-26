@@ -28,6 +28,7 @@
 **FX 행**: E=`CURRENCY:USDKRW`, F는 `=GOOGLEFINANCE("CURRENCY:USDKRW")` 를 텍스트로 표시, **G**에 `=GOOGLEFINANCE("CURRENCY:USDKRW")` (attribute 없음) 로 환율 숫자. I는 `KRW` 고정 또는 비움. J/K/L/M은 스펙에 맞춘 안내 텍스트·공백. `POST /api/portfolio/quotes/refresh` 가 전체 행을 새 계약으로 덮어씁니다.
 
 - **환율(원화 환산)**: 앱은 FX 행 **G열** 숫자를 USD/KRW로 읽습니다. KR 행은 `fx_rate_to_krw = 1`로 둡니다.
+- `/portfolio` 비중 계산은 US 종목에 대해 `currentPrice(USD) * usdkrw`로 KRW 평가를 계산합니다. FX가 없으면 US 현재가는 표시하되 KRW 평가금액/비중은 `NO_DATA`, 경고 코드 `fx_missing`을 노출합니다.
 
 ## 리포트 목표가 (`research_price_targets`)
 

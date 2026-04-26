@@ -4,6 +4,7 @@ import { getServiceSupabase } from '@/lib/server/supabase-service';
 import {
   deletePortfolioHolding,
   insertGoalAllocation,
+  insertPortfolioTradeEvent,
   insertRealizedProfitEvent,
   listFinancialGoalsForUser,
   listWebPortfolioHoldingsForUser,
@@ -91,12 +92,27 @@ export async function POST(req: Request) {
         target_price: asNumber(current?.target_price) ?? null,
         judgment_memo: current?.judgment_memo ?? null,
       });
+      const tradeEvent = await insertPortfolioTradeEvent(supabase, auth.userKey, {
+        market,
+        symbol,
+        name: current?.name ?? symbol,
+        event_type: 'buy',
+        quantity: tradeQty,
+        price: tradePrice,
+        memo: body.memo ?? null,
+        reason: body.tradeReason?.trim() || null,
+        before_quantity: currentQty,
+        before_avg_price: currentAvg,
+        after_quantity: newQty,
+        after_avg_price: newAvg,
+      });
       const suggestTickerResolver = !current?.google_ticker?.trim();
       return NextResponse.json({
         ok: true,
         action: 'buy',
         newQuantity: newQty,
         newAveragePrice: newAvg,
+        tradeEventId: tradeEvent.id,
         ...(suggestTickerResolver ? { suggestTickerResolver: true as const } : {}),
       });
     }
@@ -174,6 +190,24 @@ export async function POST(req: Request) {
             priority: '중',
           });
         }
+        const tradeEvent = await insertPortfolioTradeEvent(supabase, auth.userKey, {
+          market,
+          symbol,
+          name: current?.name ?? symbol,
+          event_type: 'sell',
+          quantity: tradeQty,
+          price: tradePrice,
+          fee_krw: feeKrw,
+          tax_krw: taxKrw,
+          realized_pnl_krw: netRealizedPnl,
+          realized_pnl_rate: realizedPnlRate ?? null,
+          memo: body.memo ?? null,
+          reason: body.tradeReason?.trim() || null,
+          before_quantity: currentQty,
+          before_avg_price: currentAvg,
+          after_quantity: 0,
+          after_avg_price: currentAvg,
+        });
         return NextResponse.json({
           ok: true,
           action: 'sell',
@@ -186,6 +220,8 @@ export async function POST(req: Request) {
             linkedGoalId,
             goalAllocated,
           },
+          realizedEventId: realizedEvent.id,
+          tradeEventId: tradeEvent.id,
         });
       }
       await upsertPortfolioHolding(supabase, auth.userKey, {
@@ -201,6 +237,24 @@ export async function POST(req: Request) {
         target_price: asNumber(current?.target_price) ?? null,
         judgment_memo: current?.judgment_memo ?? null,
       });
+      const tradeEvent = await insertPortfolioTradeEvent(supabase, auth.userKey, {
+        market,
+        symbol,
+        name: current?.name ?? symbol,
+        event_type: 'sell',
+        quantity: tradeQty,
+        price: tradePrice,
+        fee_krw: feeKrw,
+        tax_krw: taxKrw,
+        realized_pnl_krw: netRealizedPnl,
+        realized_pnl_rate: realizedPnlRate ?? null,
+        memo: body.memo ?? null,
+        reason: body.tradeReason?.trim() || null,
+        before_quantity: currentQty,
+        before_avg_price: currentAvg,
+        after_quantity: remainQty,
+        after_avg_price: currentAvg,
+      });
       return NextResponse.json({
         ok: true,
         action: 'sell',
@@ -213,6 +267,8 @@ export async function POST(req: Request) {
           linkedGoalId,
           goalAllocated,
         },
+        realizedEventId: realizedEvent.id,
+        tradeEventId: tradeEvent.id,
       });
     }
 
@@ -237,7 +293,27 @@ export async function POST(req: Request) {
       target_price: asNumber(current?.target_price) ?? null,
       judgment_memo: current?.judgment_memo ?? null,
     });
-    return NextResponse.json({ ok: true, action: 'correct', newQuantity: correctedQty, newAveragePrice: correctedAvg });
+    const tradeEvent = await insertPortfolioTradeEvent(supabase, auth.userKey, {
+      market,
+      symbol,
+      name: current?.name ?? symbol,
+      event_type: 'correct',
+      quantity: null,
+      price: null,
+      memo: body.memo ?? null,
+      reason: body.tradeReason?.trim() || null,
+      before_quantity: currentQty,
+      before_avg_price: currentAvg,
+      after_quantity: correctedQty,
+      after_avg_price: correctedAvg,
+    });
+    return NextResponse.json({
+      ok: true,
+      action: 'correct',
+      newQuantity: correctedQty,
+      newAveragePrice: correctedAvg,
+      tradeEventId: tradeEvent.id,
+    });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error';
     return NextResponse.json({ error: message }, { status: 500 });

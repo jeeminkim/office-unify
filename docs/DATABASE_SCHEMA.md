@@ -94,6 +94,7 @@
   - buy: 수량 증가 + 가중평균 단가 재계산
   - sell: 수량 감소(전량 시 삭제, 옵션으로 watchlist 이동) + 실현손익 이벤트 저장
   - correct: 수량/평단 직접 정정
+  - buy/sell/correct 성공 시 `web_portfolio_trade_events`에 사후 반영 이력을 append-only로 저장
 - `web_portfolio_holdings`의 `google_ticker`/`quote_symbol`은 시세 연동 수동 보정 필드:
   - `google_ticker`: Google Sheets `GOOGLEFINANCE` read-back용 우선 ticker
   - `quote_symbol`: Yahoo fallback 등 일반 quote provider용 우선 심볼
@@ -112,6 +113,19 @@
 | `realized_profit_events` | 매도 확정 손익(손실 포함), 수수료/세금/순실현손익 저장 |
 | `financial_goals` | 단기/중기 목표 금액, 배분 누계, 상태 관리 |
 | `goal_allocations` | 실현손익/수동현금/조정 기반 목표 배분 이력 |
+
+## Portfolio Trade Events
+
+**파일:** `docs/sql/append_web_portfolio_trade_events.sql`
+
+| 테이블 | 역할 |
+|--------|------|
+| `web_portfolio_trade_events` | 주문 실행 로그가 아닌 **사후 원장 반영 이력**(buy/sell/correct) |
+
+핵심 원칙:
+
+- 실제 주문 자동 실행 기능과 무관하며, 외부 체결 이후 기록만 남긴다.
+- sell 반영 시 `realized_profit_events`와 `web_portfolio_trade_events`가 동시에 생성될 수 있다.
 
 핵심 원칙:
 

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Portfolio UX 실사용 개선:** `/portfolio` 요약 계산에서 US 종목은 USD/KRW 환율 read-back이 있을 때 KRW 평가금액/비중에 포함하고, 환율 누락 시 `fx_missing` 경고 + NO_DATA 처리로 명확화.
+- **Ledger no-SQL 등록 플로우:** `/portfolio-ledger`에 보유 종목 추가/관심종목 추가 폼을 추가하고 `POST /api/portfolio/holdings`, `POST /api/portfolio/watchlist`를 도입해 SQL 입력 없이 등록 가능하게 개선.
+- **사후 반영 이력 계층:** `docs/sql/append_web_portfolio_trade_events.sql` 추가, `web_portfolio_trade_events`에 buy/sell/correct 이력을 저장하고 `GET /api/portfolio/holdings/[id]/events` + ledger/dossier 이력 UI를 연결.
+- **apply-trade 응답 확장:** `POST /api/portfolio/holdings/apply-trade` 성공 응답에 `tradeEventId`/`realizedEventId`를 포함하고 sell 시 `realized_profit_events` 기록 로직을 유지.
 - **portfolio_quotes 시트 계약 재정의:** F/H/J/L은 수식 **설명 텍스트**만, 실제 `GOOGLEFINANCE` 계산 수식은 G/I/K/M에만 둡니다. 서버 read-back·`quotes/status` API는 결과 열만 파싱하고 `*FormulaText` 필드로 참고 텍스트를 노출합니다. FX는 G에 `=GOOGLEFINANCE("CURRENCY:USDKRW")`(attribute 없음)를 쓰고, `quotes/refresh` 한 번으로 기존 행을 새 레이아웃으로 덮어씁니다.
 - **검증 전 기본 ticker 적용:** `ticker-resolver/status` 추천에 `defaultApplyCandidate`/`canApplyDefaultBeforeVerification`을 추가하고, `/portfolio`에서 「검증 전 기본 추천 적용」「고신뢰 기본 추천 일괄 적용」으로 `apply-bulk`(`source: default_unverified`) 후 `quotes/refresh`를 이어 실행해 `google_ticker` 없이 `missing_row`만 나오는 상황을 완화. `quotes/refresh` 응답에 보유 수·ticker 보유 수 메타 추가.
 - **Google Sheets 탭 자동 복구:** `portfolio_quotes`, `portfolio_quote_candidates` 탭이 없을 때 앱이 자동 생성 후 헤더를 보정하도록 추가하고, A1 range를 `'sheet_name'!A1` escape 방식으로 통일해 `Unable to parse range` 계열 빌드/운영 오류를 완화.

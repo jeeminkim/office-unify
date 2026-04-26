@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requirePersonaChatAuth } from '@/lib/server/persona-chat-auth';
 import { getServiceSupabase } from '@/lib/server/supabase-service';
 import {
+  listPortfolioTradeEventsForSymbol,
   listTradeJournalEntries,
   listTradeJournalReviewsByEntryId,
   listWebPortfolioHoldingsForUser,
@@ -70,8 +71,9 @@ export async function GET(_req: Request, context: Params) {
     const current = q?.currentPrice;
     const pnlRate = current != null && avg > 0 ? ((current - avg) / avg) * 100 : undefined;
 
-    const [journal, trendRows, committeeRows, pbRows] = await Promise.all([
+    const [journal, tradeEvents, trendRows, committeeRows, pbRows] = await Promise.all([
       listTradeJournalEntries(supabase, auth.userKey, 120),
+      listPortfolioTradeEventsForSymbol(supabase, auth.userKey, holding.market as 'KR' | 'US', holding.symbol),
       supabase
         .from('trend_report_runs')
         .select('id,title,summary,created_at,focus')
@@ -184,6 +186,22 @@ export async function GET(_req: Request, context: Params) {
           }
         : undefined,
       recentJournal: journalRows.slice(0, 8),
+      tradeEvents: tradeEvents.map((row) => ({
+        id: row.id,
+        market: row.market,
+        symbol: row.symbol,
+        eventType: row.event_type,
+        tradeDate: row.trade_date,
+        quantity: row.quantity == null ? undefined : toNum(row.quantity),
+        price: row.price == null ? undefined : toNum(row.price),
+        beforeQuantity: row.before_quantity == null ? undefined : toNum(row.before_quantity),
+        afterQuantity: row.after_quantity == null ? undefined : toNum(row.after_quantity),
+        beforeAvgPrice: row.before_avg_price == null ? undefined : toNum(row.before_avg_price),
+        afterAvgPrice: row.after_avg_price == null ? undefined : toNum(row.after_avg_price),
+        realizedPnlKrw: row.realized_pnl_krw == null ? undefined : toNum(row.realized_pnl_krw),
+        memo: row.memo ?? undefined,
+        reason: row.reason ?? undefined,
+      })),
       trendSignals,
       researchSignals: [],
       alerts,

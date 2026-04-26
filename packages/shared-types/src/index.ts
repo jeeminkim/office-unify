@@ -150,6 +150,9 @@ export type { OfficeUserKey } from './domainIds';
 export { parseOfficeUserKey } from './domainIds';
 export type {
   AccountSummaryDto,
+  CreateHoldingRequest,
+  CreateWatchlistRequest,
+  PortfolioTradeEvent,
   PortfolioAccountsResponseBody,
   PortfolioSummaryEnhancedResponseBody,
   PortfolioSummaryDto,

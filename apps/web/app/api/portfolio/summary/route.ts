@@ -6,7 +6,7 @@ import { getServiceSupabase } from '@/lib/server/supabase-service';
 import { requirePersonaChatAuth } from '@/lib/server/persona-chat-auth';
 import { listWebPortfolioHoldingsForUser } from '@office-unify/supabase-access';
 import { loadHoldingQuotes } from '@/lib/server/marketQuoteService';
-import { normalizeQuoteKey } from '@/lib/server/googleFinanceSheetQuoteService';
+import { normalizeQuoteKey } from '@/lib/server/quoteReadbackUtils';
 import { analyzeThesisHealth } from '@/lib/server/thesisHealthAnalyzer';
 
 type EnhancedPortfolioSummaryResponse = {
@@ -118,7 +118,7 @@ export async function GET(req: Request) {
       const currentValueNative = currentPrice != null ? quantity * currentPrice : undefined;
       const valueKrw = currentValueNative != null && fx ? currentValueNative * fx : undefined;
       const pnlKrw = valueKrw != null && avgCostKrw != null ? valueKrw - avgCostKrw : undefined;
-      const pnlRate = avgCostKrw && pnlKrw != null ? (pnlKrw / avgCostKrw) * 100 : undefined;
+      const pnlRate = currentPrice != null && avgPrice > 0 ? ((currentPrice - avgPrice) / avgPrice) * 100 : undefined;
       const thesis = analyzeThesisHealth({
         symbol: holding.symbol,
         market: holding.market,
@@ -216,7 +216,7 @@ export async function GET(req: Request) {
     }
     if (quoteWarnings.includes('usdkrw_rate_unavailable') && holdings.some((row) => row.market === 'US')) {
       warnings.push({
-        code: 'usdkrw_rate_unavailable',
+        code: 'fx_missing',
         severity: 'warn',
         message: 'USD/KRW 환율을 가져오지 못해 US 종목 KRW 평가값 계산이 제한됩니다.',
       });

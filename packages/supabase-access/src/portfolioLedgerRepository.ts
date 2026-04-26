@@ -35,6 +35,30 @@ export type WebPortfolioWatchlistRow = {
   updated_at?: string | null;
 };
 
+export type WebPortfolioTradeEventRow = {
+  id: string;
+  user_key: string;
+  market: string;
+  symbol: string;
+  name: string | null;
+  event_type: 'buy' | 'sell' | 'correct';
+  trade_date: string;
+  quantity: number | string | null;
+  price: number | string | null;
+  fee_krw: number | string | null;
+  tax_krw: number | string | null;
+  realized_pnl_krw: number | string | null;
+  realized_pnl_rate: number | string | null;
+  memo: string | null;
+  reason: string | null;
+  before_quantity: number | string | null;
+  before_avg_price: number | string | null;
+  after_quantity: number | string | null;
+  after_avg_price: number | string | null;
+  source: string | null;
+  created_at: string | null;
+};
+
 export async function listWebPortfolioHoldingsForUser(
   client: SupabaseClient,
   userKey: OfficeUserKey,
@@ -199,4 +223,79 @@ export async function patchPortfolioWatchlistTickers(
     .eq('market', market)
     .eq('symbol', symbol.trim());
   if (error) throw error;
+}
+
+export async function insertPortfolioTradeEvent(
+  client: SupabaseClient,
+  userKey: OfficeUserKey,
+  row: {
+    market: 'KR' | 'US';
+    symbol: string;
+    name?: string | null;
+    event_type: 'buy' | 'sell' | 'correct';
+    trade_date?: string;
+    quantity?: number | null;
+    price?: number | null;
+    fee_krw?: number | null;
+    tax_krw?: number | null;
+    realized_pnl_krw?: number | null;
+    realized_pnl_rate?: number | null;
+    memo?: string | null;
+    reason?: string | null;
+    before_quantity?: number | null;
+    before_avg_price?: number | null;
+    after_quantity?: number | null;
+    after_avg_price?: number | null;
+    source?: string | null;
+  },
+): Promise<{ id: string }> {
+  const payload: Record<string, unknown> = {
+    user_key: userKey as string,
+    market: row.market,
+    symbol: row.symbol.trim().toUpperCase(),
+    name: row.name?.trim() || null,
+    event_type: row.event_type,
+    trade_date: row.trade_date ?? new Date().toISOString().slice(0, 10),
+    quantity: row.quantity ?? null,
+    price: row.price ?? null,
+    fee_krw: row.fee_krw ?? 0,
+    tax_krw: row.tax_krw ?? 0,
+    realized_pnl_krw: row.realized_pnl_krw ?? null,
+    realized_pnl_rate: row.realized_pnl_rate ?? null,
+    memo: row.memo ?? null,
+    reason: row.reason ?? null,
+    before_quantity: row.before_quantity ?? null,
+    before_avg_price: row.before_avg_price ?? null,
+    after_quantity: row.after_quantity ?? null,
+    after_avg_price: row.after_avg_price ?? null,
+    source: row.source ?? 'portfolio_ledger',
+  };
+  const { data, error } = await client
+    .from('web_portfolio_trade_events')
+    .insert(payload)
+    .select('id')
+    .single();
+  if (error) throw error;
+  return { id: String(data.id) };
+}
+
+export async function listPortfolioTradeEventsForSymbol(
+  client: SupabaseClient,
+  userKey: OfficeUserKey,
+  market: 'KR' | 'US',
+  symbol: string,
+): Promise<WebPortfolioTradeEventRow[]> {
+  const { data, error } = await client
+    .from('web_portfolio_trade_events')
+    .select(
+      'id,user_key,market,symbol,name,event_type,trade_date,quantity,price,fee_krw,tax_krw,realized_pnl_krw,realized_pnl_rate,memo,reason,before_quantity,before_avg_price,after_quantity,after_avg_price,source,created_at',
+    )
+    .eq('user_key', userKey as string)
+    .eq('market', market)
+    .eq('symbol', symbol.trim().toUpperCase())
+    .order('trade_date', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (error) throw error;
+  return (data ?? []) as WebPortfolioTradeEventRow[];
 }

@@ -39,6 +39,23 @@ type GoalRow = {
   status: string;
 };
 
+type TradeEventRow = {
+  id: string;
+  market: string;
+  symbol: string;
+  eventType: "buy" | "sell" | "correct";
+  tradeDate: string;
+  quantity?: number;
+  price?: number;
+  beforeQuantity?: number;
+  afterQuantity?: number;
+  beforeAvgPrice?: number;
+  afterAvgPrice?: number;
+  realizedPnlKrw?: number;
+  memo?: string;
+  reason?: string;
+};
+
 const EXAMPLE_SQL = `-- 보유 upsert (KR 예시) — 수정도 동일 형식 INSERT 한 줄(upsert). UPDATE 문은 거부됩니다.
 INSERT INTO web_portfolio_holdings (market, symbol, name, sector, investment_memo, qty, avg_price, target_price, judgment_memo)
 VALUES ('KR', '000660', 'SK하이닉스', '반도체', '메모', 20, 513000, 1300000, '판단');
@@ -132,6 +149,38 @@ export function PortfolioLedgerClient() {
     realizedEventId?: string;
   } | null>(null);
   const applyTradePanelRef = useRef<HTMLDivElement | null>(null);
+  const [holdingCreateDraft, setHoldingCreateDraft] = useState({
+    market: "KR" as "KR" | "US",
+    symbol: "",
+    name: "",
+    quantity: "",
+    avgPrice: "",
+    sector: "",
+    investmentMemo: "",
+    judgmentMemo: "",
+    targetPrice: "",
+    stopPrice: "",
+    googleTicker: "",
+    quoteSymbol: "",
+    krQuoteMarket: "KOSPI" as "KOSPI" | "KOSDAQ",
+  });
+  const [watchCreateDraft, setWatchCreateDraft] = useState({
+    market: "KR" as "KR" | "US",
+    symbol: "",
+    name: "",
+    sector: "",
+    interestReason: "",
+    observationPoints: "",
+    desiredBuyRange: "",
+    priority: "medium" as "low" | "medium" | "high",
+    googleTicker: "",
+    quoteSymbol: "",
+    krQuoteMarket: "KOSPI" as "KOSPI" | "KOSDAQ",
+  });
+  const [createBusy, setCreateBusy] = useState<null | "holding" | "watchlist">(null);
+  const [eventsByKey, setEventsByKey] = useState<Record<string, TradeEventRow[]>>({});
+  const [eventsOpenKey, setEventsOpenKey] = useState<string | null>(null);
+  const [eventsBusyKey, setEventsBusyKey] = useState<string | null>(null);
 
   const parseQty = (v: unknown): number => {
     const n = Number(String(v ?? "").replace(/,/g, ""));
@@ -489,12 +538,14 @@ export function PortfolioLedgerClient() {
       const data = (await res.json()) as {
         error?: string;
         realizedEvent?: { id: string; linkedGoalId?: string | null; goalAllocated?: number };
+        tradeEventId?: string;
+        realizedEventId?: string;
         suggestTickerResolver?: boolean;
       };
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
 
       const suggest = data.suggestTickerResolver === true;
-      const realizedId = data.realizedEvent?.id;
+      const realizedId = data.realizedEventId ?? data.realizedEvent?.id;
       let msg = "반영 완료.";
       if (realizedId) {
         msg = "반영 완료. 실현손익이 기록되었습니다.";
@@ -532,6 +583,103 @@ export function PortfolioLedgerClient() {
       setApplyTradeBusy(false);
     }
   }, [tradeDraft, snapshot, loadSnapshot, loadGoals]);
+
+  const createHolding = useCallback(async () => {
+    const quantity = Number(holdingCreateDraft.quantity);
+    const avgPrice = Number(holdingCreateDraft.avgPrice);
+    if (!holdingCreateDraft.symbol.trim() || !holdingCreateDraft.name.trim()) {
+      setError("보유 종목 추가: 시장/심볼/종목명은 필수입니다.");
+      return;
+    }
+    if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(avgPrice) || avgPrice <= 0) {
+      setError("보유 종목 추가: 수량/평균단가는 0보다 커야 합니다.");
+      return;
+    }
+    setCreateBusy("holding");
+    setError(null);
+    setLedgerTradeBanner(null);
+    try {
+      const res = await fetch("/api/portfolio/holdings", {
+        method: "POST",
+        headers: jsonHeaders,
+        credentials: "same-origin",
+        body: JSON.stringify({
+          ...holdingCreateDraft,
+          quantity,
+          avgPrice,
+          targetPrice: holdingCreateDraft.targetPrice.trim() ? Number(holdingCreateDraft.targetPrice) : undefined,
+          stopPrice: holdingCreateDraft.stopPrice.trim() ? Number(holdingCreateDraft.stopPrice) : undefined,
+        }),
+      });
+      const data = (await res.json()) as { error?: string; message?: string };
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      setHoldingCreateDraft((prev) => ({
+        ...prev,
+        symbol: "",
+        name: "",
+        quantity: "",
+        avgPrice: "",
+      }));
+      setLedgerTradeBanner({
+        kind: "info",
+        message: (data.message ?? "보유 종목을 추가했습니다.") + " 시세 새로고침 요청과 Trade Journal 기록을 권장합니다.",
+      });
+      await loadSnapshot();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "보유 종목 추가 실패");
+    } finally {
+      setCreateBusy(null);
+    }
+  }, [holdingCreateDraft, loadSnapshot]);
+
+  const createWatchlist = useCallback(async () => {
+    if (!watchCreateDraft.symbol.trim() || !watchCreateDraft.name.trim()) {
+      setError("관심종목 추가: 시장/심볼/종목명은 필수입니다.");
+      return;
+    }
+    setCreateBusy("watchlist");
+    setError(null);
+    setLedgerTradeBanner(null);
+    try {
+      const res = await fetch("/api/portfolio/watchlist", {
+        method: "POST",
+        headers: jsonHeaders,
+        credentials: "same-origin",
+        body: JSON.stringify(watchCreateDraft),
+      });
+      const data = (await res.json()) as { error?: string; message?: string };
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      setWatchCreateDraft((prev) => ({ ...prev, symbol: "", name: "" }));
+      setLedgerTradeBanner({ kind: "success", message: data.message ?? "관심종목을 추가했습니다." });
+      await loadSnapshot();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "관심종목 추가 실패");
+    } finally {
+      setCreateBusy(null);
+    }
+  }, [watchCreateDraft, loadSnapshot]);
+
+  const toggleHoldingEvents = useCallback(async (key: string) => {
+    if (eventsOpenKey === key) {
+      setEventsOpenKey(null);
+      return;
+    }
+    setEventsOpenKey(key);
+    if (eventsByKey[key]) return;
+    setEventsBusyKey(key);
+    try {
+      const res = await fetch(`/api/portfolio/holdings/${encodeURIComponent(key)}/events`, {
+        credentials: "same-origin",
+      });
+      const data = (await res.json()) as { events?: TradeEventRow[]; error?: string };
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      setEventsByKey((prev) => ({ ...prev, [key]: data.events ?? [] }));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "거래 이력 로드 실패");
+    } finally {
+      setEventsBusyKey(null);
+    }
+  }, [eventsByKey, eventsOpenKey]);
 
   const fetchSheetsPreview = useCallback(async () => {
     setError(null);
@@ -625,6 +773,49 @@ export function PortfolioLedgerClient() {
       </div>
       <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
         이 화면은 <strong>주문 실행이 아니라 기록 반영</strong>입니다. 실제 매수/매도는 외부 증권사에서 수행한 뒤 여기서 수량/평단을 사후 반영하세요.
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-700">
+        <p className="font-semibold text-slate-900">보유 종목 추가 (외부 매수 완료 후 기록용)</p>
+        <div className="mt-2 grid gap-2 md:grid-cols-3">
+          <select className="rounded border border-slate-300 bg-white px-2 py-1" value={holdingCreateDraft.market} onChange={(e) => setHoldingCreateDraft({ ...holdingCreateDraft, market: e.target.value as "KR" | "US" })}><option value="KR">KR</option><option value="US">US</option></select>
+          <input className="rounded border border-slate-300 bg-white px-2 py-1" placeholder="심볼" value={holdingCreateDraft.symbol} onChange={(e) => setHoldingCreateDraft({ ...holdingCreateDraft, symbol: e.target.value })} />
+          <input className="rounded border border-slate-300 bg-white px-2 py-1" placeholder="종목명" value={holdingCreateDraft.name} onChange={(e) => setHoldingCreateDraft({ ...holdingCreateDraft, name: e.target.value })} />
+          <input className="rounded border border-slate-300 bg-white px-2 py-1" placeholder="수량" value={holdingCreateDraft.quantity} onChange={(e) => setHoldingCreateDraft({ ...holdingCreateDraft, quantity: e.target.value })} />
+          <input className="rounded border border-slate-300 bg-white px-2 py-1" placeholder="평균단가" value={holdingCreateDraft.avgPrice} onChange={(e) => setHoldingCreateDraft({ ...holdingCreateDraft, avgPrice: e.target.value })} />
+          <input className="rounded border border-slate-300 bg-white px-2 py-1" placeholder="섹터" value={holdingCreateDraft.sector} onChange={(e) => setHoldingCreateDraft({ ...holdingCreateDraft, sector: e.target.value })} />
+          <input className="rounded border border-slate-300 bg-white px-2 py-1" placeholder="투자 메모" value={holdingCreateDraft.investmentMemo} onChange={(e) => setHoldingCreateDraft({ ...holdingCreateDraft, investmentMemo: e.target.value })} />
+          <input className="rounded border border-slate-300 bg-white px-2 py-1" placeholder="판단 메모" value={holdingCreateDraft.judgmentMemo} onChange={(e) => setHoldingCreateDraft({ ...holdingCreateDraft, judgmentMemo: e.target.value })} />
+          <input className="rounded border border-slate-300 bg-white px-2 py-1" placeholder="목표가" value={holdingCreateDraft.targetPrice} onChange={(e) => setHoldingCreateDraft({ ...holdingCreateDraft, targetPrice: e.target.value })} />
+          <input className="rounded border border-slate-300 bg-white px-2 py-1" placeholder="손절가" value={holdingCreateDraft.stopPrice} onChange={(e) => setHoldingCreateDraft({ ...holdingCreateDraft, stopPrice: e.target.value })} />
+          <input className="rounded border border-slate-300 bg-white px-2 py-1" placeholder="google_ticker(선택)" value={holdingCreateDraft.googleTicker} onChange={(e) => setHoldingCreateDraft({ ...holdingCreateDraft, googleTicker: e.target.value })} />
+          <input className="rounded border border-slate-300 bg-white px-2 py-1" placeholder="quote_symbol(선택)" value={holdingCreateDraft.quoteSymbol} onChange={(e) => setHoldingCreateDraft({ ...holdingCreateDraft, quoteSymbol: e.target.value })} />
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button type="button" className="rounded border border-violet-300 bg-violet-50 px-2 py-1 text-violet-900" onClick={() => void suggestLedgerTicker("holding", holdingCreateDraft.market, holdingCreateDraft.symbol.trim().toUpperCase())}>ticker 자동 추천</button>
+          <button type="button" className="rounded border border-blue-600 bg-blue-600 px-3 py-1 text-white disabled:opacity-50" disabled={createBusy === "holding"} onClick={() => void createHolding()}>{createBusy === "holding" ? "저장 중..." : "보유 종목 추가"}</button>
+          <button type="button" className="rounded border border-slate-300 bg-white px-2 py-1" onClick={() => void fetch("/api/portfolio/quotes/refresh", { method: "POST", credentials: "same-origin" })}>시세 새로고침 요청</button>
+          <Link href="/trade-journal" className="rounded border border-slate-300 bg-white px-2 py-1">Trade Journal 기록</Link>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-700">
+        <p className="font-semibold text-slate-900">관심종목 추가 (SQL 없이 등록)</p>
+        <div className="mt-2 grid gap-2 md:grid-cols-3">
+          <select className="rounded border border-slate-300 bg-white px-2 py-1" value={watchCreateDraft.market} onChange={(e) => setWatchCreateDraft({ ...watchCreateDraft, market: e.target.value as "KR" | "US" })}><option value="KR">KR</option><option value="US">US</option></select>
+          <input className="rounded border border-slate-300 bg-white px-2 py-1" placeholder="심볼" value={watchCreateDraft.symbol} onChange={(e) => setWatchCreateDraft({ ...watchCreateDraft, symbol: e.target.value })} />
+          <input className="rounded border border-slate-300 bg-white px-2 py-1" placeholder="종목명" value={watchCreateDraft.name} onChange={(e) => setWatchCreateDraft({ ...watchCreateDraft, name: e.target.value })} />
+          <input className="rounded border border-slate-300 bg-white px-2 py-1" placeholder="섹터" value={watchCreateDraft.sector} onChange={(e) => setWatchCreateDraft({ ...watchCreateDraft, sector: e.target.value })} />
+          <input className="rounded border border-slate-300 bg-white px-2 py-1" placeholder="관심 사유" value={watchCreateDraft.interestReason} onChange={(e) => setWatchCreateDraft({ ...watchCreateDraft, interestReason: e.target.value })} />
+          <input className="rounded border border-slate-300 bg-white px-2 py-1" placeholder="관찰 포인트" value={watchCreateDraft.observationPoints} onChange={(e) => setWatchCreateDraft({ ...watchCreateDraft, observationPoints: e.target.value })} />
+          <input className="rounded border border-slate-300 bg-white px-2 py-1" placeholder="희망 매수 범위" value={watchCreateDraft.desiredBuyRange} onChange={(e) => setWatchCreateDraft({ ...watchCreateDraft, desiredBuyRange: e.target.value })} />
+          <input className="rounded border border-slate-300 bg-white px-2 py-1" placeholder="google_ticker(선택)" value={watchCreateDraft.googleTicker} onChange={(e) => setWatchCreateDraft({ ...watchCreateDraft, googleTicker: e.target.value })} />
+          <input className="rounded border border-slate-300 bg-white px-2 py-1" placeholder="quote_symbol(선택)" value={watchCreateDraft.quoteSymbol} onChange={(e) => setWatchCreateDraft({ ...watchCreateDraft, quoteSymbol: e.target.value })} />
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button type="button" className="rounded border border-violet-300 bg-violet-50 px-2 py-1 text-violet-900" onClick={() => void suggestLedgerTicker("watchlist", watchCreateDraft.market, watchCreateDraft.symbol.trim().toUpperCase())}>ticker 자동 추천</button>
+          <button type="button" className="rounded border border-blue-600 bg-blue-600 px-3 py-1 text-white disabled:opacity-50" disabled={createBusy === "watchlist"} onClick={() => void createWatchlist()}>{createBusy === "watchlist" ? "저장 중..." : "관심종목 추가"}</button>
+        </div>
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-700">
@@ -747,6 +938,14 @@ export function PortfolioLedgerClient() {
                               onClick={() => void suggestLedgerTicker("holding", row.market, row.symbol)}
                             >
                               ticker 추천
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded border border-slate-300 bg-white px-2 py-0.5"
+                              aria-expanded={eventsOpenKey === key}
+                              onClick={() => void toggleHoldingEvents(key)}
+                            >
+                              거래 이력
                             </button>
                           </div>
                         </td>
@@ -987,6 +1186,45 @@ export function PortfolioLedgerClient() {
                     {applyTradeBusy ? "저장 중…" : "반영 저장"}
                   </button>
                 </div>
+              </div>
+            ) : null}
+            {eventsOpenKey ? (
+              <div className="mt-3 rounded border border-slate-200 bg-slate-50 p-3 text-[11px]">
+                <p className="font-semibold text-slate-900">거래 이력: {eventsOpenKey}</p>
+                {eventsBusyKey === eventsOpenKey ? (
+                  <p className="mt-2 text-slate-600">불러오는 중...</p>
+                ) : (eventsByKey[eventsOpenKey]?.length ?? 0) === 0 ? (
+                  <p className="mt-2 text-slate-600">기록된 거래 이력이 없습니다.</p>
+                ) : (
+                  <div className="mt-2 overflow-auto">
+                    <table className="min-w-full">
+                      <thead>
+                        <tr className="border-b border-slate-200 text-slate-500">
+                          <th className="px-2 py-1 text-left">일자</th>
+                          <th className="px-2 py-1 text-left">유형</th>
+                          <th className="px-2 py-1 text-right">수량</th>
+                          <th className="px-2 py-1 text-right">단가</th>
+                          <th className="px-2 py-1 text-right">전 수량/평단</th>
+                          <th className="px-2 py-1 text-right">후 수량/평단</th>
+                          <th className="px-2 py-1 text-left">메모</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(eventsByKey[eventsOpenKey] ?? []).map((evt) => (
+                          <tr key={evt.id} className="border-b border-slate-100">
+                            <td className="px-2 py-1">{evt.tradeDate}</td>
+                            <td className="px-2 py-1">{evt.eventType}</td>
+                            <td className="px-2 py-1 text-right">{evt.quantity ?? "—"}</td>
+                            <td className="px-2 py-1 text-right">{evt.price ?? "—"}</td>
+                            <td className="px-2 py-1 text-right">{evt.beforeQuantity ?? "—"} / {evt.beforeAvgPrice ?? "—"}</td>
+                            <td className="px-2 py-1 text-right">{evt.afterQuantity ?? "—"} / {evt.afterAvgPrice ?? "—"}</td>
+                            <td className="px-2 py-1">{evt.reason ?? evt.memo ?? "-"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             ) : null}
           </>

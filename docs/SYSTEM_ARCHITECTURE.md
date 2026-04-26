@@ -36,7 +36,7 @@
   - 개인 콘솔용 확장 요약
   - quote provider 우선순위: Google Sheets `GOOGLEFINANCE` read-back -> Yahoo fallback -> none
   - Google Finance는 직접 API 호출이 아니라 시트 수식 결과 read-back
-  - quote/환율 실패 시 평가손익 계산을 생략(NO_DATA)하고 비중만 매입금액 기준 fallback
+  - US 종목은 USD/KRW read-back 성공 시 KRW 평가금액/비중에 포함, 환율 미조회 시 `fx_missing` 경고 + NO_DATA
   - 종목별 `thesisHealthStatus`/`thesisConfidence`를 함께 반환해 대시보드 badge로 사용
 - `/api/portfolio/alerts`
   - 목표가/손절가/손실률/비중/시세누락/thesis 약화·깨짐 룰 기반 action feed
@@ -44,13 +44,17 @@
 - `/api/portfolio/dossier/[symbol]`
   - 종목 단위 dossier(매수 이유·목표/손절·PB/위원회·저널·trend·thesis health) 조회
 - `/api/portfolio/holdings`
-  - 보유/관심 목록 조회
+  - GET: 보유/관심 목록 조회
+  - POST: SQL 없이 보유 종목 추가(중복 보유 차단, symbol normalize, ticker 기본값 자동)
 - `/api/portfolio/holdings/[id]`
   - 보유 종목 빠른 수정(PATCH) / 삭제(DELETE)
   - `google_ticker`/`quote_symbol` 수동 보정 저장
 - `/api/portfolio/holdings/apply-trade`
   - buy/sell/correct 사후 반영(주문 실행 아님)
   - sell 반영 시 실현손익 이벤트 자동 기록(손실 포함)
+  - 모든 반영 이벤트를 `web_portfolio_trade_events`에 별도 저장
+- `/api/portfolio/holdings/[id]/events`
+  - 종목별 사후 반영 이력 조회
 - `/api/portfolio/quotes/refresh`
   - 시세 시트 row/formula 동기화 요청 (지연 반영)
   - 응답에 권장 재조회 시간(약 60초) 포함
@@ -66,6 +70,8 @@
 - `/api/portfolio/ticker-resolver/apply-bulk`
   - 사용자가 승인한 항목만 일괄 저장 (부분 실패 허용, `failedItems` 반환)
   - `items[].source`: `verified_googlefinance`(기본) | `default_unverified` — 후자는 GOOGLEFINANCE 검증 전 규칙 기반 저장이며, 응답 `warnings`로 안내
+- `/api/portfolio/watchlist` (POST)
+  - SQL 없이 관심종목 추가(중복 차단, symbol normalize, ticker 기본값 자동)
 - `/api/portfolio/watchlist/[id]` (PATCH)
   - 관심종목 메타 + `google_ticker`/`quote_symbol` 수동 보정
 - 기존 투자 도구 API

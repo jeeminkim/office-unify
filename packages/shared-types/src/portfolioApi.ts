@@ -73,3 +73,48 @@ export type PortfolioSummaryEnhancedResponseBody = {
     refreshRequested?: boolean;
   };
 };
+
+export type CreateHoldingRequest = {
+  market: 'KR' | 'US';
+  symbol: string;
+  name: string;
+  quantity: number;
+  avgPrice: number;
+  sector?: string;
+  investmentMemo?: string;
+  judgmentMemo?: string;
+  targetPrice?: number;
+  stopPrice?: number;
+  googleTicker?: string;
+  quoteSymbol?: string;
+};
+
+export type CreateWatchlistRequest = {
+  market: 'KR' | 'US';
+  symbol: string;
+  name: string;
+  sector?: string;
+  interestReason?: string;
+  observationPoints?: string;
+  desiredBuyRange?: string;
+  priority?: 'low' | 'medium' | 'high';
+  googleTicker?: string;
+  quoteSymbol?: string;
+};
+
+export type PortfolioTradeEvent = {
+  id: string;
+  market: string;
+  symbol: string;
+  eventType: 'buy' | 'sell' | 'correct';
+  tradeDate: string;
+  quantity?: number;
+  price?: number;
+  beforeQuantity?: number;
+  afterQuantity?: number;
+  beforeAvgPrice?: number;
+  afterAvgPrice?: number;
+  realizedPnlKrw?: number;
+  memo?: string;
+  reason?: string;
+};

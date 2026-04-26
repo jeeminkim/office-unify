@@ -34,6 +34,20 @@ type DossierResponse = {
     note?: string;
   }>;
   trendSignals?: Array<{ title: string; summary: string; confidence?: string; createdAt?: string }>;
+  tradeEvents?: Array<{
+    id: string;
+    eventType: "buy" | "sell" | "correct";
+    tradeDate: string;
+    quantity?: number;
+    price?: number;
+    beforeQuantity?: number;
+    afterQuantity?: number;
+    beforeAvgPrice?: number;
+    afterAvgPrice?: number;
+    realizedPnlKrw?: number;
+    memo?: string;
+    reason?: string;
+  }>;
   researchSignals?: Array<{ title: string; summary: string }>;
   alerts?: Array<{ title: string; body: string; severity: string }>;
   thesisHealth?: { status: string; score?: number; confidence?: string; reasons: string[] };
@@ -143,9 +157,43 @@ export function PortfolioSymbolDetailClient({ symbolKey }: Props) {
         </div>
       </section>
 
+      <section className="mb-4 rounded border border-slate-200 bg-white p-4 text-sm">
+        <h2 className="font-semibold">7) 매수/매도 이력 (사후 반영)</h2>
+        {(data?.tradeEvents ?? []).length === 0 ? (
+          <p className="mt-2 text-slate-500">NO_DATA</p>
+        ) : (
+          <div className="mt-2 overflow-auto">
+            <table className="min-w-full text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 text-slate-500">
+                  <th className="px-2 py-1 text-left">일자</th>
+                  <th className="px-2 py-1 text-left">유형</th>
+                  <th className="px-2 py-1 text-right">수량/단가</th>
+                  <th className="px-2 py-1 text-right">전/후 수량</th>
+                  <th className="px-2 py-1 text-right">실현손익</th>
+                  <th className="px-2 py-1 text-left">메모</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(data?.tradeEvents ?? []).map((evt) => (
+                  <tr key={evt.id} className="border-b border-slate-100">
+                    <td className="px-2 py-1">{evt.tradeDate}</td>
+                    <td className="px-2 py-1">{evt.eventType}</td>
+                    <td className="px-2 py-1 text-right">{evt.quantity ?? "—"} / {evt.price == null ? "—" : fmt(evt.price)}</td>
+                    <td className="px-2 py-1 text-right">{evt.beforeQuantity ?? "—"} → {evt.afterQuantity ?? "—"}</td>
+                    <td className="px-2 py-1 text-right">{fmt(evt.realizedPnlKrw)}</td>
+                    <td className="px-2 py-1">{evt.reason ?? evt.memo ?? "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
       <section className="grid gap-3 md:grid-cols-2">
         <div className="rounded border border-slate-200 bg-white p-4 text-sm">
-          <h2 className="font-semibold">7) Thesis Health</h2>
+          <h2 className="font-semibold">8) Thesis Health</h2>
           <p className="mt-2 text-slate-700">
             status: {data?.thesisHealth?.status ?? "unknown"} · score: {data?.thesisHealth?.score ?? "NO_DATA"} · confidence: {data?.thesisHealth?.confidence ?? "low"}
           </p>
@@ -154,7 +202,7 @@ export function PortfolioSymbolDetailClient({ symbolKey }: Props) {
           </ul>
         </div>
         <div className="rounded border border-slate-200 bg-white p-4 text-sm">
-          <h2 className="font-semibold">8) Active Alerts</h2>
+          <h2 className="font-semibold">9) Active Alerts</h2>
           {(data?.alerts ?? []).length === 0 ? (
             <p className="mt-2 text-slate-500">NO_DATA</p>
           ) : (
