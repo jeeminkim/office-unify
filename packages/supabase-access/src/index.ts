@@ -22,6 +22,44 @@ export type {
   WebPortfolioWatchlistRow,
 } from './portfolioLedgerRepository';
 export {
+  DECISION_JOURNAL_OUTCOMES,
+  DECISION_JOURNAL_TYPES,
+  deleteDecisionJournalEntry,
+  getDecisionJournalEntryById,
+  insertDecisionJournalEntry,
+  listDecisionJournalEntries,
+  listDecisionJournalReviewDue,
+  updateDecisionJournalEntry,
+} from './decisionJournalRepository';
+export type {
+  DecisionJournalInsertInput,
+  DecisionJournalListFilters,
+  DecisionJournalOutcome,
+  DecisionJournalType,
+  WebDecisionJournalRow,
+} from './decisionJournalRepository';
+export {
+  bumpOpsEventByFingerprint,
+  countOpsEventsOpenError,
+  deleteOpsEvent,
+  getOpsEventById,
+  insertOpsEvent,
+  listOpsEvents,
+  OPS_EVENT_TYPES,
+  OPS_SEVERITIES,
+  OPS_STATUSES,
+  updateOpsEvent,
+} from './opsEventsRepository';
+export type {
+  OpsEventInsertRow,
+  OpsEventListFilters,
+  OpsEventPatch,
+  OpsEventStatus,
+  OpsEventType,
+  OpsSeverity,
+  WebOpsEventRow,
+} from './opsEventsRepository';
+export {
   getOrCreateWebPersonaSession,
   getPreviousKstDayAssistantHint,
   insertWebPersonaMessage,

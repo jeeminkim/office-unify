@@ -10,6 +10,7 @@ import { normalizeQuoteKey } from '@/lib/server/quoteReadbackUtils';
 import { analyzeThesisHealth } from '@/lib/server/thesisHealthAnalyzer';
 import { matchRelatedSectorsForHolding } from '@/lib/server/sectorRadarDossierMatch';
 import { buildSectorRadarSummaryForUser } from '@/lib/server/sectorRadarSummaryService';
+import { logOpsEvent } from '@/lib/server/opsEventLogger';
 
 type EnhancedPortfolioSummaryResponse = {
   ok: boolean;
@@ -346,6 +347,16 @@ export async function GET(req: Request) {
     return NextResponse.json(enhanced);
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error';
+    void logOpsEvent({
+      userKey,
+      eventType: 'error',
+      severity: 'error',
+      domain: 'portfolio',
+      route: '/api/portfolio/summary',
+      message,
+      code: 'portfolio_summary_exception',
+      detail: { errorType: e instanceof Error ? e.name : 'unknown' },
+    });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

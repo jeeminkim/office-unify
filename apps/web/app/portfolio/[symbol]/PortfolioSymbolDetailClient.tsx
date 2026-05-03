@@ -41,6 +41,17 @@ type DossierSectorRadarMatch = {
   matchReasons: string[];
 };
 
+type DecisionJournalListItem = {
+  id: string;
+  decision_date: string;
+  decision_type: string;
+  reason: string;
+  later_outcome: string | null;
+  review_due_date: string | null;
+  market: string | null;
+  symbol: string | null;
+};
+
 type DossierResponse = {
   ok: boolean;
   holding?: {
@@ -123,9 +134,25 @@ function actionHintLabel(h: string): string {
   return h;
 }
 
+function decisionJournalTypeKo(t: string): string {
+  const m: Record<string, string> = {
+    considered_buy: "매수 검토",
+    skipped_buy: "사지 않음",
+    considered_sell: "매도 검토",
+    skipped_sell: "팔지 않음",
+    considered_add: "추가매수 검토",
+    skipped_add: "추가매수 안 함",
+    hold: "관망·유지",
+    wait: "대기",
+    other: "기타",
+  };
+  return m[t] ?? t;
+}
+
 export function PortfolioSymbolDetailClient({ symbolKey }: Props) {
   const [data, setData] = useState<DossierResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [decisionJournal, setDecisionJournal] = useState<DecisionJournalListItem[]>([]);
 
   useEffect(() => {
     void (async () => {
@@ -141,6 +168,32 @@ export function PortfolioSymbolDetailClient({ symbolKey }: Props) {
     })();
   }, [symbolKey]);
 
+  const holdingKey = data?.holding?.symbol
+    ? `${String(data.holding.market ?? "").toUpperCase()}:${data.holding.symbol.toUpperCase()}`
+    : "";
+
+  useEffect(() => {
+    if (!holdingKey) {
+      setDecisionJournal([]);
+      return;
+    }
+    const colon = holdingKey.indexOf(":");
+    const market = colon >= 0 ? holdingKey.slice(0, colon) : "";
+    const symbol = colon >= 0 ? holdingKey.slice(colon + 1) : holdingKey;
+    void (async () => {
+      try {
+        const qs = new URLSearchParams({ symbol, limit: "12" });
+        if (market) qs.set("market", market);
+        const res = await fetch(`/api/decision-journal?${qs.toString()}`, { credentials: "same-origin" });
+        const json = (await res.json()) as { items?: DecisionJournalListItem[] };
+        if (res.ok && Array.isArray(json.items)) setDecisionJournal(json.items);
+        else setDecisionJournal([]);
+      } catch {
+        setDecisionJournal([]);
+      }
+    })();
+  }, [holdingKey]);
+
   return (
     <div className="mx-auto max-w-5xl p-6 text-slate-900">
       <div className="mb-4 flex items-center justify-between">
@@ -148,7 +201,14 @@ export function PortfolioSymbolDetailClient({ symbolKey }: Props) {
           <h1 className="text-2xl font-bold">종목 Dossier</h1>
           <p className="text-sm text-slate-600">왜 이 종목을 샀는지와 현재 thesis 상태를 한 번에 점검합니다.</p>
         </div>
-        <Link href="/portfolio" className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs">/portfolio로</Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/portfolio" className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs">
+            /portfolio로
+          </Link>
+          <Link href="/decision-journal" className="rounded border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-950">
+            비거래 의사결정 일지
+          </Link>
+        </div>
       </div>
 
       {error ? <div className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div> : null}
@@ -299,6 +359,36 @@ export function PortfolioSymbolDetailClient({ symbolKey }: Props) {
             {(data?.trendSignals ?? []).length === 0 ? <li className="text-slate-500">NO_DATA</li> : null}
           </ul>
         </div>
+      </section>
+
+      <section className="mb-4 rounded border border-emerald-200 bg-emerald-50/50 p-4 text-sm">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <h2 className="font-semibold text-emerald-950">비거래 의사결정 일지 (Decision Journal)</h2>
+          {data?.holding ? (
+            <Link
+              href={`/decision-journal?market=${encodeURIComponent(data.holding.market)}&symbol=${encodeURIComponent(data.holding.symbol)}&name=${encodeURIComponent(data.holding.name ?? "")}`}
+              className="text-xs text-emerald-900 underline underline-offset-2"
+            >
+              새 기록
+            </Link>
+          ) : null}
+        </div>
+        <p className="mt-1 text-xs text-emerald-900/90">실제 주문이 아니라, 사지 않음·팔지 않음·관망 등의 판단만 기록합니다.</p>
+        {decisionJournal.length === 0 ? (
+          <p className="mt-2 text-xs text-slate-600">이 종목에 대한 비거래 기록이 없습니다.</p>
+        ) : (
+          <ul className="mt-2 space-y-2 text-xs">
+            {decisionJournal.map((e) => (
+              <li key={e.id} className="rounded border border-emerald-100 bg-white p-2 text-slate-800">
+                <p className="font-medium text-slate-900">
+                  {e.decision_date} · {decisionJournalTypeKo(e.decision_type)} · 결과: {e.later_outcome ?? "—"}
+                </p>
+                <p className="mt-1 text-slate-700">{e.reason}</p>
+                {e.review_due_date ? <p className="mt-1 text-[10px] text-slate-500">복기 예정: {e.review_due_date}</p> : null}
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="mb-4 rounded border border-slate-200 bg-white p-4 text-sm">

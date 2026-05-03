@@ -14,6 +14,7 @@ import {
   listWebPortfolioHoldingsForUser,
   listWebPortfolioWatchlistForUser,
 } from '@office-unify/supabase-access';
+import { logOpsEvent } from '@/lib/server/opsEventLogger';
 
 type RefreshBody = {
   targetType?: 'holding' | 'watchlist' | 'all';
@@ -202,6 +203,15 @@ export async function POST(req: Request) {
     });
   } catch (e: unknown) {
     const normalized = normalizeSheetsApiError(e);
+    void logOpsEvent({
+      userKey: auth.userKey,
+      eventType: 'error',
+      severity: 'warn',
+      domain: 'ticker_resolver',
+      route: '/api/portfolio/ticker-resolver/refresh',
+      message: normalized.message || 'ticker resolver refresh failed',
+      code: normalized.code,
+    });
     const actionHint =
       normalized.code === 'sheet_tab_missing_or_invalid_range'
         ? 'portfolio_quote_candidates 탭을 찾지 못했거나 range 생성에 실패했습니다. 자동 생성 후 다시 시도하세요.'

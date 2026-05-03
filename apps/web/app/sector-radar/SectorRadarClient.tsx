@@ -10,9 +10,11 @@ import type {
   SectorWatchlistCandidateItem,
   SectorWatchlistCandidateResponse,
 } from "@/lib/sectorRadarContract";
+import { OpsFeedbackButton } from "@/components/OpsFeedbackButton";
 import {
-  formatSectorRadarWarningDetail,
-  formatSectorRadarWarningShort,
+  getVisibleSectorRadarWarningDetailsForSector,
+  getVisibleSectorRadarWarningsForSector,
+  getVisibleSectorRadarWarningsForSummary,
 } from "@/lib/sectorRadarWarningMessages";
 
 const jsonHeaders: HeadersInit = { "Content-Type": "application/json" };
@@ -169,9 +171,12 @@ export function SectorRadarClient() {
             <strong>자동 매매·주문 실행 없음</strong>. 판단 보조이며 실제 체결은 외부에서 하세요.
           </p>
         </div>
-        <Link href="/" className="text-sm text-slate-500 underline underline-offset-4 hover:text-slate-800">
-          ← 홈
-        </Link>
+        <div className="flex flex-col items-end gap-1">
+          <Link href="/" className="text-sm text-slate-500 underline underline-offset-4 hover:text-slate-800">
+            ← 홈
+          </Link>
+          <OpsFeedbackButton domain="sector_radar" />
+        </div>
       </div>
 
       <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950">
@@ -227,6 +232,9 @@ export function SectorRadarClient() {
         <Link href="/portfolio" className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm text-slate-800">
           포트폴리오와 연결 보기
         </Link>
+        <Link href="/decision-journal" className="rounded-md border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm text-emerald-950">
+          비거래 의사결정 일지
+        </Link>
         {process.env.NODE_ENV === "development" ? (
           <button
             type="button"
@@ -245,7 +253,7 @@ export function SectorRadarClient() {
       {summary?.degraded ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
           일부 데이터가 비어 있거나 Sheets 설정이 없어 <strong>degraded</strong> 모드입니다.{" "}
-          {(summary.displayWarnings ?? (summary.warnings ?? []).map((w) => formatSectorRadarWarningShort(w))).join(" · ") ||
+          {getVisibleSectorRadarWarningsForSummary(summary).join(" · ") ||
             "자세한 내용은 아래 섹터 카드의 안내를 참고하세요."}
         </div>
       ) : null}
@@ -302,11 +310,10 @@ export function SectorRadarClient() {
                   </ul>
                 )}
               </div>
-              {(s.displayWarnings?.length ?? s.warnings?.length ?? 0) > 0 ? (
+              {getVisibleSectorRadarWarningsForSector(s).length > 0 ? (
                 <ul className="mt-2 list-inside list-disc space-y-0.5 text-[11px] text-amber-800">
-                  {(s.displayWarnings ?? (s.warnings ?? []).map((w) => formatSectorRadarWarningShort(w))).map((line, wi) => {
-                    const details =
-                      s.displayWarningDetails ?? (s.warnings ?? []).map((w) => formatSectorRadarWarningDetail(w));
+                  {getVisibleSectorRadarWarningsForSector(s).map((line, wi) => {
+                    const details = getVisibleSectorRadarWarningDetailsForSector(s);
                     const tip = details[wi] ?? line;
                     return (
                       <li key={`${s.key}-warn-${wi}`} title={tip}>
@@ -316,6 +323,20 @@ export function SectorRadarClient() {
                   })}
                 </ul>
               ) : null}
+              <div className="mt-2 flex flex-wrap gap-1 text-[10px]">
+                <Link
+                  href={`/decision-journal?type=hold&sectorZone=${encodeURIComponent(s.zone)}&sectorScore=${s.score != null ? String(Math.round(s.score)) : ""}&sectorKey=${encodeURIComponent(s.key)}&sectorName=${encodeURIComponent(s.name)}`}
+                  className="rounded border border-emerald-200 bg-white px-2 py-0.5 text-emerald-900 underline-offset-2 hover:underline"
+                >
+                  관망 이유 기록
+                </Link>
+                <Link
+                  href={`/decision-journal?type=wait&sectorZone=${encodeURIComponent(s.zone)}&sectorScore=${s.score != null ? String(Math.round(s.score)) : ""}&sectorKey=${encodeURIComponent(s.key)}`}
+                  className="rounded border border-slate-200 bg-white px-2 py-0.5 text-slate-800 underline-offset-2 hover:underline"
+                >
+                  조정 대기 기록
+                </Link>
+              </div>
               {showSectorRadarRawWarnings && (s.warnings ?? []).length > 0 ? (
                 <pre className="mt-1 max-h-24 overflow-auto rounded bg-slate-900/90 p-2 font-mono text-[9px] text-slate-100">
                   {(s.warnings ?? []).join("\n")}
@@ -345,6 +366,7 @@ export function SectorRadarClient() {
                   <th className="px-2 py-1">점수</th>
                   <th className="px-2 py-1">라벨</th>
                   <th className="px-2 py-1">신뢰도</th>
+                  <th className="px-2 py-1">기록</th>
                 </tr>
               </thead>
               <tbody>
@@ -358,6 +380,14 @@ export function SectorRadarClient() {
                     <td className="px-2 py-1">{c.readinessScore}</td>
                     <td className="px-2 py-1">{readinessShort(c.readinessLabel)}</td>
                     <td className="px-2 py-1">{c.confidence}</td>
+                    <td className="px-2 py-1 whitespace-nowrap">
+                      <Link
+                        href={`/decision-journal?market=${encodeURIComponent(c.market)}&symbol=${encodeURIComponent(c.symbol)}&name=${encodeURIComponent(c.name)}&type=hold&sectorZone=${encodeURIComponent(c.sectorZone)}&sectorScore=${c.sectorScore != null ? String(Math.round(c.sectorScore)) : ""}`}
+                        className="text-violet-900 underline underline-offset-2"
+                      >
+                        관망
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>

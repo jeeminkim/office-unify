@@ -5,6 +5,7 @@ import type { PersonaChatMessageDto, PersonaChatSessionInitResponseBody } from "
 import { PERSONA_CHAT_USER_MESSAGE_MAX_CHARS } from "@office-unify/shared-types";
 import Link from "next/link";
 import { PersonaAssistantFeedbackRow } from "@/components/PersonaAssistantFeedbackRow";
+import { OpsFeedbackButton } from "@/components/OpsFeedbackButton";
 
 const jsonHeaders: HeadersInit = {
   "Content-Type": "application/json",
@@ -147,9 +148,12 @@ export function PrivateBankerClient() {
           <h1 className="text-xl font-bold tracking-tight text-slate-800">Private Banker</h1>
           <p className="text-sm text-slate-500">내부 페르소나: J. Pierpont · OpenAI · 행동 분류·체크리스트 중심</p>
         </div>
-        <Link href="/" className="text-sm text-slate-500 underline underline-offset-4 hover:text-slate-800">
-          ← dev_support 홈
-        </Link>
+        <div className="flex flex-col items-end gap-1">
+          <Link href="/" className="text-sm text-slate-500 underline underline-offset-4 hover:text-slate-800">
+            ← dev_support 홈
+          </Link>
+          <OpsFeedbackButton domain="private_banker" component="PrivateBankerClient" />
+        </div>
       </div>
       <p className="text-sm text-slate-500">
         종목 추천기가 아니라 구조화된 투자 판단 보조입니다. 매수 4유형·체크리스트·원장 규칙은 서버 시스템 프롬프트에 반영되어 있습니다. 장기 기억은 각 답변 아래 평가로만 갱신됩니다.

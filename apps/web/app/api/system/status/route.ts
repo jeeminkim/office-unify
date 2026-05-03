@@ -4,6 +4,7 @@ import { getServiceSupabase } from '@/lib/server/supabase-service';
 import { ALLOWED_PERSONA_CHAT_EMAIL } from '@/lib/server/allowed-user';
 import { PORTFOLIO_READ_SECRET_ENV } from '@/lib/server/portfolio-read-guard';
 import { getSheetsAccessToken, getSpreadsheetSheets } from '@/lib/server/google-sheets-api';
+import { logOpsEvent } from '@/lib/server/opsEventLogger';
 
 type SectionStatus = 'ok' | 'warn' | 'error' | 'not_configured';
 
@@ -230,6 +231,19 @@ export async function GET() {
   });
 
   const hasError = sections.some((s) => s.status === 'error');
+  if (hasError) {
+    const errKeys = sections.filter((s) => s.status === 'error').map((s) => s.key);
+    void logOpsEvent({
+      userKey: auth.userKey,
+      eventType: 'degraded',
+      severity: 'warn',
+      domain: 'system',
+      route: '/api/system/status',
+      message: `System status: ${errKeys.length} section(s) in error`,
+      code: 'system_status_has_errors',
+      detail: { errorSectionKeys: errKeys },
+    });
+  }
   const body: SystemStatusResponse = {
     ok: !hasError,
     generatedAt: new Date().toISOString(),

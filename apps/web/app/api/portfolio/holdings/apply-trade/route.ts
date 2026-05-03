@@ -12,6 +12,7 @@ import {
   upsertPortfolioHolding,
   upsertPortfolioWatchlist,
 } from '@office-unify/supabase-access';
+import { logOpsEvent } from '@/lib/server/opsEventLogger';
 
 type ApplyTradeRequest = {
   symbol: string;
@@ -316,6 +317,17 @@ export async function POST(req: Request) {
     });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error';
+    void logOpsEvent({
+      userKey: auth.userKey,
+      eventType: 'error',
+      severity: 'error',
+      domain: 'portfolio',
+      route: '/api/portfolio/holdings/apply-trade',
+      message,
+      code: 'apply_trade_failed',
+      symbol: `${market}:${symbol}`,
+      detail: { action: body.action },
+    });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

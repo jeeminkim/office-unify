@@ -24,6 +24,9 @@
   - **KR ETF + US 티커(코인/디지털자산 등)** anchor seed + 관심종목(`web_portfolio_watchlist`, KR·US) sector/메모 키워드 **custom anchor** 병합
   - `sector_radar_quotes` 시트(2차: `market`·`normalized_key`·`volume_avg` 등 A–U)에 `GOOGLEFINANCE` 수식 주입 후 read-back → 섹터별 점수/구간(zone)/판단 보조 문구
   - **자동 매매·주문 실행 없음** — 점수·문구는 참고용
+  - 섹터 카드·요약의 경고는 `displayWarnings` 또는 `getVisibleSectorRadarWarnings*`로 **한국어만** 노출(내부 snake_case는 개발용 raw 토글에서만)
+- `/decision-journal` : 비거래 의사결정 일지 — **실제 주문이 아니라** 사지 않음·팔지 않음·관망·대기 등의 판단을 기록. Trade Journal(실행 거래)과 구분.
+- `/ops-events` : 운영 로그·개선 포인트 — `web_ops_events` 조회·상태 변경·메모. 시스템 오류/경고와 사용자 **개선 메모**를 같은 테이블에서 backlog로 관리(자동 수정 없음).
 
 ## 서버 API 계층
 
@@ -52,6 +55,14 @@
 - `/api/portfolio/dossier/[symbol]`
   - 종목 단위 dossier(매수 이유·목표/손절·PB/위원회·저널·trend·thesis health) 조회
   - `buildSectorRadarSummaryForUser`로 섹터 레이더와 동일 스냅샷을 붙여 **관련 섹터 온도**(`relatedSectorRadar` 목록 + 단일 픽 `relatedSector`: score/zone/narrativeHint/anchors, confidence low|medium|high, matchReasons)를 판단 보조로 반환
+  - 응답의 `sectorRadarWarnings`·시세와 병합되는 `warnings`는 사용자에게 보일 때 **한국어 경고 문구**로 정규화(내부 코드 직접 노출 없음)
+- `/api/decision-journal` (GET 목록 / POST 생성)
+- `/api/decision-journal/[id]` (PATCH / DELETE)
+- `/api/decision-journal/review-due` (복기일 도래·`later_outcome=pending` 목록)
+- `/api/ops/events` (GET 목록·POST 사용자 개선/피드백; `detail` 서버에서 마스킹)
+- `/api/ops/events/[id]` (PATCH 상태·메모 / DELETE)
+- `/api/ops/summary` (열린 심각 오류 건수 등 요약)
+- 서버 `logOpsEvent` : portfolio quotes·ticker resolver·sector radar·trade/decision journal·system status 등에서 **실패 시에만** best-effort 기록(throw 없음, `fingerprint`로 중복 병합)
 - `/api/portfolio/holdings`
   - GET: 보유/관심 목록 조회
   - POST: SQL 없이 보유 종목 추가(중복 보유 차단, symbol normalize, ticker 기본값 자동)
@@ -111,6 +122,15 @@
   - 시트 read-back 진단(anchor별 rowStatus, 선택 필드 `market`·`parsedVolumeAvg` 등)
 - `/api/sector-radar/watchlist-candidates`
   - `web_portfolio_watchlist` + Sector Radar 요약을 결합해 **관찰 우선순위 큐**(`readinessScore`/`readinessLabel`/`confidence`/`reasons`)를 반환. **매수 추천·자동 주문 없음**
+
+## Private Banker — Decision Journal 연동(후속 예정)
+
+현재 단계에서는 PB가 비거래 일지를 자동 분석하지 않는다. 아래는 API·스키마가 뒷받침할 수 있는 **후보 질문**이다.
+
+- 사지 않은 종목이 이후 상승했을 때, 기록된 이유가 합리적이었는지
+- 팔지 않은 판단이 손실 회피인지 thesis 유지인지
+- 공포 구간에서 반복적으로 매수를 미루는 패턴, 과열 구간에서 보유만 늘리는 패턴
+- Sector Radar·Thesis·Trade Journal·Decision Journal을 같은 `symbol`/`user_key`로 조인한 회고
 
 ## 출력 형식 검증
 

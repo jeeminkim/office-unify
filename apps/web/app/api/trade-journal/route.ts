@@ -11,6 +11,7 @@ import {
   listTradeJournalEntries,
   listWebPortfolioHoldingsForUser,
 } from '@office-unify/supabase-access';
+import { logOpsEvent } from '@/lib/server/opsEventLogger';
 
 function parseLimit(raw: string | null): number {
   const num = Number(raw ?? '50');
@@ -29,7 +30,17 @@ export async function GET(req: Request) {
     const items = await listTradeJournalEntries(supabase, auth.userKey, parseLimit(url.searchParams.get('limit')));
     return NextResponse.json({ items, total: items.length, warnings: [] });
   } catch (error: unknown) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'unknown error' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'unknown error';
+    void logOpsEvent({
+      userKey: auth.userKey,
+      eventType: 'error',
+      severity: 'error',
+      domain: 'trade_journal',
+      route: '/api/trade-journal',
+      message,
+      code: 'trade_journal_list_failed',
+    });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -93,7 +104,17 @@ export async function POST(req: Request) {
       warnings: parsed.warnings,
     });
   } catch (error: unknown) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'unknown error' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'unknown error';
+    void logOpsEvent({
+      userKey: auth.userKey,
+      eventType: 'error',
+      severity: 'error',
+      domain: 'trade_journal',
+      route: '/api/trade-journal',
+      message,
+      code: 'trade_journal_create_failed',
+    });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 

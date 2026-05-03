@@ -10,6 +10,7 @@ import {
   PORTFOLIO_QUOTES_FX_PRICE_RESULT_FORMULA_EXPECTED,
   readGoogleFinanceQuoteSheetRows,
 } from '@/lib/server/googleFinanceSheetQuoteService';
+import { logOpsEvent } from '@/lib/server/opsEventLogger';
 
 export async function GET() {
   const auth = await requirePersonaChatAuth();
@@ -162,6 +163,16 @@ export async function GET() {
     });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error';
+    void logOpsEvent({
+      userKey: auth.userKey,
+      eventType: 'error',
+      severity: 'error',
+      domain: 'portfolio_quotes',
+      route: '/api/portfolio/quotes/status',
+      message,
+      code: 'quotes_status_exception',
+      detail: { errorType: e instanceof Error ? e.name : 'unknown' },
+    });
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }

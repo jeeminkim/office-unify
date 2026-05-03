@@ -5,6 +5,7 @@ import { listWebPortfolioWatchlistForUser } from '@office-unify/supabase-access'
 import { normalizeSheetsApiError } from '@/lib/server/google-sheets-api';
 import { buildMergedSectorRadarAnchors, SECTOR_RADAR_SHEET_NAME } from '@/lib/server/sectorRadarRegistry';
 import { isSectorRadarSheetsConfigured, syncSectorRadarQuoteSheetRows } from '@/lib/server/sectorRadarSheetService';
+import { logOpsEvent } from '@/lib/server/opsEventLogger';
 
 export async function POST() {
   const auth = await requirePersonaChatAuth();
@@ -36,6 +37,16 @@ export async function POST() {
     });
   } catch (e: unknown) {
     const normalized = normalizeSheetsApiError(e);
+    void logOpsEvent({
+      userKey: auth.userKey,
+      eventType: 'error',
+      severity: 'warn',
+      domain: 'sector_radar',
+      route: '/api/sector-radar/refresh',
+      message: normalized.message || 'sector radar sheet refresh failed',
+      code: normalized.code,
+      detail: { sheetName: SECTOR_RADAR_SHEET_NAME },
+    });
     return NextResponse.json(
       {
         ok: false,

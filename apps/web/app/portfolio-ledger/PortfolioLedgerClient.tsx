@@ -8,6 +8,7 @@ import type {
   PortfolioLedgerValidateResponseBody,
 } from "@office-unify/shared-types";
 import type { SectorWatchlistCandidateItem } from "@/lib/sectorRadarContract";
+import { OpsFeedbackButton } from "@/components/OpsFeedbackButton";
 
 const jsonHeaders: HeadersInit = { "Content-Type": "application/json" };
 
@@ -1146,6 +1147,7 @@ export function PortfolioLedgerClient() {
             INSERT / DELETE 만 허용. <strong className="text-slate-700">정합성 검사</strong> 통과 후{" "}
             <strong className="text-slate-700">원장 반영</strong>을 누르세요. user_key는 서버가 세션으로 채웁니다.
           </p>
+          <OpsFeedbackButton domain="portfolio" component="PortfolioLedgerClient" className="mt-2" />
         </div>
         <Link href="/" className="text-sm text-slate-500 underline underline-offset-4 hover:text-slate-800">
           ← 홈

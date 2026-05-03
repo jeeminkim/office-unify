@@ -6,6 +6,7 @@ import {
   listWebPortfolioWatchlistForUser,
   upsertPortfolioHolding,
 } from '@office-unify/supabase-access';
+import { logOpsEvent } from '@/lib/server/opsEventLogger';
 
 export async function GET() {
   const auth = await requirePersonaChatAuth();
@@ -128,6 +129,16 @@ export async function POST(req: Request) {
     });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Unknown error';
+    void logOpsEvent({
+      userKey: auth.userKey,
+      eventType: 'error',
+      severity: 'error',
+      domain: 'portfolio',
+      route: '/api/portfolio/holdings',
+      message,
+      code: 'portfolio_holding_create_failed',
+      symbol: `${market}:${symbol}`,
+    });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -15,7 +15,10 @@ export function looksLikeSectorRadarWarningCode(s: string): boolean {
 
 /** 카드 하단 등 짧은 문구 */
 export function formatSectorRadarWarningShort(code: string): string {
-  switch (code) {
+  const t = code.trim();
+  if (!t) return "";
+  const key = looksLikeSectorRadarWarningCode(t) ? t.toLowerCase() : t;
+  switch (key) {
     case "volume_avg_unavailable_neutral_volume_score":
       return "거래량 평균 부족 → 거래량 점수 중립 반영";
     case "price_unavailable":
@@ -75,16 +78,19 @@ export function formatSectorRadarWarningShort(code: string): string {
       return "PB 데이터 생략";
     case "financial_goals_no_data":
       return "재무 목표 없음";
+    case "sector_radar_dossier_attach_failed":
+      return "섹터 레이더 요약을 불러오지 못함";
     default:
-      return looksLikeSectorRadarWarningCode(code)
-        ? "일부 데이터 부족 → 점수 보수적 반영"
-        : code;
+      return looksLikeSectorRadarWarningCode(t) ? "일부 데이터 부족 → 점수 보수적 반영" : t;
   }
 }
 
 /** tooltip·상세용 긴 문구 */
 export function formatSectorRadarWarningDetail(code: string): string {
-  switch (code) {
+  const t = code.trim();
+  if (!t) return "";
+  const key = looksLikeSectorRadarWarningCode(t) ? t.toLowerCase() : t;
+  switch (key) {
     case "volume_avg_unavailable_neutral_volume_score":
       return "최근 평균 거래량을 안정적으로 계산하지 못해 거래량 점수는 중립값으로 반영했습니다.";
     case "price_unavailable":
@@ -144,10 +150,10 @@ export function formatSectorRadarWarningDetail(code: string): string {
       return "PB(프라이뱅커) 데이터를 불러오지 못했습니다.";
     case "financial_goals_no_data":
       return "등록된 재무 목표가 없습니다.";
+    case "sector_radar_dossier_attach_failed":
+      return "도사(dossier)에 섹터 레이더 요약을 붙이는 중 오류가 났습니다.";
     default:
-      return looksLikeSectorRadarWarningCode(code)
-        ? "일부 데이터가 부족해 점수는 보수적으로 계산했습니다."
-        : code;
+      return looksLikeSectorRadarWarningCode(t) ? "일부 데이터가 부족해 점수는 보수적으로 계산했습니다." : t;
   }
 }
 
@@ -194,4 +200,41 @@ export function attachSectorRadarDisplayFields(body: SectorRadarSummaryResponse)
     displayWarnings: topPairs.map((p) => p.short),
     displayWarningDetails: topPairs.map((p) => p.detail),
   };
+}
+
+/** 운영 UI용: raw snake_case가 섞여 있어도 한국어로만 반환 */
+export function getVisibleSectorRadarWarningsForSector(sector: SectorRadarSummarySector): string[] {
+  const base = sector.displayWarnings?.length
+    ? sector.displayWarnings
+    : (sector.warnings ?? []).map((w) => formatSectorRadarWarningShort(w));
+  return base.map((line) => (looksLikeSectorRadarWarningCode(line) ? formatSectorRadarWarningShort(line) : line));
+}
+
+export function getVisibleSectorRadarWarningDetailsForSector(sector: SectorRadarSummarySector): string[] {
+  const shorts = getVisibleSectorRadarWarningsForSector(sector);
+  if (
+    sector.displayWarningDetails?.length === shorts.length &&
+    sector.displayWarnings?.length === shorts.length
+  ) {
+    return sector.displayWarningDetails;
+  }
+  return (sector.warnings ?? []).map((w) => formatSectorRadarWarningDetail(w));
+}
+
+export function getVisibleSectorRadarWarningsForSummary(summary: SectorRadarSummaryResponse): string[] {
+  const base = summary.displayWarnings?.length
+    ? summary.displayWarnings
+    : (summary.warnings ?? []).map((w) => formatSectorRadarWarningShort(w));
+  return base.map((line) => (looksLikeSectorRadarWarningCode(line) ? formatSectorRadarWarningShort(line) : line));
+}
+
+export function getVisibleSectorRadarWarningDetailsForSummary(summary: SectorRadarSummaryResponse): string[] {
+  const shorts = getVisibleSectorRadarWarningsForSummary(summary);
+  if (
+    summary.displayWarningDetails?.length === shorts.length &&
+    summary.displayWarnings?.length === shorts.length
+  ) {
+    return summary.displayWarningDetails;
+  }
+  return (summary.warnings ?? []).map((w) => formatSectorRadarWarningDetail(w));
 }

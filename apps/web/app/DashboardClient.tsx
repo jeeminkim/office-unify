@@ -7,7 +7,12 @@ import type {
   SectorRadarSummarySector,
   SectorWatchlistCandidateResponse,
 } from "@/lib/sectorRadarContract";
-import { formatSectorRadarWarningDetail, formatSectorRadarWarningShort } from "@/lib/sectorRadarWarningMessages";
+import {
+  formatSectorRadarWarningDetail,
+  formatSectorRadarWarningShort,
+  getVisibleSectorRadarWarningDetailsForSummary,
+  getVisibleSectorRadarWarningsForSummary,
+} from "@/lib/sectorRadarWarningMessages";
 
 type StatusSection = {
   key: string;
@@ -143,6 +148,8 @@ export function DashboardClient() {
   const [portfolioAlerts, setPortfolioAlerts] = useState<Array<{ id: string; symbol: string; title: string; body: string; severity: string }>>([]);
   const [sectorRadar, setSectorRadar] = useState<SectorRadarSummaryResponse | null>(null);
   const [watchQueue, setWatchQueue] = useState<SectorWatchlistCandidateResponse | null>(null);
+  const [decisionReviewDueCount, setDecisionReviewDueCount] = useState<number | null>(null);
+  const [opsOpenErrorCount, setOpsOpenErrorCount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloading, setReloading] = useState(false);
 
@@ -185,19 +192,29 @@ export function DashboardClient() {
       setPortfolioAlerts(alertsJson.alerts ?? []);
       setError(null);
       try {
-        const [sectorRes, watchRes] = await Promise.all([
+        const [sectorRes, watchRes, djRes, opsSumRes] = await Promise.all([
           fetch("/api/sector-radar/summary", { credentials: "same-origin" }),
           fetch("/api/sector-radar/watchlist-candidates", { credentials: "same-origin" }),
+          fetch("/api/decision-journal/review-due", { credentials: "same-origin" }),
+          fetch("/api/ops/summary", { credentials: "same-origin" }),
         ]);
         const sectorJson = (await sectorRes.json()) as SectorRadarSummaryResponse;
         const watchJson = (await watchRes.json()) as SectorWatchlistCandidateResponse;
+        const djJson = (await djRes.json()) as { count?: number; items?: unknown[] };
+        const opsSumJson = (await opsSumRes.json()) as { openErrorCount?: number };
         if (Array.isArray(sectorJson?.sectors)) setSectorRadar(sectorJson);
         else setSectorRadar(null);
         if (watchRes.ok && Array.isArray(watchJson?.candidates)) setWatchQueue(watchJson);
         else setWatchQueue(null);
+        if (djRes.ok && typeof djJson.count === "number") setDecisionReviewDueCount(djJson.count);
+        else setDecisionReviewDueCount(null);
+        if (opsSumRes.ok && typeof opsSumJson.openErrorCount === "number") setOpsOpenErrorCount(opsSumJson.openErrorCount);
+        else setOpsOpenErrorCount(null);
       } catch {
         setSectorRadar(null);
         setWatchQueue(null);
+        setDecisionReviewDueCount(null);
+        setOpsOpenErrorCount(null);
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "대시보드 로드 실패");
@@ -247,7 +264,13 @@ export function DashboardClient() {
           <Link href="/sector-radar" className="rounded border border-slate-300 bg-white px-3 py-1.5">Sector Radar</Link>
           <Link href="/realized-pnl" className="rounded border border-slate-300 bg-white px-3 py-1.5">Realized PnL</Link>
           <Link href="/financial-goals" className="rounded border border-slate-300 bg-white px-3 py-1.5">Financial Goals</Link>
+          <Link href="/decision-journal" className="rounded border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-emerald-950">
+            Decision Journal
+          </Link>
           <Link href="/trade-journal" className="rounded border border-slate-300 bg-white px-3 py-1.5">Trade Journal</Link>
+          <Link href="/ops-events" className="rounded border border-amber-200 bg-amber-50 px-3 py-1.5 text-amber-950">
+            운영 로그{opsOpenErrorCount != null && opsOpenErrorCount > 0 ? ` (${opsOpenErrorCount})` : ""}
+          </Link>
         </div>
       </div>
 
@@ -276,7 +299,12 @@ export function DashboardClient() {
       <section className="mb-5 rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-800">시스템 상태</h2>
-          <Link href="/system-status" className="text-xs text-slate-500 underline underline-offset-4">상세 보기</Link>
+          <div className="flex flex-wrap gap-2 text-xs">
+            <Link href="/system-status" className="text-slate-500 underline underline-offset-4">상세 보기</Link>
+            <Link href="/ops-events" className="text-amber-800 underline underline-offset-4">
+              운영 로그{opsOpenErrorCount != null && opsOpenErrorCount > 0 ? ` · 열린 오류 ${opsOpenErrorCount}` : ""}
+            </Link>
+          </div>
         </div>
         <p className="mt-1 text-xs text-slate-600">
           error {statusSummary.errors} · warn {statusSummary.warns} · not_configured {statusSummary.notConfigured}
@@ -397,23 +425,31 @@ export function DashboardClient() {
         </section>
       ) : null}
 
-      {sectorRadar && (sectorRadar.displayWarnings?.length ?? sectorRadar.warnings?.length ?? 0) > 0 ? (
+      {sectorRadar && getVisibleSectorRadarWarningsForSummary(sectorRadar).length > 0 ? (
         <section className="mb-5 rounded-xl border border-amber-100 bg-amber-50/90 px-3 py-2 text-[11px] text-amber-950">
           <p className="font-semibold text-amber-950">섹터 레이더 데이터 안내</p>
           <ul className="mt-1 list-inside list-disc space-y-0.5">
-            {(sectorRadar.displayWarnings ?? (sectorRadar.warnings ?? []).map((w) => formatSectorRadarWarningShort(w))).map(
-              (line, i) => {
-                const details =
-                  sectorRadar.displayWarningDetails ??
-                  (sectorRadar.warnings ?? []).map((w) => formatSectorRadarWarningDetail(w));
-                return (
-                  <li key={`srw-${i}`} title={details[i] ?? line}>
-                    {line}
-                  </li>
-                );
-              },
-            )}
+            {getVisibleSectorRadarWarningsForSummary(sectorRadar).map((line, i) => {
+              const details = getVisibleSectorRadarWarningDetailsForSummary(sectorRadar);
+              return (
+                <li key={`srw-${i}`} title={details[i] ?? line}>
+                  {line}
+                </li>
+              );
+            })}
           </ul>
+        </section>
+      ) : null}
+
+      {decisionReviewDueCount != null && decisionReviewDueCount > 0 ? (
+        <section className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50/80 px-3 py-2 text-xs text-emerald-950">
+          <p>
+            복기할 판단 <strong>{decisionReviewDueCount}</strong>건이 있습니다.{" "}
+            <Link href="/decision-journal?tab=review" className="font-medium underline underline-offset-2">
+              비거래 의사결정 일지
+            </Link>
+            에서 확인하세요.
+          </p>
         </section>
       ) : null}
 

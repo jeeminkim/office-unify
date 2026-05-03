@@ -53,7 +53,7 @@ export type SectorRadarSummarySector = {
   };
   /** 서버 내부 경고 코드(snake_case 등). UI 기본 노출 금지 — displayWarnings 사용. */
   warnings: string[];
-  /** 사용자용 짧은 문구(카드 하단 등). 없으면 클라이언트에서 warnings를 변환. */
+  /** 사용자용 짧은 문구(카드 하단 등). 없거나 raw가 섞이면 `getVisibleSectorRadarWarningsForSector`가 `warnings`를 변환해 사용. */
   displayWarnings?: string[];
   /** tooltip·상세용 긴 문구(displayWarnings와 동일 순서). */
   displayWarningDetails?: string[];

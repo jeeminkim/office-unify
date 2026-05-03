@@ -28,6 +28,32 @@
 | `docs/sql/append_web_realized_pnl_and_goals.sql` | 실현손익 이벤트 + 목표 자금 + 목표 배분 |
 | `docs/sql/append_web_portfolio_quote_overrides.sql` | 보유 종목 quote ticker 수동 override 컬럼 |
 | `docs/sql/append_web_portfolio_watchlist_quote_overrides.sql` | 관심종목 quote ticker 수동 override 컬럼 |
+| `docs/sql/append_web_decision_journal.sql` | 비거래 의사결정 일지 `web_decision_journal_entries` (실행하지 않은 판단 로그; Trade Journal과 구분) |
+| `docs/sql/append_web_ops_events.sql` | 운영 관측 로그 `web_ops_events` (오류·경고·개선 메모; secret 저장 금지; fingerprint 중복 시 occurrence 증분) |
+
+## Ops Events (운영 로그)
+
+**파일:** `docs/sql/append_web_ops_events.sql`
+
+| 테이블 | 역할 |
+|--------|------|
+| `web_ops_events` | `event_type` / `severity` / `domain` / `message` / `code` / `status` / `detail`(jsonb) / `fingerprint` — Vercel·브라우저에서 사라지는 진단 정보와 사용자 개선 메모를 누적 |
+
+**인덱스:** `user_key + last_seen_at`, `domain + last_seen_at`, `severity + status`, partial unique `fingerprint` (null 제외)
+
+**원칙:** 기능을 대체하지 않으며, 로깅 실패는 앱 동작에 영향 없음. 민감정보는 저장하지 않는다.
+
+## Decision Journal (비거래 의사결정 일지)
+
+**파일:** `docs/sql/append_web_decision_journal.sql`
+
+| 테이블 | 역할 |
+|--------|------|
+| `web_decision_journal_entries` | 사용자별 비거래 판단(considered_buy / skipped_buy / skipped_sell / hold / wait 등), 복기일·사후 평가(`later_outcome`)·선택적 Trade Journal/보유 키 링크 |
+
+**인덱스:** `user_key + decision_date desc`, `user_key + market + symbol`, `user_key + review_due_date`
+
+**원칙:** 이 테이블은 **주문·체결 기록이 아니다**. 실행한 거래는 Trade Journal·원장 이벤트로 남긴다.
 
 ## Sector Radar (섹터 온도계)
 

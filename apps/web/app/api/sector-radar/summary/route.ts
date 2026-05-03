@@ -6,12 +6,22 @@ import { scoreSectorFromAnchors } from '@/lib/server/sectorRadarScoring';
 import { buildSectorRadarSummaryForUser } from '@/lib/server/sectorRadarSummaryService';
 import { attachSectorRadarDisplayFields } from '@/lib/sectorRadarWarningMessages';
 import type { SectorRadarSummaryResponse } from '@/lib/sectorRadarContract';
+import { logOpsEvent } from '@/lib/server/opsEventLogger';
 
 export async function GET() {
   const auth = await requirePersonaChatAuth();
   if (!auth.ok) return auth.response;
   const supabase = getServiceSupabase();
   if (!supabase) {
+    void logOpsEvent({
+      userKey: auth.userKey,
+      eventType: 'degraded',
+      severity: 'warn',
+      domain: 'sector_radar',
+      route: '/api/sector-radar/summary',
+      message: 'Sector radar summary unavailable: Supabase not configured',
+      code: 'supabase_unconfigured',
+    });
     const generatedAt = new Date().toISOString();
     return NextResponse.json(
       attachSectorRadarDisplayFields({
@@ -27,6 +37,20 @@ export async function GET() {
     );
   }
 
-  const body = await buildSectorRadarSummaryForUser(supabase, auth.userKey);
-  return NextResponse.json(body);
+  try {
+    const body = await buildSectorRadarSummaryForUser(supabase, auth.userKey);
+    return NextResponse.json(body);
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'sector radar summary failed';
+    void logOpsEvent({
+      userKey: auth.userKey,
+      eventType: 'error',
+      severity: 'error',
+      domain: 'sector_radar',
+      route: '/api/sector-radar/summary',
+      message,
+      code: 'sector_radar_summary_exception',
+    });
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }

@@ -12,6 +12,11 @@ import { loadHoldingQuotes } from '@/lib/server/marketQuoteService';
 import { matchRelatedSectorsForHolding } from '@/lib/server/sectorRadarDossierMatch';
 import { buildSectorRadarSummaryForUser } from '@/lib/server/sectorRadarSummaryService';
 import type { PortfolioDossierRelatedSector } from '@/lib/sectorRadarContract';
+import {
+  formatSectorRadarWarningShort,
+  getVisibleSectorRadarWarningsForSummary,
+  looksLikeSectorRadarWarningCode,
+} from '@/lib/sectorRadarWarningMessages';
 import { analyzeThesisHealth } from '@/lib/server/thesisHealthAnalyzer';
 
 type Params = { params: Promise<{ symbol: string }> };
@@ -126,7 +131,7 @@ export async function GET(_req: Request, context: Params) {
         buildSectorRadarSummaryForUser(supabase, auth.userKey),
       ]);
       sectorRadarGeneratedAt = radarSummary.generatedAt;
-      sectorRadarWarnings = radarSummary.warnings ?? [];
+      sectorRadarWarnings = getVisibleSectorRadarWarningsForSummary(radarSummary);
       const wl = watchlistAll.find(
         (w) => w.market === holding.market && w.symbol.trim().toUpperCase() === holding.symbol.trim().toUpperCase(),
       ) ?? null;
@@ -143,7 +148,7 @@ export async function GET(_req: Request, context: Params) {
         radarSummary.sectors,
       );
     } catch {
-      sectorRadarWarnings = ['sector_radar_dossier_attach_failed'];
+      sectorRadarWarnings = [formatSectorRadarWarningShort('sector_radar_dossier_attach_failed')];
     }
 
     const relatedSector: PortfolioDossierRelatedSector | null =
@@ -259,7 +264,12 @@ export async function GET(_req: Request, context: Params) {
       reviewLatest: review,
       thesisHealth,
       degraded: !q?.currentPrice,
-      warnings: Array.from(new Set([...(quote.warnings ?? []), ...sectorRadarWarnings])),
+      warnings: Array.from(
+        new Set([
+          ...(quote.warnings ?? []).map((w) => (looksLikeSectorRadarWarningCode(w) ? formatSectorRadarWarningShort(w) : w)),
+          ...sectorRadarWarnings,
+        ]),
+      ),
     });
   } catch (error: unknown) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'unknown error' }, { status: 500 });

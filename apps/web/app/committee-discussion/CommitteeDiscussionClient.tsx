@@ -9,6 +9,7 @@ import type {
 } from "@office-unify/shared-types";
 import Link from "next/link";
 import { CommitteeTurnFeedbackRow } from "@/components/CommitteeTurnFeedbackRow";
+import { OpsFeedbackButton } from "@/components/OpsFeedbackButton";
 
 const jsonHeaders: HeadersInit = {
   "Content-Type": "application/json",
@@ -439,9 +440,12 @@ export function CommitteeDiscussionClient() {
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col gap-4 bg-slate-50 p-6 text-slate-900">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-bold tracking-tight text-slate-800">투자위원회 · 턴제 토론</h1>
-        <Link href="/" className="text-sm text-slate-500 underline underline-offset-4 hover:text-slate-800">
-          ← dev_support 홈
-        </Link>
+        <div className="flex flex-col items-end gap-1">
+          <Link href="/" className="text-sm text-slate-500 underline underline-offset-4 hover:text-slate-800">
+            ← dev_support 홈
+          </Link>
+          <OpsFeedbackButton domain="committee" component="CommitteeDiscussionClient" />
+        </div>
       </div>
       <p className="text-sm text-slate-500">
         Hindenburg → James Simons → CIO → Peter Drucker 순으로 한 라운드씩 발언합니다. 서버가 조회한 보유·관심 원장이 시스템 프롬프트에 포함됩니다(조일현 페르소나는 제외). 토론 내용은 이 화면에만 쌓이며 일반 persona-chat 세션과는 별도입니다. 피드백은 서버에 턴 ID로 저장되어 위원회 전용 장기 기억(committee-lt)에 반영됩니다. 조일현 Markdown 보고서는{" "}

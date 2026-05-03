@@ -7,6 +7,7 @@ import {
   isGoogleFinanceQuoteConfigured,
   syncGoogleFinanceQuoteSheetRows,
 } from '@/lib/server/googleFinanceSheetQuoteService';
+import { logOpsEvent } from '@/lib/server/opsEventLogger';
 
 export async function POST() {
   const auth = await requirePersonaChatAuth();
@@ -64,6 +65,17 @@ export async function POST() {
           : normalized.code === 'spreadsheet_not_found_or_wrong_id'
             ? 'GOOGLE_SHEETS_SPREADSHEET_ID가 문서 ID인지 확인하세요. 전체 URL이 아닌 ID만 입력해야 합니다.'
             : 'Google Sheets 시세 수식 갱신에 실패했습니다. 설정과 권한을 확인 후 다시 시도하세요.';
+    void logOpsEvent({
+      userKey: auth.userKey,
+      eventType: 'error',
+      severity: 'warn',
+      domain: 'portfolio_quotes',
+      route: '/api/portfolio/quotes/refresh',
+      message: normalized.message || 'Google Sheets quote refresh failed',
+      code: normalized.code,
+      actionHint,
+      detail: { sheetsCode: normalized.code },
+    });
     return NextResponse.json(
       {
         ok: false,

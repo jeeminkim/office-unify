@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { OpsFeedbackButton } from "@/components/OpsFeedbackButton";
 
 type SummaryResponse = {
   ok: boolean;
@@ -528,6 +529,7 @@ export function PortfolioDashboardClient() {
           <p className="mt-1 text-sm text-slate-600">
             현재 포지션 상태 점검 화면입니다. 주문 실행이 아니라 사후 기록/원장 반영 기준입니다.
           </p>
+          <OpsFeedbackButton domain="portfolio" className="mt-2" />
         </div>
         <div className="flex gap-2 text-xs">
           <Link href="/" className="rounded border border-slate-300 bg-white px-3 py-1.5">홈</Link>
@@ -1088,7 +1090,37 @@ export function PortfolioDashboardClient() {
                       )}
                     </div>
                   </td>
-                  <td className="px-2 py-1"><Link href="/portfolio-ledger" className="rounded border border-slate-300 bg-white px-2 py-0.5">관리</Link></td>
+                  <td className="px-2 py-1">
+                    <div className="flex max-w-[200px] flex-col gap-1">
+                      <Link
+                        href={`/portfolio/${encodeURIComponent(`${row.market ?? "US"}:${row.symbol}`)}`}
+                        className="rounded border border-slate-300 bg-white px-2 py-0.5 text-center"
+                      >
+                        Dossier
+                      </Link>
+                      <Link href="/portfolio-ledger" className="rounded border border-slate-300 bg-white px-2 py-0.5 text-center">
+                        원장
+                      </Link>
+                      <Link
+                        href={`/decision-journal?market=${encodeURIComponent(row.market ?? "US")}&symbol=${encodeURIComponent(row.symbol)}&name=${encodeURIComponent(row.displayName ?? row.symbol)}&type=skipped_buy&portfolioWeight=${row.weight != null ? String(row.weight) : ""}`}
+                        className="rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-center text-emerald-950"
+                      >
+                        사지 않은 이유
+                      </Link>
+                      <Link
+                        href={`/decision-journal?market=${encodeURIComponent(row.market ?? "US")}&symbol=${encodeURIComponent(row.symbol)}&name=${encodeURIComponent(row.displayName ?? row.symbol)}&type=skipped_sell&portfolioWeight=${row.weight != null ? String(row.weight) : ""}`}
+                        className="rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-center text-amber-950"
+                      >
+                        팔지 않은 이유
+                      </Link>
+                      <Link
+                        href={`/decision-journal?market=${encodeURIComponent(row.market ?? "US")}&symbol=${encodeURIComponent(row.symbol)}&name=${encodeURIComponent(row.displayName ?? row.symbol)}&type=hold&portfolioWeight=${row.weight != null ? String(row.weight) : ""}`}
+                        className="rounded border border-slate-200 bg-white px-2 py-0.5 text-center"
+                      >
+                        관망 기록
+                      </Link>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1115,6 +1147,9 @@ export function PortfolioDashboardClient() {
           <Link href="/portfolio-ledger" className="rounded border border-slate-300 bg-white px-3 py-1.5">원장 반영</Link>
           <Link href="/portfolio-ledger" className="rounded border border-slate-300 bg-white px-3 py-1.5">매수/매도 후 보유 수량 수정</Link>
           <Link href="/trade-journal" className="rounded border border-slate-300 bg-white px-3 py-1.5">Trade Journal 기록</Link>
+          <Link href="/decision-journal" className="rounded border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-emerald-950">
+            비거래 의사결정 일지
+          </Link>
           <Link href="/realized-pnl" className="rounded border border-slate-300 bg-white px-3 py-1.5">실현손익 보기</Link>
           <Link href="/financial-goals" className="rounded border border-slate-300 bg-white px-3 py-1.5">목표 자금 보기</Link>
         </div>
