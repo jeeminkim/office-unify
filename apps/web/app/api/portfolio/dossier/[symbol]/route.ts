@@ -6,8 +6,11 @@ import {
   listTradeJournalEntries,
   listTradeJournalReviewsByEntryId,
   listWebPortfolioHoldingsForUser,
+  listWebPortfolioWatchlistForUser,
 } from '@office-unify/supabase-access';
 import { loadHoldingQuotes } from '@/lib/server/marketQuoteService';
+import { matchRelatedSectorsForHolding } from '@/lib/server/sectorRadarDossierMatch';
+import { buildSectorRadarSummaryForUser } from '@/lib/server/sectorRadarSummaryService';
 import { analyzeThesisHealth } from '@/lib/server/thesisHealthAnalyzer';
 
 type Params = { params: Promise<{ symbol: string }> };
@@ -113,6 +116,35 @@ export async function GET(_req: Request, context: Params) {
     const pbLatest = (pbRows.data ?? [])
       .find((r) => String(r.role ?? '') === 'assistant' && String(r.content ?? '').toUpperCase().includes(symbol));
 
+    let relatedSectorRadar: ReturnType<typeof matchRelatedSectorsForHolding> = [];
+    let sectorRadarGeneratedAt: string | undefined;
+    let sectorRadarWarnings: string[] = [];
+    try {
+      const [watchlistAll, radarSummary] = await Promise.all([
+        listWebPortfolioWatchlistForUser(supabase, auth.userKey),
+        buildSectorRadarSummaryForUser(supabase, auth.userKey),
+      ]);
+      sectorRadarGeneratedAt = radarSummary.generatedAt;
+      sectorRadarWarnings = radarSummary.warnings ?? [];
+      const wl = watchlistAll.find(
+        (w) => w.market === holding.market && w.symbol.trim().toUpperCase() === holding.symbol.trim().toUpperCase(),
+      ) ?? null;
+      relatedSectorRadar = matchRelatedSectorsForHolding(
+        {
+          market: holding.market,
+          symbol: holding.symbol,
+          name: holding.name,
+          sector: holding.sector ?? null,
+          investment_memo: holding.investment_memo ?? null,
+          judgment_memo: holding.judgment_memo ?? null,
+        },
+        wl,
+        radarSummary.sectors,
+      );
+    } catch {
+      sectorRadarWarnings = ['sector_radar_dossier_attach_failed'];
+    }
+
     const thesisHealth = analyzeThesisHealth({
       symbol,
       market: holding.market,
@@ -157,6 +189,7 @@ export async function GET(_req: Request, context: Params) {
         market: holding.market,
         symbol: holding.symbol,
         name: holding.name,
+        sector: holding.sector ?? null,
         qty: toNum(holding.qty),
         avgPrice: toNum(holding.avg_price),
         currentPrice: current,
@@ -164,6 +197,9 @@ export async function GET(_req: Request, context: Params) {
         googleTicker: holding.google_ticker,
         quoteSymbol: holding.quote_symbol,
       },
+      relatedSectorRadar,
+      sectorRadarGeneratedAt,
+      sectorRadarWarnings,
       thesis: {
         reason: holding.investment_memo ?? undefined,
         targetPrice: toNum(holding.target_price) || undefined,
@@ -208,7 +244,7 @@ export async function GET(_req: Request, context: Params) {
       reviewLatest: review,
       thesisHealth,
       degraded: !q?.currentPrice,
-      warnings: quote.warnings,
+      warnings: Array.from(new Set([...(quote.warnings ?? []), ...sectorRadarWarnings])),
     });
   } catch (error: unknown) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'unknown error' }, { status: 500 });

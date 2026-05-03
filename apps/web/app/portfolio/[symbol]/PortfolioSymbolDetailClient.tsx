@@ -5,17 +5,38 @@ import { useEffect, useState } from "react";
 
 type Props = { symbolKey: string };
 
+type DossierSectorRadarMatch = {
+  key: string;
+  name: string;
+  score?: number;
+  zone: string;
+  actionHint: string;
+  confidence: "low" | "medium";
+  narrativeHint: string;
+  linkedAnchors: Array<{
+    symbol: string;
+    name: string;
+    googleTicker: string;
+    dataStatus: string;
+    changePct?: number;
+  }>;
+  matchReasons: string[];
+};
+
 type DossierResponse = {
   ok: boolean;
   holding?: {
     market: string;
     symbol: string;
     name: string;
+    sector?: string | null;
     qty: number;
     avgPrice: number;
     currentPrice?: number;
     pnlRate?: number;
   };
+  relatedSectorRadar?: DossierSectorRadarMatch[];
+  sectorRadarGeneratedAt?: string;
   thesis?: {
     reason?: string;
     targetPrice?: number;
@@ -63,6 +84,26 @@ function fmt(v?: number): string {
   return krw.format(v);
 }
 
+function sectorZoneLabel(zone: string): string {
+  if (zone === "extreme_fear") return "극공포";
+  if (zone === "fear") return "공포";
+  if (zone === "neutral") return "중립";
+  if (zone === "greed") return "탐욕";
+  if (zone === "extreme_greed") return "과열";
+  if (zone === "no_data") return "NO_DATA";
+  return zone;
+}
+
+function actionHintLabel(h: string): string {
+  if (h === "buy_watch") return "분할매수 검토(관찰)";
+  if (h === "accumulate") return "조정·분할매수 검토";
+  if (h === "hold") return "관망·유지 점검";
+  if (h === "trim_watch") return "비중 축소·분할매도 검토";
+  if (h === "avoid_chase") return "추격매수 주의";
+  if (h === "no_data") return "데이터 부족";
+  return h;
+}
+
 export function PortfolioSymbolDetailClient({ symbolKey }: Props) {
   const [data, setData] = useState<DossierResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -99,6 +140,61 @@ export function PortfolioSymbolDetailClient({ symbolKey }: Props) {
         <p className="mt-1 text-sm text-slate-600">
           현재가 {fmt(data?.holding?.currentPrice)} · 손익률 {data?.holding?.pnlRate == null ? "NO_DATA" : `${data.holding.pnlRate.toFixed(2)}%`} · 수량 {data?.holding?.qty ?? "NO_DATA"}
         </p>
+        {data?.holding?.sector ? (
+          <p className="mt-1 text-xs text-slate-500">섹터(원장): {data.holding.sector}</p>
+        ) : null}
+      </section>
+
+      <section className="mb-4 rounded border border-indigo-200 bg-indigo-50/60 p-4 text-sm">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 className="font-semibold text-indigo-950">관련 섹터 온도 (판단 보조)</h2>
+            <p className="mt-1 text-xs text-indigo-900/90">
+              ETF anchor 기반 섹터 레이더와의 <strong>텍스트·섹터 필드 매칭</strong>입니다. 자동 매수·매도 신호가 아니며, 실제 주문은 하지 않습니다.{" "}
+              {data?.sectorRadarGeneratedAt ? (
+                <span className="text-slate-600">기준 시각: {data.sectorRadarGeneratedAt}</span>
+              ) : null}
+            </p>
+          </div>
+          <Link href="/sector-radar" className="text-xs text-indigo-800 underline underline-offset-2">
+            섹터 레이더 전체
+          </Link>
+        </div>
+        {(data?.relatedSectorRadar ?? []).length === 0 ? (
+          <p className="mt-2 text-xs text-slate-600">매칭된 섹터가 없습니다. 원장/관심종목의 섹터·메모에 분야 키워드를 넣거나 `/sector-radar`에서 시트를 새로고침해 보세요.</p>
+        ) : (
+          <ul className="mt-3 space-y-3 text-xs">
+            {(data?.relatedSectorRadar ?? []).map((m) => (
+              <li key={m.key} className="rounded border border-indigo-100 bg-white p-3 text-slate-800">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <p className="font-semibold text-slate-900">{m.name}</p>
+                  <p className="text-[11px] text-slate-600">
+                    confidence: <span className="font-medium">{m.confidence}</span>
+                    {m.score != null ? ` · score ${Math.round(m.score)}` : " · score NO_DATA"} · {sectorZoneLabel(m.zone)} ·{" "}
+                    {actionHintLabel(m.actionHint)}
+                  </p>
+                </div>
+                <p className="mt-2 text-[11px] leading-snug text-slate-700">{m.narrativeHint}</p>
+                {(m.linkedAnchors ?? []).length > 0 ? (
+                  <div className="mt-2">
+                    <p className="text-[10px] font-medium text-slate-500">linked anchors</p>
+                    <ul className="mt-1 space-y-0.5 text-[10px] text-slate-600">
+                      {(m.linkedAnchors ?? []).slice(0, 6).map((a) => (
+                        <li key={`${m.key}-${a.symbol}`}>
+                          <span className="font-mono">{a.symbol}</span> {a.name} · {a.googleTicker} · {a.dataStatus}
+                          {a.changePct != null ? ` · ${a.changePct.toFixed(2)}%` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {(m.matchReasons ?? []).length > 0 ? (
+                  <p className="mt-2 text-[10px] text-slate-500">매칭 근거: {m.matchReasons.join(", ")}</p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="mb-4 grid gap-3 md:grid-cols-2">

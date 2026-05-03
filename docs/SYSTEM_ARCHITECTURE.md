@@ -20,6 +20,10 @@
   - 고급 모드 표시 상태는 `localStorage.portfolioLedgerAdvancedMode`로 유지
 - `/realized-pnl` : 실현손익 대시보드(기간/종목/이벤트)
 - `/financial-goals` : 목표 자금 관리(목표 생성/배분/달성률)
+- `/sector-radar` : 섹터 Fear & Greed Radar(섹터 온도계)
+  - 한국 상장 **ETF anchor seed** + 관심종목(`web_portfolio_watchlist`의 sector/메모 키워드) **custom anchor** 병합
+  - `sector_radar_quotes` 시트에 `GOOGLEFINANCE` 수식 주입 후 read-back → 섹터별 점수/구간(zone)/판단 보조 문구
+  - **자동 매매·주문 실행 없음** — 점수·문구는 참고용
 
 ## 서버 API 계층
 
@@ -46,6 +50,7 @@
   - 경고는 제안이며 자동 매매/자동 주문을 수행하지 않음
 - `/api/portfolio/dossier/[symbol]`
   - 종목 단위 dossier(매수 이유·목표/손절·PB/위원회·저널·trend·thesis health) 조회
+  - `buildSectorRadarSummaryForUser`로 섹터 레이더와 동일 스냅샷을 붙여 **관련 섹터 온도**(`relatedSectorRadar`: score/zone/actionHint/narrativeHint/linkedAnchors, confidence low|medium, matchReasons)를 판단 보조로 반환
 - `/api/portfolio/holdings`
   - GET: 보유/관심 목록 조회
   - POST: SQL 없이 보유 종목 추가(중복 보유 차단, symbol normalize, ticker 기본값 자동)
@@ -96,6 +101,13 @@
   - 목표 CRUD
 - `/api/financial-goals/[id]/allocations`
   - 목표 배분 생성(실현손익/수동현금/조정)
+- `/api/sector-radar/summary`
+  - 섹터별 온도·anchor 상태·components·warnings, 홈용 `fearCandidatesTop3` / `greedCandidatesTop3`
+  - Sheets 미설정·탭 비어 있음 시 `degraded` + NO_DATA 유지
+- `/api/sector-radar/refresh`
+  - `sector_radar_quotes` 탭 생성/덮어쓰기 및 GOOGLEFINANCE 수식 동기화(`USER_ENTERED`)
+- `/api/sector-radar/status`
+  - 시트 read-back 진단(anchor별 rowStatus)
 
 ## 출력 형식 검증
 
@@ -114,6 +126,7 @@
 - 계산 불가 항목은 `undefined/null + warning`으로 반환
 - 메모리/시트/테이블 미설정 시 기능 전체 중단 대신 섹션 단위 경고로 degrade
 - PB/위원회/Trend/Research 결과 화면은 outputQuality/model usage badge를 함께 표시
+- **Sector Radar**는 대표 ETF 몇 개의 시장 데이터를 요약한 휴리스틱 점수이며, **전 섹터 펀더멘털을 대체하지 않는다.** ETF seed 오류·시트 지연 시 섹터 단위 NO_DATA로 degrade
 - 전량 매도 시 보유 제거 후 선택적으로 watchlist 이동 가능
 - `thesis health`는 rule+텍스트 기반 휴리스틱 평가이며 사실(Fact)과 판단(Interpretation)을 분리해 표시한다.
 - `/portfolio`의 quote recovery 패널은 상태 머신(`needs_ticker_candidates` → `quote_ready`) 기반으로 다음 조치 버튼을 안내한다.

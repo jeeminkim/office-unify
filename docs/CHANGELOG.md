@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Dossier × Sector Radar:** `/api/portfolio/dossier/[symbol]`에 `relatedSectorRadar`를 추가하고, `buildSectorRadarSummaryForUser`를 재사용해 보유·관심(동일 심볼) 텍스트/섹터·registry 키워드로 매칭(confidence low|medium). `/portfolio/[symbol]`에 「관련 섹터 온도 (판단 보조)」카드.
+- **Sector Fear & Greed Radar:** `/sector-radar` 페이지와 `GET /api/sector-radar/summary`, `POST /api/sector-radar/refresh`, `GET /api/sector-radar/status` 추가. 한국 상장 ETF seed + 관심종목 키워드 병합 anchor를 `sector_radar_quotes` 시트에 `GOOGLEFINANCE` read-back으로 점수화(자동 주문 없음). 홈 대시보드에 조정 후보/과열 주의 Top3 카드 연동.
 - **Portfolio Ledger 모드 분리 + 자동 동기화:** `/portfolio-ledger`를 기본 모드/고급(SQL) 모드로 분리하고 SQL 블록 기본 숨김을 적용. 신규 보유/관심 등록 및 `apply-trade` 성공 후 `quotes/refresh -> quotes/status -> snapshot/goals/history/dashboard` 자동 동기화 체인을 추가.
 - **등록 직후 ticker 추천 연계:** 보유/관심 등록 시 `google_ticker`가 비어 있으면 KR(`KRX:{pad6}`)/US(symbol) 기본 후보와 quote symbol(`.KS/.KQ` 또는 US symbol)을 채워 요청하고 `ticker-resolver/refresh`를 백그라운드로 연계(자동 DB 확정 없음, 승인 구조 유지).
 - **Dashboard 즉시 반영 UX:** ledger 업데이트 시 홈 대시보드가 custom event 기반으로 overview를 재로딩하고, `/api/dashboard/overview`를 `force-dynamic`으로 설정해 stale 응답 가능성을 낮춤.

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { SectorRadarSummaryResponse, SectorRadarSummarySector } from "@/lib/sectorRadarContract";
 
 type StatusSection = {
   key: string;
@@ -119,6 +120,15 @@ function routineTone(status: "ready" | "needs_data" | "done" | "warn"): string {
   return "border-slate-200 bg-slate-50";
 }
 
+function sectorZoneShort(zone: SectorRadarSummarySector["zone"]): string {
+  if (zone === "extreme_fear") return "극공포";
+  if (zone === "fear") return "공포";
+  if (zone === "neutral") return "중립";
+  if (zone === "greed") return "탐욕";
+  if (zone === "extreme_greed") return "과열";
+  return "NO_DATA";
+}
+
 export function DashboardClient() {
   const [statusSections, setStatusSections] = useState<StatusSection[]>([]);
   const [overview, setOverview] = useState<DashboardResponse | null>(null);
@@ -126,6 +136,7 @@ export function DashboardClient() {
   const [profitGoal, setProfitGoal] = useState<ProfitGoalSummaryResponse | null>(null);
   const [pattern, setPattern] = useState<PatternAnalysisResponse | null>(null);
   const [portfolioAlerts, setPortfolioAlerts] = useState<Array<{ id: string; symbol: string; title: string; body: string; severity: string }>>([]);
+  const [sectorRadar, setSectorRadar] = useState<SectorRadarSummaryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloading, setReloading] = useState(false);
 
@@ -159,6 +170,14 @@ export function DashboardClient() {
       setPattern(patternJson);
       setPortfolioAlerts(alertsJson.alerts ?? []);
       setError(null);
+      try {
+        const sectorRes = await fetch("/api/sector-radar/summary", { credentials: "same-origin" });
+        const sectorJson = (await sectorRes.json()) as SectorRadarSummaryResponse;
+        if (Array.isArray(sectorJson?.sectors)) setSectorRadar(sectorJson);
+        else setSectorRadar(null);
+      } catch {
+        setSectorRadar(null);
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "대시보드 로드 실패");
     } finally {
@@ -204,6 +223,7 @@ export function DashboardClient() {
           <Link href="/dev-assistant" className="rounded border border-slate-300 bg-white px-3 py-1.5">Dev Assistant</Link>
           <Link href="/portfolio" className="rounded border border-slate-300 bg-white px-3 py-1.5">Portfolio</Link>
           <Link href="/portfolio-ledger" className="rounded border border-slate-300 bg-white px-3 py-1.5">Portfolio Ledger</Link>
+          <Link href="/sector-radar" className="rounded border border-slate-300 bg-white px-3 py-1.5">Sector Radar</Link>
           <Link href="/realized-pnl" className="rounded border border-slate-300 bg-white px-3 py-1.5">Realized PnL</Link>
           <Link href="/financial-goals" className="rounded border border-slate-300 bg-white px-3 py-1.5">Financial Goals</Link>
           <Link href="/trade-journal" className="rounded border border-slate-300 bg-white px-3 py-1.5">Trade Journal</Link>
@@ -285,6 +305,53 @@ export function DashboardClient() {
           </div>
         </div>
       </section>
+
+      {sectorRadar?.sectors?.length ? (
+        <section className="mb-5 grid gap-3 md:grid-cols-2">
+          <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-800">섹터 온도계 · 조정/분할매수 후보 (Top 3)</h2>
+              <Link href="/sector-radar" className="text-xs text-slate-600 underline underline-offset-2">
+                전체 보기
+              </Link>
+            </div>
+            <p className="mt-1 text-[11px] text-slate-600">ETF anchor 기준 판단 보조이며 주문 실행 기능은 없습니다.</p>
+            {(sectorRadar.fearCandidatesTop3 ?? []).length === 0 ? (
+              <p className="mt-2 text-xs text-slate-500">NO_DATA</p>
+            ) : (
+              <ul className="mt-2 space-y-1 text-xs text-slate-800">
+                {sectorRadar.fearCandidatesTop3.map((s) => (
+                  <li key={s.key} className="rounded border border-blue-100 bg-white px-2 py-1">
+                    {s.name} · {s.score != null ? `${Math.round(s.score)}점` : "—"} · {sectorZoneShort(s.zone)} —{" "}
+                    {s.narrativeHint.length > 56 ? `${s.narrativeHint.slice(0, 56)}…` : s.narrativeHint}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="rounded-xl border border-orange-200 bg-orange-50/70 p-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-800">섹터 온도계 · 추격매수 주의 (Top 3)</h2>
+              <Link href="/sector-radar" className="text-xs text-slate-600 underline underline-offset-2">
+                전체 보기
+              </Link>
+            </div>
+            <p className="mt-1 text-[11px] text-slate-600">과열 구간은 비중 축소·분할매도 검토용 참고입니다.</p>
+            {(sectorRadar.greedCandidatesTop3 ?? []).length === 0 ? (
+              <p className="mt-2 text-xs text-slate-500">NO_DATA</p>
+            ) : (
+              <ul className="mt-2 space-y-1 text-xs text-slate-800">
+                {sectorRadar.greedCandidatesTop3.map((s) => (
+                  <li key={`g-${s.key}`} className="rounded border border-orange-100 bg-white px-2 py-1">
+                    {s.name} · {s.score != null ? `${Math.round(s.score)}점` : "—"} · {sectorZoneShort(s.zone)} —{" "}
+                    {s.narrativeHint.length > 56 ? `${s.narrativeHint.slice(0, 56)}…` : s.narrativeHint}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+      ) : null}
 
       <section className="mb-5 grid gap-3 md:grid-cols-2">
         <div className="rounded-xl border border-slate-200 bg-white p-4">

@@ -29,6 +29,11 @@
 | `docs/sql/append_web_portfolio_quote_overrides.sql` | 보유 종목 quote ticker 수동 override 컬럼 |
 | `docs/sql/append_web_portfolio_watchlist_quote_overrides.sql` | 관심종목 quote ticker 수동 override 컬럼 |
 
+## Sector Radar (섹터 온도계)
+
+- **1차 구현은 신규 SQL 없음.** 섹터·ETF anchor seed는 `apps/web/lib/server/sectorRadarRegistry.ts` 상수로 관리하고, 사용자별 custom anchor는 `web_portfolio_watchlist`(특히 `sector` 및 메모 필드 키워드)에서 병합한다.
+- **2차(선택)**: 운영에서 카테고리/anchor를 DB로 빼야 할 때 `sector_radar_categories`, `sector_radar_anchors`, `sector_radar_scores` 등의 DDL을 별도 문서화할 수 있다(현재 DDL 파일 없음).
+
 ## Committee Followups (조일현 보고서 후속작업)
 
 **파일:** `docs/sql/append_web_committee_followups.sql`

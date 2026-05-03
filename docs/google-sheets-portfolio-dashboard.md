@@ -53,6 +53,7 @@
 | `ledger_change_queue` | 조일현 JSON 대기열 (DB 아님) |
 | `research_price_targets` | **수동 전용** — 리포트 목표가 적재 (API 미동기화) |
 | `portfolio_quote_candidates` (기본명) | **ticker 추천 전용** — `POST /api/portfolio/ticker-resolver/refresh`가 후보별 `GOOGLEFINANCE` 수식을 append·update 하고, 서버가 read-back으로 검증한다. **DB 자동 반영 없음** — 적용은 사용자가 API/UI에서 승인할 때만 한다. 탭명은 `PORTFOLIO_TICKER_CANDIDATES_SHEET_NAME`으로 바꿀 수 있다. |
+| `sector_radar_quotes` (기본명) | **섹터 온도계 전용** — `POST /api/sector-radar/refresh`가 섹터별 한국 상장 ETF anchor 행에 `GOOGLEFINANCE(price|volume|changepct|high52|low52|datadelay)` 수식을 쓴다. **F/H/J/L/N/P/R**는 선행 `'` 텍스트(수식 설명), **G/I/K/M/O/S**에 실제 수식·read-back. `volume_avg`(Q)는 1차 미계산으로 비울 수 있음(NO_DATA). 탭명은 `SECTOR_RADAR_QUOTES_SHEET_NAME`으로 변경 가능. |
 
 동기화 API는 **앞 4개 탭만** 덮어씁니다. `ledger_change_queue`는 API로 **한 줄 append**만 합니다. `portfolio_quote_candidates`는 ticker-resolver API가 별도로 관리한다.
 
@@ -65,7 +66,7 @@
 
 ### 탭 자동 생성 / 장애 대응
 
-- `portfolio_quotes`, `portfolio_quote_candidates` 탭이 없으면 앱이 요청 시 자동 생성합니다.
+- `portfolio_quotes`, `portfolio_quote_candidates`, `sector_radar_quotes` 탭이 없으면 앱이 요청 시 자동 생성합니다(각각 quotes refresh / ticker-resolver / sector-radar refresh 경로).
 - A1 range는 `'sheet_name'!A1` 형태로 escape하여 특수문자/공백 탭 이름에서도 안전하게 처리합니다.
 - 그래도 실패하면 다음 순서로 점검하세요.
   - 서비스 계정 편집 권한(403)
