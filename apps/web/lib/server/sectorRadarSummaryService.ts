@@ -10,6 +10,7 @@ import {
   mergeSheetRowsWithAnchors,
   readSectorRadarQuoteSheetRows,
 } from '@/lib/server/sectorRadarSheetService';
+import { attachSectorRadarDisplayFields } from '@/lib/sectorRadarWarningMessages';
 import type { SectorRadarSummaryResponse, SectorRadarSummarySector } from '@/lib/sectorRadarContract';
 
 function pickTop3(
@@ -71,7 +72,7 @@ export async function buildSectorRadarSummaryForUser(
     return scoreSectorFromAnchors(cat.key, cat.name, metrics);
   });
 
-  return {
+  return attachSectorRadarDisplayFields({
     ok: true,
     degraded: degraded || undefined,
     generatedAt,
@@ -79,5 +80,5 @@ export async function buildSectorRadarSummaryForUser(
     warnings: Array.from(new Set(warnings.filter(Boolean))),
     fearCandidatesTop3: pickTop3(sectors, ['extreme_fear', 'fear']),
     greedCandidatesTop3: pickGreedTop3(sectors),
-  };
+  });
 }

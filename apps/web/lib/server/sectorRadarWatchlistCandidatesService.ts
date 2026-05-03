@@ -14,6 +14,7 @@ import type {
   SectorWatchlistCandidateItem,
   SectorWatchlistCandidateResponse,
 } from '@/lib/sectorRadarContract';
+import { toSectorRadarWarningDisplayPairs } from '@/lib/sectorRadarWarningMessages';
 
 function zoneContribution(zone: SectorRadarZone): number {
   switch (zone) {
@@ -136,7 +137,16 @@ export async function buildSectorWatchlistCandidateResponse(
     watchlist = await listWebPortfolioWatchlistForUser(supabase, userKey);
   } catch (e: unknown) {
     warnings.push(e instanceof Error ? e.message : 'watchlist_fetch_failed');
-    return { ok: true, generatedAt, candidates: [], warnings };
+    const w = Array.from(new Set(warnings.filter(Boolean)));
+    const wpairs = toSectorRadarWarningDisplayPairs(w).filter((p) => p.short);
+    return {
+      ok: true,
+      generatedAt,
+      candidates: [],
+      warnings: w,
+      displayWarnings: wpairs.map((p) => p.short),
+      displayWarningDetails: wpairs.map((p) => p.detail),
+    };
   }
 
   const radar = await buildSectorRadarSummaryForUser(supabase, userKey);
@@ -197,10 +207,14 @@ export async function buildSectorWatchlistCandidateResponse(
 
   candidates.sort((a, b) => b.readinessScore - a.readinessScore);
 
+  const w = Array.from(new Set(warnings.filter(Boolean)));
+  const wpairs = toSectorRadarWarningDisplayPairs(w).filter((p) => p.short);
   return {
     ok: true,
     generatedAt,
     candidates,
-    warnings: Array.from(new Set(warnings.filter(Boolean))),
+    warnings: w,
+    displayWarnings: wpairs.map((p) => p.short),
+    displayWarningDetails: wpairs.map((p) => p.detail),
   };
 }

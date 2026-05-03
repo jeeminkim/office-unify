@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Sector Radar 경고 UX:** 섹터 점수용 `warnings`는 내부 코드(snake_case)로 유지하고, `GET /api/sector-radar/summary`·`watchlist-candidates` 응답에 `displayWarnings` / `displayWarningDetails`(한국어 짧은 문구·tooltip용 상세)를 추가. `/sector-radar`·홈 대시보드 섹터 블록은 raw 코드를 노출하지 않으며, 개발 모드에서만 raw 토글 가능. `formatSectorRadarWarningShort`/`Detail`로 대시보드 overview 경고 코드도 사용자 문구로 변환.
 - **관심종목 관찰 큐:** `GET /api/sector-radar/watchlist-candidates` — `web_portfolio_watchlist`와 Sector Radar를 결합해 `readinessScore`·`readinessLabel`(watch_now/prepare/hold_watch/wait/no_data)·`confidence`·`reasons`를 반환(매수 추천·자동 주문 없음). `/sector-radar` 섹터 카드에 관련 관심종목 최대 3건·전체 표, 홈에 「오늘의 관심종목 큐」, `/portfolio-ledger` 관심 테이블에 섹터 존·레이더 배지 연동.
 - **Sector Radar 2차:** `sector_radar_quotes` 시트를 **A–U( market·normalized_key·currency·52주 low/high·volume·rolling volume_avg )** 로 재동기화하고, 거래량/거래량평균 비율로 거래량 점수(5~30)를 반영. **코인/디지털자산(`crypto`)** 카테고리·US seed(IBIT/FBTC/ARKB/ETHA/FETH/NASDAQ:COIN/NASDAQ:MSTR)·관심종목(US 포함) 병합, crypto 전용 가중(BTC 45 / Alt 25 / Infra 30) 서브스코어. Dossier에 `relatedSector`(단일 픽) 추가·매칭 confidence `high`. `/api/portfolio/summary`에 보유별 `sectorRadarBadge`(fear\|greed). 홈에 Crypto Radar 카드·Fear/Greed 카드 문구 정리. **브레이킹(운영):** 기존 시트 첫 열이 `category_key`인 1차 레이아웃은 자동 읽기 호환만 되고, US/crypto·volume_avg를 쓰려면 `POST /api/sector-radar/refresh`로 헤더/행을 새 계약으로 덮어써야 한다.
 - **Dossier × Sector Radar (1차):** `/api/portfolio/dossier/[symbol]`에 `relatedSectorRadar`를 추가하고, `buildSectorRadarSummaryForUser`를 재사용해 보유·관심(동일 심볼) 텍스트/섹터·registry 키워드로 매칭. `/portfolio/[symbol]`에 「관련 섹터 온도 (판단 보조)」카드.

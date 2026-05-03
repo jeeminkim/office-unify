@@ -10,6 +10,10 @@ import type {
   SectorWatchlistCandidateItem,
   SectorWatchlistCandidateResponse,
 } from "@/lib/sectorRadarContract";
+import {
+  formatSectorRadarWarningDetail,
+  formatSectorRadarWarningShort,
+} from "@/lib/sectorRadarWarningMessages";
 
 const jsonHeaders: HeadersInit = { "Content-Type": "application/json" };
 
@@ -71,6 +75,7 @@ export function SectorRadarClient() {
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [refreshBusy, setRefreshBusy] = useState(false);
   const [statusBusy, setStatusBusy] = useState(false);
+  const [showSectorRadarRawWarnings, setShowSectorRadarRawWarnings] = useState(false);
 
   const bySectorKey = useMemo(() => {
     const m = new Map<string, SectorWatchlistCandidateItem[]>();
@@ -222,6 +227,15 @@ export function SectorRadarClient() {
         <Link href="/portfolio" className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm text-slate-800">
           포트폴리오와 연결 보기
         </Link>
+        {process.env.NODE_ENV === "development" ? (
+          <button
+            type="button"
+            className="rounded-md border border-dashed border-slate-400 px-3 py-2 text-xs text-slate-600"
+            onClick={() => setShowSectorRadarRawWarnings((v) => !v)}
+          >
+            {showSectorRadarRawWarnings ? "raw warnings 숨기기" : "raw warnings (개발)"}
+          </button>
+        ) : null}
       </div>
 
       {error ? (
@@ -231,7 +245,8 @@ export function SectorRadarClient() {
       {summary?.degraded ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
           일부 데이터가 비어 있거나 Sheets 설정이 없어 <strong>degraded</strong> 모드입니다.{" "}
-          {(summary.warnings ?? []).join(" · ") || "warnings 참고"}
+          {(summary.displayWarnings ?? (summary.warnings ?? []).map((w) => formatSectorRadarWarningShort(w))).join(" · ") ||
+            "자세한 내용은 아래 섹터 카드의 안내를 참고하세요."}
         </div>
       ) : null}
 
@@ -287,8 +302,24 @@ export function SectorRadarClient() {
                   </ul>
                 )}
               </div>
-              {(s.warnings ?? []).length > 0 ? (
-                <p className="mt-2 text-[11px] text-amber-800">{(s.warnings ?? []).join(" · ")}</p>
+              {(s.displayWarnings?.length ?? s.warnings?.length ?? 0) > 0 ? (
+                <ul className="mt-2 list-inside list-disc space-y-0.5 text-[11px] text-amber-800">
+                  {(s.displayWarnings ?? (s.warnings ?? []).map((w) => formatSectorRadarWarningShort(w))).map((line, wi) => {
+                    const details =
+                      s.displayWarningDetails ?? (s.warnings ?? []).map((w) => formatSectorRadarWarningDetail(w));
+                    const tip = details[wi] ?? line;
+                    return (
+                      <li key={`${s.key}-warn-${wi}`} title={tip}>
+                        {line}
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : null}
+              {showSectorRadarRawWarnings && (s.warnings ?? []).length > 0 ? (
+                <pre className="mt-1 max-h-24 overflow-auto rounded bg-slate-900/90 p-2 font-mono text-[9px] text-slate-100">
+                  {(s.warnings ?? []).join("\n")}
+                </pre>
               ) : null}
             </div>
           );

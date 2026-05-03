@@ -51,7 +51,12 @@ export type SectorRadarSummarySector = {
     cryptoAlt?: number;
     cryptoInfra?: number;
   };
+  /** 서버 내부 경고 코드(snake_case 등). UI 기본 노출 금지 — displayWarnings 사용. */
   warnings: string[];
+  /** 사용자용 짧은 문구(카드 하단 등). 없으면 클라이언트에서 warnings를 변환. */
+  displayWarnings?: string[];
+  /** tooltip·상세용 긴 문구(displayWarnings와 동일 순서). */
+  displayWarningDetails?: string[];
 };
 
 export type SectorRadarSummaryResponse = {
@@ -60,6 +65,8 @@ export type SectorRadarSummaryResponse = {
   generatedAt: string;
   sectors: SectorRadarSummarySector[];
   warnings: string[];
+  displayWarnings?: string[];
+  displayWarningDetails?: string[];
   fearCandidatesTop3: SectorRadarSummarySector[];
   greedCandidatesTop3: SectorRadarSummarySector[];
 };
@@ -134,4 +141,6 @@ export type SectorWatchlistCandidateResponse = {
   generatedAt: string;
   candidates: SectorWatchlistCandidateItem[];
   warnings: string[];
+  displayWarnings?: string[];
+  displayWarningDetails?: string[];
 };

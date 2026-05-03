@@ -4,6 +4,7 @@ import { getServiceSupabase } from '@/lib/server/supabase-service';
 import { SECTOR_RADAR_CATEGORY_SEEDS } from '@/lib/server/sectorRadarRegistry';
 import { scoreSectorFromAnchors } from '@/lib/server/sectorRadarScoring';
 import { buildSectorRadarSummaryForUser } from '@/lib/server/sectorRadarSummaryService';
+import { attachSectorRadarDisplayFields } from '@/lib/sectorRadarWarningMessages';
 import type { SectorRadarSummaryResponse } from '@/lib/sectorRadarContract';
 
 export async function GET() {
@@ -13,7 +14,7 @@ export async function GET() {
   if (!supabase) {
     const generatedAt = new Date().toISOString();
     return NextResponse.json(
-      {
+      attachSectorRadarDisplayFields({
         ok: false,
         degraded: true,
         generatedAt,
@@ -21,7 +22,7 @@ export async function GET() {
         warnings: ['Supabase is not configured (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY).'],
         fearCandidatesTop3: [],
         greedCandidatesTop3: [],
-      } satisfies SectorRadarSummaryResponse,
+      }) satisfies SectorRadarSummaryResponse,
       { status: 503 },
     );
   }

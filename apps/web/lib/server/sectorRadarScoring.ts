@@ -152,15 +152,13 @@ export function computeStandardSectorSnapshot(
       narrativeHint: narrativeFor('no_data'),
       anchors: [],
       components: {},
-      warnings: quiet
-        ? []
-        : ['관심종목에 섹터 키워드가 맞는 ETF를 추가하면 관심 앵커로 반영됩니다.'],
+      warnings: quiet ? [] : ['watchlist_anchor_hint'],
     };
   }
 
   const okPrice = rows.filter((r) => r.dataStatus === 'ok' && r.price != null && r.price > 0);
   if (okPrice.length === 0) {
-    if (!quiet) warnings.push('앵커 ETF 시세를 불러오지 못했습니다.');
+    if (!quiet) warnings.push('price_unavailable');
     return {
       key: categoryKey,
       name: categoryName,
@@ -174,7 +172,7 @@ export function computeStandardSectorSnapshot(
   }
 
   if (!quiet && rows.some((r) => r.dataStatus === 'pending')) {
-    warnings.push('일부 anchor ETF 시세 지연');
+    warnings.push('googlefinance_pending');
   }
 
   const momentumPts = rows
@@ -189,7 +187,7 @@ export function computeStandardSectorSnapshot(
   const avgRangeP = rangePs.length ? rangePs.reduce((a, b) => a + b, 0) / rangePs.length : undefined;
   const drawdown = avgRangeP != null ? 15 * avgRangeP : undefined;
   if (!quiet && rangePs.length < Math.max(1, Math.floor(rows.length * 0.5))) {
-    warnings.push('52주 밴드 데이터 부족');
+    warnings.push('high52_low52_unavailable');
   }
 
   const trendPts = rows
@@ -208,7 +206,7 @@ export function computeStandardSectorSnapshot(
     volume = volumePointsFromRatio(avgR);
   } else {
     volume = 10;
-    if (!quiet) warnings.push('거래량 평균 부족 → 거래량 점수는 중립 반영');
+    if (!quiet) warnings.push('volume_avg_unavailable_neutral_volume_score');
   }
 
   let risk = 10;
@@ -270,7 +268,7 @@ function scoreCryptoSectorFromAnchors(categoryKey: string, categoryName: string,
       narrativeHint: narrativeFor('no_data'),
       anchors: [],
       components: {},
-      warnings: ['관심종목에 섹터 키워드가 맞는 ETF를 추가하면 관심 앵커로 반영됩니다.'],
+      warnings: ['watchlist_anchor_hint'],
     };
   }
 
@@ -288,7 +286,7 @@ function scoreCryptoSectorFromAnchors(categoryKey: string, categoryName: string,
   ];
   const okLegs = legs.filter((x) => x.s != null);
   if (!okLegs.length) {
-    warnings.push('앵커 ETF 시세를 불러오지 못했습니다.');
+    warnings.push('price_unavailable');
     return {
       key: categoryKey,
       name: categoryName,
@@ -306,9 +304,9 @@ function scoreCryptoSectorFromAnchors(categoryKey: string, categoryName: string,
   const zone = zoneFromScore(score);
   const actionHint = actionHintFromZone(zone);
 
-  if (rows.some((r) => r.dataStatus === 'pending')) warnings.push('일부 anchor ETF 시세 지연');
+  if (rows.some((r) => r.dataStatus === 'pending')) warnings.push('googlefinance_pending');
   if (rows.filter((r) => rangePosition(r.price, r.high52, r.low52) != null).length < rows.length * 0.5) {
-    warnings.push('52주 밴드 데이터 부족');
+    warnings.push('high52_low52_unavailable');
   }
 
   return {

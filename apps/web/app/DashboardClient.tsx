@@ -7,6 +7,7 @@ import type {
   SectorRadarSummarySector,
   SectorWatchlistCandidateResponse,
 } from "@/lib/sectorRadarContract";
+import { formatSectorRadarWarningDetail, formatSectorRadarWarningShort } from "@/lib/sectorRadarWarningMessages";
 
 type StatusSection = {
   key: string;
@@ -396,6 +397,26 @@ export function DashboardClient() {
         </section>
       ) : null}
 
+      {sectorRadar && (sectorRadar.displayWarnings?.length ?? sectorRadar.warnings?.length ?? 0) > 0 ? (
+        <section className="mb-5 rounded-xl border border-amber-100 bg-amber-50/90 px-3 py-2 text-[11px] text-amber-950">
+          <p className="font-semibold text-amber-950">섹터 레이더 데이터 안내</p>
+          <ul className="mt-1 list-inside list-disc space-y-0.5">
+            {(sectorRadar.displayWarnings ?? (sectorRadar.warnings ?? []).map((w) => formatSectorRadarWarningShort(w))).map(
+              (line, i) => {
+                const details =
+                  sectorRadar.displayWarningDetails ??
+                  (sectorRadar.warnings ?? []).map((w) => formatSectorRadarWarningDetail(w));
+                return (
+                  <li key={`srw-${i}`} title={details[i] ?? line}>
+                    {line}
+                  </li>
+                );
+              },
+            )}
+          </ul>
+        </section>
+      ) : null}
+
       <section className="mb-5 rounded-xl border border-teal-200 bg-teal-50/70 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-teal-950">오늘의 관심종목 큐</h2>
@@ -528,7 +549,11 @@ export function DashboardClient() {
           <p className="mt-2 text-xs text-slate-600">약화 토픽: {(overview?.trendMemorySummary.weakenedTopics ?? []).slice(0, 5).join(", ") || "NO_DATA"}</p>
           {(overview?.warnings ?? []).length > 0 ? (
             <ul className="mt-3 list-disc pl-4 text-[11px] text-amber-700">
-              {overview?.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+              {(overview?.warnings ?? []).map((warning) => (
+                <li key={warning} title={formatSectorRadarWarningDetail(warning)}>
+                  {formatSectorRadarWarningShort(warning)}
+                </li>
+              ))}
             </ul>
           ) : null}
         </div>
