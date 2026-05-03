@@ -21,8 +21,8 @@
 - `/realized-pnl` : 실현손익 대시보드(기간/종목/이벤트)
 - `/financial-goals` : 목표 자금 관리(목표 생성/배분/달성률)
 - `/sector-radar` : 섹터 Fear & Greed Radar(섹터 온도계)
-  - 한국 상장 **ETF anchor seed** + 관심종목(`web_portfolio_watchlist`의 sector/메모 키워드) **custom anchor** 병합
-  - `sector_radar_quotes` 시트에 `GOOGLEFINANCE` 수식 주입 후 read-back → 섹터별 점수/구간(zone)/판단 보조 문구
+  - **KR ETF + US 티커(코인/디지털자산 등)** anchor seed + 관심종목(`web_portfolio_watchlist`, KR·US) sector/메모 키워드 **custom anchor** 병합
+  - `sector_radar_quotes` 시트(2차: `market`·`normalized_key`·`volume_avg` 등 A–U)에 `GOOGLEFINANCE` 수식 주입 후 read-back → 섹터별 점수/구간(zone)/판단 보조 문구
   - **자동 매매·주문 실행 없음** — 점수·문구는 참고용
 
 ## 서버 API 계층
@@ -45,12 +45,13 @@
   - Google Finance는 직접 API 호출이 아니라 시트 수식 결과 read-back
   - US 종목은 USD/KRW read-back 성공 시 KRW 평가금액/비중에 포함, 환율 미조회 시 `fx_missing` 경고 + NO_DATA
   - 종목별 `thesisHealthStatus`/`thesisConfidence`를 함께 반환해 대시보드 badge로 사용
+  - (best-effort) 섹터 레이더 최우선 매칭 구간에 따라 `sectorRadarBadge`: `fear` \| `greed` (판단 보조, 자동 주문 없음)
 - `/api/portfolio/alerts`
   - 목표가/손절가/손실률/비중/시세누락/thesis 약화·깨짐 룰 기반 action feed
   - 경고는 제안이며 자동 매매/자동 주문을 수행하지 않음
 - `/api/portfolio/dossier/[symbol]`
   - 종목 단위 dossier(매수 이유·목표/손절·PB/위원회·저널·trend·thesis health) 조회
-  - `buildSectorRadarSummaryForUser`로 섹터 레이더와 동일 스냅샷을 붙여 **관련 섹터 온도**(`relatedSectorRadar`: score/zone/actionHint/narrativeHint/linkedAnchors, confidence low|medium, matchReasons)를 판단 보조로 반환
+  - `buildSectorRadarSummaryForUser`로 섹터 레이더와 동일 스냅샷을 붙여 **관련 섹터 온도**(`relatedSectorRadar` 목록 + 단일 픽 `relatedSector`: score/zone/narrativeHint/anchors, confidence low|medium|high, matchReasons)를 판단 보조로 반환
 - `/api/portfolio/holdings`
   - GET: 보유/관심 목록 조회
   - POST: SQL 없이 보유 종목 추가(중복 보유 차단, symbol normalize, ticker 기본값 자동)
@@ -107,7 +108,9 @@
 - `/api/sector-radar/refresh`
   - `sector_radar_quotes` 탭 생성/덮어쓰기 및 GOOGLEFINANCE 수식 동기화(`USER_ENTERED`)
 - `/api/sector-radar/status`
-  - 시트 read-back 진단(anchor별 rowStatus)
+  - 시트 read-back 진단(anchor별 rowStatus, 선택 필드 `market`·`parsedVolumeAvg` 등)
+- `/api/sector-radar/watchlist-candidates`
+  - `web_portfolio_watchlist` + Sector Radar 요약을 결합해 **관찰 우선순위 큐**(`readinessScore`/`readinessLabel`/`confidence`/`reasons`)를 반환. **매수 추천·자동 주문 없음**
 
 ## 출력 형식 검증
 

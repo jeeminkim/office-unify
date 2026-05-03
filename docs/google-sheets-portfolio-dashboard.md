@@ -53,7 +53,7 @@
 | `ledger_change_queue` | 조일현 JSON 대기열 (DB 아님) |
 | `research_price_targets` | **수동 전용** — 리포트 목표가 적재 (API 미동기화) |
 | `portfolio_quote_candidates` (기본명) | **ticker 추천 전용** — `POST /api/portfolio/ticker-resolver/refresh`가 후보별 `GOOGLEFINANCE` 수식을 append·update 하고, 서버가 read-back으로 검증한다. **DB 자동 반영 없음** — 적용은 사용자가 API/UI에서 승인할 때만 한다. 탭명은 `PORTFOLIO_TICKER_CANDIDATES_SHEET_NAME`으로 바꿀 수 있다. |
-| `sector_radar_quotes` (기본명) | **섹터 온도계 전용** — `POST /api/sector-radar/refresh`가 섹터별 한국 상장 ETF anchor 행에 `GOOGLEFINANCE(price|volume|changepct|high52|low52|datadelay)` 수식을 쓴다. **F/H/J/L/N/P/R**는 선행 `'` 텍스트(수식 설명), **G/I/K/M/O/S**에 실제 수식·read-back. `volume_avg`(Q)는 1차 미계산으로 비울 수 있음(NO_DATA). 탭명은 `SECTOR_RADAR_QUOTES_SHEET_NAME`으로 변경 가능. |
+| `sector_radar_quotes` (기본명) | **섹터 온도계 전용** — `POST /api/sector-radar/refresh`가 **2차 레이아웃(A–U)** 으로 행을 덮어쓴다. `market`(KR\|US), `symbol`, `name`, `normalized_key`(예: `crypto::US::IBIT`), `google_ticker` 메타 + **F/G** 가격 수식·결과, **H/I** 통화, **J/K** 등락률, **L/M** 52주저가, **N/O** 52주고가, **P/Q** 거래량, **R/S** 거래량 20영업일 근사(`AVERAGE(INDEX(GOOGLEFINANCE(Erow,"volume", TODAY()-29, TODAY()),0,2))`), **T** status, **U** `last_synced_at`. 선행 `'` 텍스트 열은 수식 힌트용. **레거시 1차 시트( category_key 첫 열 )** 는 read-back만 호환되며, US·`volume_avg` 반영을 위해 **refresh 한 번으로 갱신**하는 것을 권장한다. 탭명은 `SECTOR_RADAR_QUOTES_SHEET_NAME`으로 변경 가능. |
 
 동기화 API는 **앞 4개 탭만** 덮어씁니다. `ledger_change_queue`는 API로 **한 줄 append**만 합니다. `portfolio_quote_candidates`는 ticker-resolver API가 별도로 관리한다.
 

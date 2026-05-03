@@ -71,7 +71,10 @@ export async function POST(req: Request) {
     const existing = await listWebPortfolioWatchlistForUser(supabase, auth.userKey);
     const already = existing.some((row) => row.market === market && row.symbol.trim().toUpperCase() === symbol);
     if (already) {
-      return NextResponse.json({ error: '이미 관심종목에 존재합니다.' }, { status: 409 });
+      return NextResponse.json(
+        { error: '이미 관심종목에 있습니다. 수정 화면을 사용하세요.' },
+        { status: 409 },
+      );
     }
     await upsertPortfolioWatchlist(supabase, auth.userKey, {
       market,

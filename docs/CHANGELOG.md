@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-- **Dossier × Sector Radar:** `/api/portfolio/dossier/[symbol]`에 `relatedSectorRadar`를 추가하고, `buildSectorRadarSummaryForUser`를 재사용해 보유·관심(동일 심볼) 텍스트/섹터·registry 키워드로 매칭(confidence low|medium). `/portfolio/[symbol]`에 「관련 섹터 온도 (판단 보조)」카드.
+- **관심종목 관찰 큐:** `GET /api/sector-radar/watchlist-candidates` — `web_portfolio_watchlist`와 Sector Radar를 결합해 `readinessScore`·`readinessLabel`(watch_now/prepare/hold_watch/wait/no_data)·`confidence`·`reasons`를 반환(매수 추천·자동 주문 없음). `/sector-radar` 섹터 카드에 관련 관심종목 최대 3건·전체 표, 홈에 「오늘의 관심종목 큐」, `/portfolio-ledger` 관심 테이블에 섹터 존·레이더 배지 연동.
+- **Sector Radar 2차:** `sector_radar_quotes` 시트를 **A–U( market·normalized_key·currency·52주 low/high·volume·rolling volume_avg )** 로 재동기화하고, 거래량/거래량평균 비율로 거래량 점수(5~30)를 반영. **코인/디지털자산(`crypto`)** 카테고리·US seed(IBIT/FBTC/ARKB/ETHA/FETH/NASDAQ:COIN/NASDAQ:MSTR)·관심종목(US 포함) 병합, crypto 전용 가중(BTC 45 / Alt 25 / Infra 30) 서브스코어. Dossier에 `relatedSector`(단일 픽) 추가·매칭 confidence `high`. `/api/portfolio/summary`에 보유별 `sectorRadarBadge`(fear\|greed). 홈에 Crypto Radar 카드·Fear/Greed 카드 문구 정리. **브레이킹(운영):** 기존 시트 첫 열이 `category_key`인 1차 레이아웃은 자동 읽기 호환만 되고, US/crypto·volume_avg를 쓰려면 `POST /api/sector-radar/refresh`로 헤더/행을 새 계약으로 덮어써야 한다.
+- **Dossier × Sector Radar (1차):** `/api/portfolio/dossier/[symbol]`에 `relatedSectorRadar`를 추가하고, `buildSectorRadarSummaryForUser`를 재사용해 보유·관심(동일 심볼) 텍스트/섹터·registry 키워드로 매칭. `/portfolio/[symbol]`에 「관련 섹터 온도 (판단 보조)」카드.
 - **Sector Fear & Greed Radar:** `/sector-radar` 페이지와 `GET /api/sector-radar/summary`, `POST /api/sector-radar/refresh`, `GET /api/sector-radar/status` 추가. 한국 상장 ETF seed + 관심종목 키워드 병합 anchor를 `sector_radar_quotes` 시트에 `GOOGLEFINANCE` read-back으로 점수화(자동 주문 없음). 홈 대시보드에 조정 후보/과열 주의 Top3 카드 연동.
 - **Portfolio Ledger 모드 분리 + 자동 동기화:** `/portfolio-ledger`를 기본 모드/고급(SQL) 모드로 분리하고 SQL 블록 기본 숨김을 적용. 신규 보유/관심 등록 및 `apply-trade` 성공 후 `quotes/refresh -> quotes/status -> snapshot/goals/history/dashboard` 자동 동기화 체인을 추가.
 - **등록 직후 ticker 추천 연계:** 보유/관심 등록 시 `google_ticker`가 비어 있으면 KR(`KRX:{pad6}`)/US(symbol) 기본 후보와 quote symbol(`.KS/.KQ` 또는 US symbol)을 채워 요청하고 `ticker-resolver/refresh`를 백그라운드로 연계(자동 DB 확정 없음, 승인 구조 유지).

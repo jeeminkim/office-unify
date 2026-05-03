@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { SectorRadarMarket } from '@/lib/server/sectorRadarRegistry';
 import type {
   SectorRadarActionHint,
   SectorRadarAnchorDataStatus,
@@ -9,6 +10,7 @@ import type {
 } from '@/lib/sectorRadarContract';
 
 export type AnchorMetricRow = {
+  market?: SectorRadarMarket;
   symbol: string;
   name: string;
   googleTicker: string;
@@ -50,15 +52,15 @@ function actionHintFromZone(zone: SectorRadarZone): SectorRadarActionHint {
 function narrativeFor(hint: SectorRadarActionHint): string {
   switch (hint) {
     case 'buy_watch':
-      return '극단적 조정 구간으로 보입니다. 분할매수 검토·관찰 후보이며, 자동 매수 신호가 아닙니다.';
+      return '시장 공포가 큽니다. 관심종목을 천천히 담을 기회일 수 있습니다.';
     case 'accumulate':
-      return '조정 구간에 가깝습니다. 분할매수 검토를 고려하되, 판단은 본인 책임입니다.';
+      return '조정 구간입니다. 좋은 종목은 분할 매수 검토 구간입니다.';
     case 'hold':
-      return '중립 구간입니다. 관망·리밸런싱 여부만 점검하세요.';
+      return '방향성 탐색 구간입니다. 종목별 선별 접근이 좋습니다.';
     case 'trim_watch':
-      return '과열에 가깝습니다. 비중 축소·분할매도 검토를 고려하세요.';
+      return '많이 올라온 구간입니다. 신규 추격보다 분할익절·관망이 유리합니다.';
     case 'avoid_chase':
-      return '과열 구간에 가깝습니다. 추격매수 주의, 비중 축소 검토를 권장합니다.';
+      return '많이 올라온 구간입니다. 신규 추격보다 분할익절·관망이 유리합니다.';
     default:
       return '데이터가 부족해 온도를 계산하지 못했습니다. 시트 새로고침 후 30~90초 뒤 다시 확인하세요.';
   }
@@ -97,6 +99,20 @@ function classifyDataStatus(
   return 'pending';
 }
 
+function volumeRatio(volume?: number, volumeAvg?: number): number | undefined {
+  if (volumeAvg == null || volumeAvg <= 0 || volume == null || volume <= 0) return undefined;
+  return volume / volumeAvg;
+}
+
+/** 거래량 비율 → 0~30점 (섹터 합산 100점 중 거래량 축). */
+function volumePointsFromRatio(ratio: number): number {
+  if (ratio < 0.7) return 5;
+  if (ratio < 1.0) return 10;
+  if (ratio < 1.3) return 18;
+  if (ratio < 1.7) return 24;
+  return 30;
+}
+
 /** 시트 raw + 파싱값으로 앵커 요약 행 생성 */
 export function buildSummaryAnchors(rows: AnchorMetricRow[]): SectorRadarSummaryAnchor[] {
   return rows.map((r) => ({
@@ -114,12 +130,18 @@ export function buildSummaryAnchors(rows: AnchorMetricRow[]): SectorRadarSummary
   }));
 }
 
-export function scoreSectorFromAnchors(
+/**
+ * 단일/소수 앵커에 대한 표준 100점 스냅샷 (crypto 서브그룹 평균용).
+ * `quiet`이면 사람용 warnings 생략.
+ */
+export function computeStandardSectorSnapshot(
   categoryKey: string,
   categoryName: string,
   rows: AnchorMetricRow[],
+  opts?: { quiet?: boolean },
 ): SectorRadarSummarySector {
   const warnings: string[] = [];
+  const quiet = opts?.quiet === true;
 
   if (rows.length === 0) {
     return {
@@ -130,13 +152,15 @@ export function scoreSectorFromAnchors(
       narrativeHint: narrativeFor('no_data'),
       anchors: [],
       components: {},
-      warnings: ['anchor_set_empty', '관심종목에 섹터 키워드가 맞는 ETF를 추가하면 custom anchor로 반영됩니다.'],
+      warnings: quiet
+        ? []
+        : ['관심종목에 섹터 키워드가 맞는 ETF를 추가하면 관심 앵커로 반영됩니다.'],
     };
   }
 
   const okPrice = rows.filter((r) => r.dataStatus === 'ok' && r.price != null && r.price > 0);
   if (okPrice.length === 0) {
-    warnings.push('all_anchors_missing_price');
+    if (!quiet) warnings.push('앵커 ETF 시세를 불러오지 못했습니다.');
     return {
       key: categoryKey,
       name: categoryName,
@@ -149,17 +173,24 @@ export function scoreSectorFromAnchors(
     };
   }
 
+  if (!quiet && rows.some((r) => r.dataStatus === 'pending')) {
+    warnings.push('일부 anchor ETF 시세 지연');
+  }
+
   const momentumPts = rows
     .map((r) => momentumPointsFromChangePct(r.changePct))
     .filter((v): v is number => v != null);
-  const momentum = momentumPts.length ? momentumPts.reduce((a, b) => a + b, 0) / momentumPts.length : undefined;
+  const rawMomentumAvg = momentumPts.length ? momentumPts.reduce((a, b) => a + b, 0) / momentumPts.length : undefined;
+  const momentum = rawMomentumAvg != null ? Math.min(25, rawMomentumAvg * (25 / 28)) : undefined;
 
   const rangePs = rows
     .map((r) => rangePosition(r.price, r.high52, r.low52))
     .filter((v): v is number => v != null);
   const avgRangeP = rangePs.length ? rangePs.reduce((a, b) => a + b, 0) / rangePs.length : undefined;
-
-  const drawdown = avgRangeP != null ? 20 * avgRangeP : undefined;
+  const drawdown = avgRangeP != null ? 15 * avgRangeP : undefined;
+  if (!quiet && rangePs.length < Math.max(1, Math.floor(rows.length * 0.5))) {
+    warnings.push('52주 밴드 데이터 부족');
+  }
 
   const trendPts = rows
     .map((r) => {
@@ -171,18 +202,13 @@ export function scoreSectorFromAnchors(
   const trend = trendPts.length ? trendPts.reduce((a, b) => a + b, 0) / trendPts.length : 10;
 
   let volume: number | undefined;
-  const volRatios = rows
-    .map((r) => {
-      if (r.volumeAvg == null || r.volumeAvg <= 0 || r.volume == null || r.volume <= 0) return undefined;
-      return Math.min(2.5, r.volume / r.volumeAvg);
-    })
-    .filter((v): v is number => v != null);
+  const volRatios = rows.map((r) => volumeRatio(r.volume, r.volumeAvg)).filter((v): v is number => v != null);
   if (volRatios.length) {
     const avgR = volRatios.reduce((a, b) => a + b, 0) / volRatios.length;
-    volume = Math.min(20, 8 * avgR);
+    volume = volumePointsFromRatio(avgR);
   } else {
     volume = 10;
-    warnings.push('volume_avg_unavailable_neutral_volume_score');
+    if (!quiet) warnings.push('거래량 평균 부족 → 거래량 점수는 중립 반영');
   }
 
   let risk = 10;
@@ -191,8 +217,8 @@ export function scoreSectorFromAnchors(
   if (rows.some((r) => r.dataStatus === 'parse_failed')) risk -= 2;
   risk = Math.max(0, risk);
 
-  const m = momentum ?? 15;
-  const d = drawdown ?? 10;
+  const m = momentum ?? 15 * (25 / 28);
+  const d = drawdown ?? 7.5;
   const v = volume ?? 10;
   const tr = trend;
   const score = Math.round(Math.min(100, Math.max(0, m + d + v + tr + risk)));
@@ -208,14 +234,110 @@ export function scoreSectorFromAnchors(
     narrativeHint: narrativeFor(actionHint),
     anchors: buildSummaryAnchors(rows),
     components: {
-      momentum,
-      volume,
-      drawdown,
-      trend,
+      momentum: m,
+      volume: v,
+      drawdown: d,
+      trend: tr,
       risk,
     },
     warnings,
   };
+}
+
+const CRYPTO_BTC = new Set(['IBIT', 'FBTC', 'ARKB']);
+const CRYPTO_ALT = new Set(['ETHA', 'FETH']);
+const CRYPTO_INFRA = new Set(['COIN', 'MSTR']);
+
+function avgLineScore(rows: AnchorMetricRow[], pred: (r: AnchorMetricRow) => boolean): number | undefined {
+  const sub = rows.filter(pred).filter((r) => r.dataStatus === 'ok' && r.price != null && r.price > 0);
+  if (!sub.length) return undefined;
+  const scores = sub
+    .map((r) => computeStandardSectorSnapshot('_line', '_', [r], { quiet: true }).score)
+    .filter((x): x is number => x != null && Number.isFinite(x));
+  if (!scores.length) return undefined;
+  return scores.reduce((a, b) => a + b, 0) / scores.length;
+}
+
+function scoreCryptoSectorFromAnchors(categoryKey: string, categoryName: string, rows: AnchorMetricRow[]): SectorRadarSummarySector {
+  const warnings: string[] = [];
+
+  if (rows.length === 0) {
+    return {
+      key: categoryKey,
+      name: categoryName,
+      zone: 'no_data',
+      actionHint: 'no_data',
+      narrativeHint: narrativeFor('no_data'),
+      anchors: [],
+      components: {},
+      warnings: ['관심종목에 섹터 키워드가 맞는 ETF를 추가하면 관심 앵커로 반영됩니다.'],
+    };
+  }
+
+  const btc = avgLineScore(rows, (r) => CRYPTO_BTC.has(r.symbol.toUpperCase()));
+  const alt = avgLineScore(
+    rows,
+    (r) => CRYPTO_ALT.has(r.symbol.toUpperCase()) || r.symbol.toUpperCase() === 'SOL',
+  );
+  const infra = avgLineScore(rows, (r) => CRYPTO_INFRA.has(r.symbol.toUpperCase()));
+
+  const legs: { w: number; s?: number }[] = [
+    { w: 0.45, s: btc },
+    { w: 0.25, s: alt },
+    { w: 0.3, s: infra },
+  ];
+  const okLegs = legs.filter((x) => x.s != null);
+  if (!okLegs.length) {
+    warnings.push('앵커 ETF 시세를 불러오지 못했습니다.');
+    return {
+      key: categoryKey,
+      name: categoryName,
+      zone: 'no_data',
+      actionHint: 'no_data',
+      narrativeHint: narrativeFor('no_data'),
+      anchors: buildSummaryAnchors(rows),
+      components: {},
+      warnings,
+    };
+  }
+
+  const wsum = okLegs.reduce((a, x) => a + x.w, 0);
+  const score = Math.round(okLegs.reduce((a, x) => a + (x.w / wsum) * (x.s as number), 0));
+  const zone = zoneFromScore(score);
+  const actionHint = actionHintFromZone(zone);
+
+  if (rows.some((r) => r.dataStatus === 'pending')) warnings.push('일부 anchor ETF 시세 지연');
+  if (rows.filter((r) => rangePosition(r.price, r.high52, r.low52) != null).length < rows.length * 0.5) {
+    warnings.push('52주 밴드 데이터 부족');
+  }
+
+  return {
+    key: categoryKey,
+    name: categoryName,
+    score,
+    zone,
+    actionHint,
+    narrativeHint: narrativeFor(actionHint),
+    anchors: buildSummaryAnchors(rows),
+    components: {
+      cryptoBtc: btc,
+      cryptoAlt: alt,
+      cryptoInfra: infra,
+      risk: okLegs.length >= 2 ? 10 : 7,
+    },
+    warnings,
+  };
+}
+
+export function scoreSectorFromAnchors(
+  categoryKey: string,
+  categoryName: string,
+  rows: AnchorMetricRow[],
+): SectorRadarSummarySector {
+  if (categoryKey === 'crypto') {
+    return scoreCryptoSectorFromAnchors(categoryKey, categoryName, rows);
+  }
+  return computeStandardSectorSnapshot(categoryKey, categoryName, rows);
 }
 
 export { classifyDataStatus };

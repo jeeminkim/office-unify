@@ -17,7 +17,7 @@ import {
 
 type RefreshBody = {
   targetType?: 'holding' | 'watchlist' | 'all';
-  symbols?: Array<{ market: string; symbol: string }>;
+  symbols?: Array<{ market: string; symbol: string; name?: string }>;
 };
 
 type ResolveTarget = {
@@ -82,6 +82,7 @@ export async function POST(req: Request) {
         const m = s.market === 'US' || s.market === 'KR' ? s.market : null;
         if (!m) continue;
         const sym = normSym(m, s.symbol);
+        const fallbackName = (typeof s.name === 'string' && s.name.trim()) ? s.name.trim() : sym;
         if (restrict === 'all' || restrict === 'holding') {
           const h = holdings.find((row) => row.market === m && normSym(row.market, row.symbol) === sym);
           if (h) {
@@ -92,6 +93,15 @@ export async function POST(req: Request) {
               name: h.name,
               existingGoogleTicker: h.google_ticker,
               existingQuoteSymbol: h.quote_symbol,
+            });
+          } else if (restrict === 'holding') {
+            push({
+              targetType: 'holding',
+              market: m,
+              symbol: sym,
+              name: fallbackName,
+              existingGoogleTicker: null,
+              existingQuoteSymbol: null,
             });
           }
         }
@@ -105,6 +115,15 @@ export async function POST(req: Request) {
               name: w.name,
               existingGoogleTicker: w.google_ticker,
               existingQuoteSymbol: w.quote_symbol,
+            });
+          } else if (restrict === 'watchlist') {
+            push({
+              targetType: 'watchlist',
+              market: m,
+              symbol: sym,
+              name: fallbackName,
+              existingGoogleTicker: null,
+              existingQuoteSymbol: null,
             });
           }
         }

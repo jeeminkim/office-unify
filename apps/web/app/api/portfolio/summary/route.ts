@@ -4,10 +4,12 @@ import { parseOfficeUserKey, type PortfolioSummaryResponseBody } from '@office-u
 import { denyUnlessPortfolioReadSecret } from '@/lib/server/portfolio-read-guard';
 import { getServiceSupabase } from '@/lib/server/supabase-service';
 import { requirePersonaChatAuth } from '@/lib/server/persona-chat-auth';
-import { listWebPortfolioHoldingsForUser } from '@office-unify/supabase-access';
+import { listWebPortfolioHoldingsForUser, listWebPortfolioWatchlistForUser } from '@office-unify/supabase-access';
 import { loadHoldingQuotes } from '@/lib/server/marketQuoteService';
 import { normalizeQuoteKey } from '@/lib/server/quoteReadbackUtils';
 import { analyzeThesisHealth } from '@/lib/server/thesisHealthAnalyzer';
+import { matchRelatedSectorsForHolding } from '@/lib/server/sectorRadarDossierMatch';
+import { buildSectorRadarSummaryForUser } from '@/lib/server/sectorRadarSummaryService';
 
 type EnhancedPortfolioSummaryResponse = {
   ok: boolean;
@@ -35,6 +37,8 @@ type EnhancedPortfolioSummaryResponse = {
     needsTickerRecommendation?: boolean;
     thesisHealthStatus?: 'healthy' | 'watch' | 'weakening' | 'broken' | 'unknown';
     thesisConfidence?: 'low' | 'medium' | 'high';
+    /** 섹터 레이더 최우선 매칭 구간(판단 보조, 자동 주문 없음) */
+    sectorRadarBadge?: 'fear' | 'greed';
   }>;
   exposures?: {
     byMarket?: Array<{ key: string; valueKrw: number; weight: number }>;
@@ -105,6 +109,41 @@ export async function GET(req: Request) {
       googleTicker: holding.google_ticker ?? undefined,
     })));
     const quoteWarnings = [...quoteBundle.warnings];
+
+    const sectorRadarBadgeByKey = new Map<string, 'fear' | 'greed'>();
+    try {
+      const [watchlist, radar] = await Promise.all([
+        listWebPortfolioWatchlistForUser(supabase, userKey),
+        buildSectorRadarSummaryForUser(supabase, userKey),
+      ]);
+      for (const holding of holdings) {
+        const wl =
+          watchlist.find(
+            (w) =>
+              w.market === holding.market && w.symbol.trim().toUpperCase() === holding.symbol.trim().toUpperCase(),
+          ) ?? null;
+        const matches = matchRelatedSectorsForHolding(
+          {
+            market: holding.market,
+            symbol: holding.symbol,
+            name: holding.name,
+            sector: holding.sector ?? null,
+            investment_memo: holding.investment_memo ?? null,
+            judgment_memo: holding.judgment_memo ?? null,
+          },
+          wl,
+          radar.sectors,
+          1,
+        );
+        const top = matches[0];
+        if (!top || top.zone === 'no_data') continue;
+        const k = `${holding.market}:${holding.symbol.trim().toUpperCase()}`;
+        if (top.zone === 'extreme_fear' || top.zone === 'fear') sectorRadarBadgeByKey.set(k, 'fear');
+        else if (top.zone === 'greed' || top.zone === 'extreme_greed') sectorRadarBadgeByKey.set(k, 'greed');
+      }
+    } catch {
+      /* 섹터 배지는 best-effort */
+    }
 
     const topPositionsRaw = holdings.map((holding) => {
       const quantity = toNumber(holding.qty);
@@ -178,6 +217,7 @@ export async function GET(req: Request) {
           weightBaseKrw && weightBaseKrw > 0
             ? (((hasAnyValuation ? row.valueKrw : row.totalCostKrw) ?? 0) / weightBaseKrw) * 100
             : undefined,
+        sectorRadarBadge: sectorRadarBadgeByKey.get(`${row.market}:${row.symbol.trim().toUpperCase()}`),
       }));
     const byMarket = Array.from(
       topPositionsRaw.reduce((map, row) => {

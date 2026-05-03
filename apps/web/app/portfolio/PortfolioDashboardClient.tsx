@@ -28,6 +28,7 @@ type SummaryResponse = {
     needsTickerRecommendation?: boolean;
     thesisHealthStatus?: "healthy" | "watch" | "weakening" | "broken" | "unknown";
     thesisConfidence?: "low" | "medium" | "high";
+    sectorRadarBadge?: "fear" | "greed";
   }>;
   warnings: Array<{ code: string; severity: "info" | "warn" | "danger"; message: string }>;
   dataQuality: {
@@ -1067,6 +1068,12 @@ export function PortfolioDashboardClient() {
                         <span className={`rounded px-2 py-0.5 ${row.thesisHealthStatus === "broken" ? "bg-red-100 text-red-900" : row.thesisHealthStatus === "weakening" ? "bg-amber-100 text-amber-900" : row.thesisHealthStatus === "watch" ? "bg-blue-100 text-blue-900" : "bg-emerald-100 text-emerald-900"}`}>
                           thesis {row.thesisHealthStatus} ({row.thesisConfidence ?? "low"})
                         </span>
+                      ) : null}
+                      {row.sectorRadarBadge === "fear" ? (
+                        <span className="rounded bg-sky-100 px-2 py-0.5 text-sky-950">sector fear</span>
+                      ) : null}
+                      {row.sectorRadarBadge === "greed" ? (
+                        <span className="rounded bg-orange-100 px-2 py-0.5 text-orange-950">sector greed</span>
                       ) : null}
                       {row.market === "US" && summary?.dataQuality.fxAvailable === false ? (
                         <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-900">fx_missing</span>

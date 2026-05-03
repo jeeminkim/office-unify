@@ -100,7 +100,7 @@ export async function POST(req: Request) {
     const already = existing.some((row) => row.market === market && row.symbol.trim().toUpperCase() === symbol);
     if (already) {
       return NextResponse.json(
-        { error: '기존 보유가 있습니다. 매수/매도 반영을 사용하세요.' },
+        { error: '이미 보유 중입니다. 신규 추가가 아니라 매수/매도 반영을 사용하세요.' },
         { status: 409 },
       );
     }

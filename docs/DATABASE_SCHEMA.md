@@ -31,8 +31,8 @@
 
 ## Sector Radar (섹터 온도계)
 
-- **1차 구현은 신규 SQL 없음.** 섹터·ETF anchor seed는 `apps/web/lib/server/sectorRadarRegistry.ts` 상수로 관리하고, 사용자별 custom anchor는 `web_portfolio_watchlist`(특히 `sector` 및 메모 필드 키워드)에서 병합한다.
-- **2차(선택)**: 운영에서 카테고리/anchor를 DB로 빼야 할 때 `sector_radar_categories`, `sector_radar_anchors`, `sector_radar_scores` 등의 DDL을 별도 문서화할 수 있다(현재 DDL 파일 없음).
+- **신규 SQL 없음.** 섹터·anchor seed는 `apps/web/lib/server/sectorRadarRegistry.ts` 상수로 관리하고, 사용자별 custom anchor는 `web_portfolio_watchlist`(특히 `sector` 및 메모 필드 키워드, **US 관심종목 포함**)에서 병합한다. **관심종목 관찰 큐**는 `GET /api/sector-radar/watchlist-candidates`가 동일 watchlist 행을 레이더와 조합해 산출한다(저장 컬럼 추가 없음). 시트 `sector_radar_quotes`는 Google Sheets에만 존재하며 **2차 계약(A–U)** 은 `docs/google-sheets-portfolio-dashboard.md`를 참고한다.
+- **향후(선택)**: 운영에서 카테고리/anchor를 DB로 빼야 할 때 `sector_radar_categories`, `sector_radar_anchors`, `sector_radar_scores` 등의 DDL을 별도 문서화할 수 있다(현재 DDL 파일 없음).
 
 ## Committee Followups (조일현 보고서 후속작업)
 

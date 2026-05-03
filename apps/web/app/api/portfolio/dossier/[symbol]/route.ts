@@ -11,6 +11,7 @@ import {
 import { loadHoldingQuotes } from '@/lib/server/marketQuoteService';
 import { matchRelatedSectorsForHolding } from '@/lib/server/sectorRadarDossierMatch';
 import { buildSectorRadarSummaryForUser } from '@/lib/server/sectorRadarSummaryService';
+import type { PortfolioDossierRelatedSector } from '@/lib/sectorRadarContract';
 import { analyzeThesisHealth } from '@/lib/server/thesisHealthAnalyzer';
 
 type Params = { params: Promise<{ symbol: string }> };
@@ -145,6 +146,19 @@ export async function GET(_req: Request, context: Params) {
       sectorRadarWarnings = ['sector_radar_dossier_attach_failed'];
     }
 
+    const relatedSector: PortfolioDossierRelatedSector | null =
+      relatedSectorRadar[0] != null
+        ? {
+            key: relatedSectorRadar[0]!.key,
+            name: relatedSectorRadar[0]!.name,
+            score: relatedSectorRadar[0]!.score,
+            zone: relatedSectorRadar[0]!.zone,
+            confidence: relatedSectorRadar[0]!.confidence,
+            narrativeHint: relatedSectorRadar[0]!.narrativeHint,
+            anchors: relatedSectorRadar[0]!.linkedAnchors ?? [],
+          }
+        : null;
+
     const thesisHealth = analyzeThesisHealth({
       symbol,
       market: holding.market,
@@ -198,6 +212,7 @@ export async function GET(_req: Request, context: Params) {
         quoteSymbol: holding.quote_symbol,
       },
       relatedSectorRadar,
+      relatedSector,
       sectorRadarGeneratedAt,
       sectorRadarWarnings,
       thesis: {

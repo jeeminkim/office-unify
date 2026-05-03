@@ -5,13 +5,31 @@ import { useEffect, useState } from "react";
 
 type Props = { symbolKey: string };
 
+type DossierRelatedSector = {
+  key: string;
+  name: string;
+  score?: number;
+  zone: string;
+  confidence: "low" | "medium" | "high";
+  narrativeHint: string;
+  anchors: Array<{
+    symbol: string;
+    name: string;
+    googleTicker: string;
+    dataStatus: string;
+    changePct?: number;
+    price?: number;
+    volume?: number;
+  }>;
+};
+
 type DossierSectorRadarMatch = {
   key: string;
   name: string;
   score?: number;
   zone: string;
   actionHint: string;
-  confidence: "low" | "medium";
+  confidence: "low" | "medium" | "high";
   narrativeHint: string;
   linkedAnchors: Array<{
     symbol: string;
@@ -36,6 +54,7 @@ type DossierResponse = {
     pnlRate?: number;
   };
   relatedSectorRadar?: DossierSectorRadarMatch[];
+  relatedSector?: DossierRelatedSector | null;
   sectorRadarGeneratedAt?: string;
   thesis?: {
     reason?: string;
@@ -150,7 +169,7 @@ export function PortfolioSymbolDetailClient({ symbolKey }: Props) {
           <div>
             <h2 className="font-semibold text-indigo-950">관련 섹터 온도 (판단 보조)</h2>
             <p className="mt-1 text-xs text-indigo-900/90">
-              ETF anchor 기반 섹터 레이더와의 <strong>텍스트·섹터 필드 매칭</strong>입니다. 자동 매수·매도 신호가 아니며, 실제 주문은 하지 않습니다.{" "}
+              ETF·티커 anchor 기반 섹터 레이더와의 <strong>텍스트·섹터 필드 매칭</strong>입니다. 자동 매수·매도 신호가 아니며, 실제 주문은 하지 않습니다.{" "}
               {data?.sectorRadarGeneratedAt ? (
                 <span className="text-slate-600">기준 시각: {data.sectorRadarGeneratedAt}</span>
               ) : null}
@@ -160,11 +179,38 @@ export function PortfolioSymbolDetailClient({ symbolKey }: Props) {
             섹터 레이더 전체
           </Link>
         </div>
-        {(data?.relatedSectorRadar ?? []).length === 0 ? (
+        {data?.relatedSector ? (
+          <div className="mt-3 rounded border border-indigo-200 bg-white p-3 text-slate-800">
+            <p className="text-xs font-semibold text-indigo-950">관련 섹터 온도</p>
+            <p className="mt-1 text-sm font-medium text-slate-900">{data.relatedSector.name}</p>
+            <p className="mt-1 text-[11px] text-slate-600">
+              {data.relatedSector.score != null ? `${Math.round(data.relatedSector.score)}점` : "NO_DATA"} · {sectorZoneLabel(data.relatedSector.zone)} · 신뢰도{" "}
+              {data.relatedSector.confidence}
+            </p>
+            <p className="mt-2 text-xs leading-snug text-slate-700">{data.relatedSector.narrativeHint}</p>
+            {(data.relatedSector.anchors ?? []).length > 0 ? (
+              <ul className="mt-2 space-y-0.5 text-[10px] text-slate-600">
+                {(data.relatedSector.anchors ?? []).slice(0, 8).map((a) => (
+                  <li key={`rs-${a.symbol}`}>
+                    <span className="font-mono">{a.symbol}</span> {a.name} · {a.googleTicker} · {a.dataStatus}
+                    {a.changePct != null ? ` · ${a.changePct.toFixed(2)}%` : ""}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
+        {!data?.relatedSector && (data?.relatedSectorRadar ?? []).length === 0 ? (
           <p className="mt-2 text-xs text-slate-600">매칭된 섹터가 없습니다. 원장/관심종목의 섹터·메모에 분야 키워드를 넣거나 `/sector-radar`에서 시트를 새로고침해 보세요.</p>
-        ) : (
-          <ul className="mt-3 space-y-3 text-xs">
-            {(data?.relatedSectorRadar ?? []).map((m) => (
+        ) : null}
+        {(() => {
+          const extra = (data?.relatedSectorRadar ?? []).filter((m) => !data?.relatedSector || m.key !== data.relatedSector.key);
+          if (extra.length === 0) return null;
+          return (
+            <>
+              {data?.relatedSector ? <p className="mt-3 text-xs font-medium text-slate-700">추가 섹터 매칭</p> : null}
+              <ul className="mt-2 space-y-3 text-xs">
+                {extra.map((m) => (
               <li key={m.key} className="rounded border border-indigo-100 bg-white p-3 text-slate-800">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <p className="font-semibold text-slate-900">{m.name}</p>
@@ -192,9 +238,11 @@ export function PortfolioSymbolDetailClient({ symbolKey }: Props) {
                   <p className="mt-2 text-[10px] text-slate-500">매칭 근거: {m.matchReasons.join(", ")}</p>
                 ) : null}
               </li>
-            ))}
-          </ul>
-        )}
+                ))}
+              </ul>
+            </>
+          );
+        })()}
       </section>
 
       <section className="mb-4 grid gap-3 md:grid-cols-2">

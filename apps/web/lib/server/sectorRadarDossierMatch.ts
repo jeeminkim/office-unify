@@ -1,11 +1,8 @@
 import 'server-only';
 
 import type { WebPortfolioWatchlistRow } from '@office-unify/supabase-access';
-import { SECTOR_RADAR_CATEGORY_SEEDS } from '@/lib/server/sectorRadarRegistry';
-import type {
-  SectorRadarSummaryAnchor,
-  SectorRadarSummarySector,
-} from '@/lib/sectorRadarContract';
+import { SECTOR_RADAR_CATEGORY_SEEDS, type SectorRadarAnchorSeed } from '@/lib/server/sectorRadarRegistry';
+import type { SectorRadarSummaryAnchor, SectorRadarSummarySector } from '@/lib/sectorRadarContract';
 
 export type DossierSectorRadarMatch = {
   key: string;
@@ -14,7 +11,7 @@ export type DossierSectorRadarMatch = {
   zone: SectorRadarSummarySector['zone'];
   actionHint: SectorRadarSummarySector['actionHint'];
   narrativeHint: string;
-  confidence: 'low' | 'medium';
+  confidence: 'low' | 'medium' | 'high';
   linkedAnchors: SectorRadarSummaryAnchor[];
   matchReasons: string[];
 };
@@ -26,6 +23,16 @@ function norm(s: string | null | undefined): string {
 function padKr(sym: string): string {
   const t = sym.trim().toUpperCase();
   return /^\d+$/.test(t) ? t.padStart(6, '0') : t;
+}
+
+function anchorSeedMatchesHolding(
+  holding: { market: string; symbol: string },
+  a: SectorRadarAnchorSeed,
+): boolean {
+  const m = a.market ?? 'KR';
+  if (holding.market !== m) return false;
+  if (m === 'KR') return padKr(holding.symbol) === padKr(a.symbol);
+  return holding.symbol.trim().toUpperCase() === a.symbol.trim().toUpperCase();
 }
 
 function buildBlob(
@@ -74,7 +81,6 @@ export function matchRelatedSectorsForHolding(
   const blob = buildBlob(holding, watch);
   const hs = norm(holding.sector);
   const ws = norm(watch?.sector ?? '');
-  const symPad = padKr(holding.symbol);
 
   const candidates: DossierSectorRadarMatch[] = [];
 
@@ -84,9 +90,11 @@ export function matchRelatedSectorsForHolding(
 
     const reasons: string[] = [];
     let medium = false;
+    let high = false;
 
     for (const a of cat.anchors) {
-      if (padKr(a.symbol) === symPad) {
+      if (anchorSeedMatchesHolding(holding, a)) {
+        high = true;
         medium = true;
         reasons.push(`anchor_symbol:${a.symbol}`);
         break;
@@ -95,8 +103,14 @@ export function matchRelatedSectorsForHolding(
 
     const catName = norm(cat.name);
     const catKey = norm(cat.key);
+    if (!high && hs && hs === catName) {
+      high = true;
+      medium = true;
+      reasons.push('holding.sector_exact');
+    }
+
     if (!medium && hs) {
-      if (hs === catName || hs.includes(catName) || catName.includes(hs)) {
+      if (hs.includes(catName) || catName.includes(hs)) {
         medium = true;
         reasons.push('holding.sector');
       } else if (catKey.length >= 3 && hs.includes(catKey)) {
@@ -128,13 +142,14 @@ export function matchRelatedSectorsForHolding(
 
     const nameHit = catName.length >= 2 && blob.includes(catName);
     if (!medium && nameHit) {
+      medium = true;
       reasons.push(`category_name:${cat.name}`);
     }
 
     const hasSignal = medium || kwHits >= 1 || nameHit;
     if (!hasSignal) continue;
 
-    const confidence: 'low' | 'medium' = medium ? 'medium' : 'low';
+    const confidence: 'low' | 'medium' | 'high' = high ? 'high' : medium ? 'medium' : 'low';
 
     candidates.push({
       key: snap.key,
@@ -149,7 +164,7 @@ export function matchRelatedSectorsForHolding(
     });
   }
 
-  const rank = (m: DossierSectorRadarMatch) => (m.confidence === 'medium' ? 2 : 1);
+  const rank = (m: DossierSectorRadarMatch) => (m.confidence === 'high' ? 3 : m.confidence === 'medium' ? 2 : 1);
   candidates.sort((a, b) => rank(b) - rank(a) || (b.matchReasons.length - a.matchReasons.length));
   return candidates.slice(0, maxResults);
 }

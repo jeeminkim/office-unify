@@ -27,12 +27,15 @@ export async function GET() {
     if (!tabFound) warnings.push('sector_radar_tab_missing_or_unreadable');
     const mapped: SectorRadarStatusRow[] = rows.map((r) => ({
       categoryKey: r.categoryKey,
+      market: r.market,
       anchorSymbol: r.anchorSymbol,
       googleTicker: r.googleTicker,
       rawPrice: r.rawPrice,
       parsedPrice: r.price,
       rawVolume: r.rawVolume,
       parsedVolume: r.volume,
+      rawVolumeAvg: r.rawVolumeAvg,
+      parsedVolumeAvg: r.volumeAvg,
       rawChangePct: r.rawChangePct,
       parsedChangePct: r.changePct,
       rowStatus: r.rowStatus,

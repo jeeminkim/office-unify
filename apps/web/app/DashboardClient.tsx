@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { SectorRadarSummaryResponse, SectorRadarSummarySector } from "@/lib/sectorRadarContract";
+import type {
+  SectorRadarSummaryResponse,
+  SectorRadarSummarySector,
+  SectorWatchlistCandidateResponse,
+} from "@/lib/sectorRadarContract";
 
 type StatusSection = {
   key: string;
@@ -137,8 +141,17 @@ export function DashboardClient() {
   const [pattern, setPattern] = useState<PatternAnalysisResponse | null>(null);
   const [portfolioAlerts, setPortfolioAlerts] = useState<Array<{ id: string; symbol: string; title: string; body: string; severity: string }>>([]);
   const [sectorRadar, setSectorRadar] = useState<SectorRadarSummaryResponse | null>(null);
+  const [watchQueue, setWatchQueue] = useState<SectorWatchlistCandidateResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloading, setReloading] = useState(false);
+
+  const watchQueueTop5 = useMemo(() => {
+    const rows = watchQueue?.candidates ?? [];
+    return rows
+      .filter((x) => x.readinessLabel === "watch_now" || x.readinessLabel === "prepare")
+      .sort((a, b) => b.readinessScore - a.readinessScore)
+      .slice(0, 5);
+  }, [watchQueue]);
 
   const loadOverview = useCallback(async () => {
     setReloading(true);
@@ -171,12 +184,19 @@ export function DashboardClient() {
       setPortfolioAlerts(alertsJson.alerts ?? []);
       setError(null);
       try {
-        const sectorRes = await fetch("/api/sector-radar/summary", { credentials: "same-origin" });
+        const [sectorRes, watchRes] = await Promise.all([
+          fetch("/api/sector-radar/summary", { credentials: "same-origin" }),
+          fetch("/api/sector-radar/watchlist-candidates", { credentials: "same-origin" }),
+        ]);
         const sectorJson = (await sectorRes.json()) as SectorRadarSummaryResponse;
+        const watchJson = (await watchRes.json()) as SectorWatchlistCandidateResponse;
         if (Array.isArray(sectorJson?.sectors)) setSectorRadar(sectorJson);
         else setSectorRadar(null);
+        if (watchRes.ok && Array.isArray(watchJson?.candidates)) setWatchQueue(watchJson);
+        else setWatchQueue(null);
       } catch {
         setSectorRadar(null);
+        setWatchQueue(null);
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "대시보드 로드 실패");
@@ -307,15 +327,15 @@ export function DashboardClient() {
       </section>
 
       {sectorRadar?.sectors?.length ? (
-        <section className="mb-5 grid gap-3 md:grid-cols-2">
+        <section className="mb-5 grid gap-3 md:grid-cols-3">
           <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-slate-800">섹터 온도계 · 조정/분할매수 후보 (Top 3)</h2>
+              <h2 className="text-sm font-semibold text-slate-800">오늘의 Fear 후보 Top3</h2>
               <Link href="/sector-radar" className="text-xs text-slate-600 underline underline-offset-2">
                 전체 보기
               </Link>
             </div>
-            <p className="mt-1 text-[11px] text-slate-600">ETF anchor 기준 판단 보조이며 주문 실행 기능은 없습니다.</p>
+            <p className="mt-1 text-[11px] text-slate-600">예: 바이오 41점(중립) → 관망·리밸런싱 구간. 주문 실행 없음.</p>
             {(sectorRadar.fearCandidatesTop3 ?? []).length === 0 ? (
               <p className="mt-2 text-xs text-slate-500">NO_DATA</p>
             ) : (
@@ -331,12 +351,12 @@ export function DashboardClient() {
           </div>
           <div className="rounded-xl border border-orange-200 bg-orange-50/70 p-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-slate-800">섹터 온도계 · 추격매수 주의 (Top 3)</h2>
+              <h2 className="text-sm font-semibold text-slate-800">오늘의 Greed 후보 Top3</h2>
               <Link href="/sector-radar" className="text-xs text-slate-600 underline underline-offset-2">
                 전체 보기
               </Link>
             </div>
-            <p className="mt-1 text-[11px] text-slate-600">과열 구간은 비중 축소·분할매도 검토용 참고입니다.</p>
+            <p className="mt-1 text-[11px] text-slate-600">예: AI/전력인프라 74점(탐욕) → 추격매수 주의. 주문 실행 없음.</p>
             {(sectorRadar.greedCandidatesTop3 ?? []).length === 0 ? (
               <p className="mt-2 text-xs text-slate-500">NO_DATA</p>
             ) : (
@@ -350,8 +370,58 @@ export function DashboardClient() {
               </ul>
             )}
           </div>
+          <div className="rounded-xl border border-violet-200 bg-violet-50/70 p-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-800">Crypto Radar</h2>
+              <Link href="/sector-radar" className="text-xs text-slate-600 underline underline-offset-2">
+                전체 보기
+              </Link>
+            </div>
+            {(() => {
+              const c = sectorRadar.sectors.find((s) => s.key === "crypto");
+              if (!c) {
+                return <p className="mt-2 text-xs text-slate-600">코인/디지털자산 섹터 요약을 불러오지 못했습니다.</p>;
+              }
+              return (
+                <>
+                  <p className="mt-1 text-[11px] text-slate-600">
+                    코인/디지털자산 {c.score != null ? `${Math.round(c.score)}점` : "NO_DATA"} ({sectorZoneShort(c.zone)}) —{" "}
+                    {c.narrativeHint.length > 72 ? `${c.narrativeHint.slice(0, 72)}…` : c.narrativeHint}
+                  </p>
+                  <p className="mt-2 text-[10px] text-violet-900/80">BTC·알트·인프라 가중 서브스코어 기반. 자동매매 없음.</p>
+                </>
+              );
+            })()}
+          </div>
         </section>
       ) : null}
+
+      <section className="mb-5 rounded-xl border border-teal-200 bg-teal-50/70 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-teal-950">오늘의 관심종목 큐</h2>
+          <Link href="/sector-radar" className="text-xs text-teal-800 underline underline-offset-2">
+            섹터 레이더에서 전체 보기
+          </Link>
+        </div>
+        <p className="mt-1 text-[11px] text-teal-900/90">
+          매수 추천이 아니라 관찰 우선순위입니다. 섹터가 공포 구간이어도 개별 종목 thesis 확인이 필요합니다.
+        </p>
+        {watchQueueTop5.length === 0 ? (
+          <p className="mt-2 text-xs text-slate-600">지금 관찰·준비 구간(watch_now / prepare)에 오른 관심종목이 없거나 데이터가 없습니다.</p>
+        ) : (
+          <ul className="mt-2 space-y-1 text-xs text-teal-950">
+            {watchQueueTop5.map((c) => (
+              <li key={`wq-${c.market}-${c.symbol}`} className="rounded border border-teal-100 bg-white px-2 py-1">
+                <span className="font-medium">{c.name}</span>{" "}
+                <span className="font-mono text-slate-600">
+                  {c.market}:{c.symbol}
+                </span>{" "}
+                · {c.readinessScore}점 · {c.readinessLabel === "watch_now" ? "지금 관찰" : "준비"} · {c.sectorName}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section className="mb-5 grid gap-3 md:grid-cols-2">
         <div className="rounded-xl border border-slate-200 bg-white p-4">

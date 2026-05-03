@@ -2,10 +2,15 @@ import 'server-only';
 
 import type { WebPortfolioWatchlistRow } from '@office-unify/supabase-access';
 
+export type SectorRadarMarket = 'KR' | 'US';
+
 export type SectorRadarAnchorSeed = {
   symbol: string;
   name: string;
   sourceLabel: 'seed';
+  market?: SectorRadarMarket;
+  /** KR 기본 KRX:pad6, US·명시 시 그대로 사용 */
+  googleTicker?: string;
 };
 
 export type SectorRadarCategorySeed = {
@@ -17,6 +22,28 @@ export type SectorRadarCategorySeed = {
 };
 
 export const SECTOR_RADAR_SHEET_NAME = process.env.SECTOR_RADAR_QUOTES_SHEET_NAME?.trim() || 'sector_radar_quotes';
+
+export function normalizedSectorSymbol(market: SectorRadarMarket, symbol: string): string {
+  const t = symbol.trim().toUpperCase();
+  if (market === 'KR' && /^\d+$/.test(t)) return t.padStart(6, '0');
+  return t;
+}
+
+export function buildSectorRadarNormalizedKey(categoryKey: string, market: SectorRadarMarket, symbol: string): string {
+  return `${categoryKey}::${market}::${normalizedSectorSymbol(market, symbol)}`;
+}
+
+export function parseSectorRadarNormalizedKey(raw: string): { categoryKey: string; market: SectorRadarMarket; symbol: string } | null {
+  const t = raw.trim();
+  const parts = t.split('::');
+  if (parts.length !== 3) return null;
+  const [categoryKey, marketRaw, symbolRaw] = parts;
+  if (!categoryKey || !symbolRaw) return null;
+  const mu = (marketRaw || '').toUpperCase();
+  if (mu !== 'KR' && mu !== 'US') return null;
+  const market = mu as SectorRadarMarket;
+  return { categoryKey, market, symbol: normalizedSectorSymbol(market, symbolRaw) };
+}
 
 /** 운영 중 수정 가능한 seed. 잘못된 티커는 시트 read-back에서 NO_DATA 처리. */
 export const SECTOR_RADAR_CATEGORY_SEEDS: SectorRadarCategorySeed[] = [
@@ -80,10 +107,32 @@ export const SECTOR_RADAR_CATEGORY_SEEDS: SectorRadarCategorySeed[] = [
     ],
   },
   {
-    key: 'crypto_infra',
-    name: '코인/디지털자산 인프라',
-    keywords: ['코인', 'crypto', '비트', '디지털자산', '블록체인'],
-    anchors: [],
+    key: 'crypto',
+    name: '코인/디지털자산',
+    keywords: [
+      'bitcoin',
+      'btc',
+      'ethereum',
+      'eth',
+      'solana',
+      'crypto',
+      'coin',
+      'digital asset',
+      '블록체인',
+      '비트코인',
+      '이더리움',
+      '솔라나',
+      '코인',
+    ],
+    anchors: [
+      { symbol: 'IBIT', name: 'iShares Bitcoin Trust', sourceLabel: 'seed', market: 'US', googleTicker: 'IBIT' },
+      { symbol: 'FBTC', name: 'Fidelity Wise Origin Bitcoin Fund', sourceLabel: 'seed', market: 'US', googleTicker: 'FBTC' },
+      { symbol: 'ARKB', name: 'ARK 21Shares Bitcoin ETF', sourceLabel: 'seed', market: 'US', googleTicker: 'ARKB' },
+      { symbol: 'ETHA', name: 'iShares Ethereum Trust', sourceLabel: 'seed', market: 'US', googleTicker: 'ETHA' },
+      { symbol: 'FETH', name: 'Fidelity Ethereum Fund', sourceLabel: 'seed', market: 'US', googleTicker: 'FETH' },
+      { symbol: 'COIN', name: 'Coinbase Global Inc', sourceLabel: 'seed', market: 'US', googleTicker: 'NASDAQ:COIN' },
+      { symbol: 'MSTR', name: 'MicroStrategy Inc', sourceLabel: 'seed', market: 'US', googleTicker: 'NASDAQ:MSTR' },
+    ],
   },
   {
     key: 'defense_space',
@@ -120,6 +169,7 @@ export const SECTOR_RADAR_CATEGORY_SEEDS: SectorRadarCategorySeed[] = [
 export type MergedSectorRadarAnchor = {
   categoryKey: string;
   categoryName: string;
+  market: SectorRadarMarket;
   symbol: string;
   name: string;
   googleTicker: string;
@@ -136,14 +186,15 @@ function defaultGoogleTickerKr(symbol: string): string {
   return `KRX:${padKrSymbol(symbol)}`;
 }
 
+function resolveSeedGoogleTicker(seed: SectorRadarAnchorSeed): { market: SectorRadarMarket; ticker: string; symbolNorm: string } {
+  const market: SectorRadarMarket = seed.market ?? 'KR';
+  const symbolNorm = normalizedSectorSymbol(market, seed.symbol);
+  const ticker = (seed.googleTicker?.trim() || (market === 'KR' ? defaultGoogleTickerKr(seed.symbol) : symbolNorm)).toUpperCase();
+  return { market, ticker, symbolNorm };
+}
+
 function watchlistTextBlob(row: WebPortfolioWatchlistRow): string {
-  return [
-    row.sector ?? '',
-    row.name ?? '',
-    row.investment_memo ?? '',
-    row.interest_reason ?? '',
-    row.observation_points ?? '',
-  ]
+  return [row.sector ?? '', row.name ?? '', row.investment_memo ?? '', row.interest_reason ?? '', row.observation_points ?? '']
     .join(' ')
     .toLowerCase();
 }
@@ -152,16 +203,41 @@ function categoryMatch(category: SectorRadarCategorySeed, blob: string): boolean
   return category.keywords.some((k) => blob.includes(k.toLowerCase()));
 }
 
+function normLower(s: string | null | undefined): string {
+  return (s ?? '').trim().toLowerCase();
+}
+
+/** 관심종목 텍스트·섹터 필드로 매칭되는 sector_radar 카테고리 키 목록 */
+export function listSectorKeysMatchingWatchlist(row: WebPortfolioWatchlistRow): string[] {
+  const blob = watchlistTextBlob(row);
+  const hs = normLower(row.sector);
+  const out = new Set<string>();
+  for (const cat of SECTOR_RADAR_CATEGORY_SEEDS) {
+    if (categoryMatch(cat, blob)) out.add(cat.key);
+    const catName = normLower(cat.name);
+    const catKey = normLower(cat.key);
+    if (hs && catName) {
+      if (hs === catName || hs.includes(catName) || catName.includes(hs)) out.add(cat.key);
+      if (catKey.length >= 3 && hs.includes(catKey)) out.add(cat.key);
+    }
+  }
+  return [...out];
+}
+
+function mergeKey(a: MergedSectorRadarAnchor): string {
+  return `${a.categoryKey}:${a.market}:${normalizedSectorSymbol(a.market, a.symbol)}`;
+}
+
 /**
- * seed registry + KR 관심종목 중 키워드 매칭으로 custom anchor 병합.
- * 동일 category+symbol 은 한 번만 유지.
+ * seed registry + 관심종목 중 키워드 매칭으로 custom anchor 병합.
+ * 동일 category+market+symbol 은 한 번만 유지.
  */
 export function buildMergedSectorRadarAnchors(watchlist: WebPortfolioWatchlistRow[]): MergedSectorRadarAnchor[] {
   const seen = new Set<string>();
   const out: MergedSectorRadarAnchor[] = [];
 
   const push = (row: MergedSectorRadarAnchor) => {
-    const key = `${row.categoryKey}:${padKrSymbol(row.symbol)}`;
+    const key = mergeKey(row);
     if (seen.has(key)) return;
     seen.add(key);
     out.push(row);
@@ -169,34 +245,56 @@ export function buildMergedSectorRadarAnchors(watchlist: WebPortfolioWatchlistRo
 
   for (const cat of SECTOR_RADAR_CATEGORY_SEEDS) {
     for (const a of cat.anchors) {
+      const { market, ticker, symbolNorm } = resolveSeedGoogleTicker(a);
       push({
         categoryKey: cat.key,
         categoryName: cat.name,
-        symbol: padKrSymbol(a.symbol),
+        market,
+        symbol: symbolNorm,
         name: a.name,
-        googleTicker: defaultGoogleTickerKr(a.symbol),
+        googleTicker: ticker,
         sourceLabel: 'seed',
       });
     }
   }
 
   for (const w of watchlist) {
-    if (w.market !== 'KR') continue;
-    const sym = padKrSymbol(w.symbol);
-    if (!/^\d{6}$/.test(sym)) continue;
-    const blob = watchlistTextBlob(w);
-    const ticker = (w.google_ticker?.trim() || defaultGoogleTickerKr(sym)).toUpperCase();
+    const market = w.market as SectorRadarMarket;
+    if (market !== 'KR' && market !== 'US') continue;
 
-    for (const cat of SECTOR_RADAR_CATEGORY_SEEDS) {
-      if (!categoryMatch(cat, blob)) continue;
-      push({
-        categoryKey: cat.key,
-        categoryName: cat.name,
-        symbol: sym,
-        name: (w.name ?? sym).trim() || sym,
-        googleTicker: ticker,
-        sourceLabel: 'watchlist',
-      });
+    const blob = watchlistTextBlob(w);
+    const ticker = (w.google_ticker?.trim() || (market === 'KR' ? defaultGoogleTickerKr(w.symbol) : w.symbol.trim().toUpperCase())).toUpperCase();
+
+    if (market === 'KR') {
+      const sym = padKrSymbol(w.symbol);
+      if (!/^\d{6}$/.test(sym)) continue;
+      for (const cat of SECTOR_RADAR_CATEGORY_SEEDS) {
+        if (!categoryMatch(cat, blob)) continue;
+        push({
+          categoryKey: cat.key,
+          categoryName: cat.name,
+          market: 'KR',
+          symbol: sym,
+          name: (w.name ?? sym).trim() || sym,
+          googleTicker: ticker,
+          sourceLabel: 'watchlist',
+        });
+      }
+    } else {
+      const sym = normalizedSectorSymbol('US', w.symbol);
+      if (!sym) continue;
+      for (const cat of SECTOR_RADAR_CATEGORY_SEEDS) {
+        if (!categoryMatch(cat, blob)) continue;
+        push({
+          categoryKey: cat.key,
+          categoryName: cat.name,
+          market: 'US',
+          symbol: sym,
+          name: (w.name ?? sym).trim() || sym,
+          googleTicker: ticker,
+          sourceLabel: 'watchlist',
+        });
+      }
     }
   }
 

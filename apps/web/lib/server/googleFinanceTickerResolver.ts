@@ -24,12 +24,31 @@ function pushUnique(out: TickerCandidate[], c: TickerCandidate, seen: Set<string
 }
 
 /** 코스닥 상장 가능성이 알려진 종목명(표시·후보 우선순위용). 자동 DB 저장은 하지 않음. */
-const KOSDAQ_PRIORITY_NAME_FRAGMENTS = ['HLB', '고영', '메지온', '알테오젠'] as const;
+const KOSDAQ_PRIORITY_NAME_FRAGMENTS = [
+  'HLB',
+  '고영',
+  '메지온',
+  '알테오젠',
+  '파마리서치',
+  'HK이노엔',
+  '한솔아이원스',
+] as const;
 
 export function isKosdaqPriorityKrDisplayName(name?: string): boolean {
   if (!name?.trim()) return false;
   const n = name.replace(/\s/g, '').toLowerCase();
   return KOSDAQ_PRIORITY_NAME_FRAGMENTS.some((frag) => n.includes(frag.toLowerCase()));
+}
+
+/** quote_symbol `.KQ` 우선이 타당한지(추천용, 확정 아님). */
+export function isKosdaqQuoteLikelyKr(name?: string, sectorHint?: string, core6?: string | null): boolean {
+  if (isKosdaqPriorityKrDisplayName(name)) return true;
+  const blob = `${name ?? ''} ${sectorHint ?? ''}`.toLowerCase();
+  if (blob.includes('코스닥') || blob.includes('kosdaq')) return true;
+  if (core6 && /^140/.test(core6) && (blob.includes('바이오') || blob.includes('제약') || blob.includes('therapeutics') || blob.includes('pharma'))) {
+    return true;
+  }
+  return false;
 }
 
 /** KR 심볼이 숫자+문자 혼합(예: ETF 0123G0)인지 — 자동 high confidence 금지용 */
@@ -141,7 +160,7 @@ export function generateGoogleFinanceTickerCandidates(input: ResolveTickerInput)
     const core6 = krNumericCore(sym);
     const pad6 = sym.padStart(6, '0');
     if (core6) {
-      const kosdaqPriority = isKosdaqPriorityKrDisplayName(input.name);
+      const kosdaqPriority = isKosdaqQuoteLikelyKr(input.name, undefined, core6);
       pushUnique(
         out,
         {
@@ -175,7 +194,7 @@ export function generateGoogleFinanceTickerCandidates(input: ResolveTickerInput)
         seen,
       );
     } else {
-      const kosdaqPriority = isKosdaqPriorityKrDisplayName(input.name);
+      const kosdaqPriority = isKosdaqQuoteLikelyKr(input.name, undefined, null);
       pushUnique(
         out,
         {
