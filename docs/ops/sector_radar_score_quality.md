@@ -82,3 +82,97 @@ Sector Radar 점수는 **매수 추천이 아니라 섹터 관찰 신호**입니
 5. `web_ops_events`에서 `sector_radar_score_*`가 과도하게 쌓이지 않는지(동일 fingerprint는 occurrence만 증가) 확인  
 
 자세한 anchor 시트 운영은 [sector_radar_anchor_universe.md](./sector_radar_anchor_universe.md)를 참고합니다.
+
+## 중복 로그 방지 / throttle 정책
+
+- 전용 로거: `apps/web/lib/server/sectorRadarOpsLogger.ts`
+- 공통 upsert 유틸: `apps/web/lib/server/upsertOpsEventByFingerprint.ts` (RPC 우선, 실패 시 fallback)
+- 안정 fingerprint: `sector_radar:${userKey}:${normalizedSectorKey}:${code}`
+- 동일 fingerprint는 신규 row를 만들지 않고 기존 row를 갱신(occurrence_count/last_seen_at/detail/message)
+- warning 반복은 cooldown 적용
+  - 기본: 30분 (`sector_radar_score_no_data`, `sector_radar_score_quote_coverage_low`, `sector_radar_score_very_low_confidence`, `sector_radar_score_sample_too_small`)
+  - 관찰 경고(`sector_radar_score_overheated`): 24시간
+- cooldown 윈도우 내 반복은 DB write를 건너뛰고(`skippedByThrottle`) 응답/화면 상태는 유지
+
+## status 재발 처리 정책
+
+- `open` / `investigating` / `backlog`: occurrence 누적 + last_seen_at/detail 갱신
+- `resolved`: 재발 시 `open`으로 reopen 후 occurrence 누적
+- `ignored`: 기본적으로 `ignored` 유지(필요 시 last_seen_at만 갱신하거나 throttle skip)
+
+## warning 유형 정책
+
+- 데이터 품질 warning(`no_data`, `quote_coverage_low`, `very_low_confidence`, `sample_too_small`)
+  - 운영 이슈(`isOperationalError=true`), dedupe+throttle 적용
+- 정상 관찰 warning(`overheated`)
+  - 오류 아님(`isObservationWarning=true`, `isOperationalError=false`)
+  - UI에는 표시 가능, DB 적재는 긴 throttle(24h)로 제한
+
+## detail 구조(요약)
+
+`detail`에는 원인 추적을 위해 아래를 포함합니다.
+
+- `sampleCount`, `quoteOkCount`, `quoteMissingCount`, `quoteCoverageRatio`
+- `anchorSymbols[]`(symbol/googleTicker/quoteSymbol/role/quoteStatus)
+- `missingSymbols[]`, `missingReasons[]`
+- `suggestedAction`, `isOperationalError`, `isObservationWarning`
+
+## Ops Events 상세 UI
+
+- `domain=sector_radar`이고 `detail.feature=sector_radar_score_quality`이면 상세 영역에서 표 형태를 우선 렌더링합니다.
+- 카드 본문에 `표본 n개 · 시세 성공 n개 · 누락 n개` 요약을 표시합니다.
+- 상세에서 `anchorSymbols`는 `종목명/symbol/quoteSymbol/googleTicker/role/quoteStatus` 표로 확인할 수 있습니다.
+- 원본 JSON은 제거하지 않고 `원본 JSON 보기` 접기 영역으로 유지합니다.
+
+## rawScore vs adjustedScore 해석
+
+- `rawScore`: 기존 산식 점수(호환 필드 `score`와 동일 기준)
+- `adjustedScore`: 표본 수/시세 커버리지 penalty를 합산한 보수 점수
+- 카드 기본 점수는 `adjustedScore`를 우선 사용하고, 상세에서 raw/adjusted를 함께 보여줍니다.
+- 높은 점수는 **매수 신호가 아니라 최근 강한 움직임**일 수 있으며, 과열/위험에서는 추격매수 주의 문구를 강제합니다.
+
+## 운영 SQL
+
+```sql
+select
+  code,
+  severity,
+  status,
+  occurrence_count,
+  first_seen_at,
+  last_seen_at,
+  message,
+  detail
+from public.web_ops_events
+where domain = 'sector_radar'
+order by last_seen_at desc
+limit 50;
+```
+
+```sql
+select
+  fingerprint,
+  code,
+  count(*) as row_count,
+  sum(coalesce(occurrence_count, 1)) as occurrence_total,
+  max(last_seen_at) as last_seen_at
+from public.web_ops_events
+where domain = 'sector_radar'
+group by fingerprint, code
+having count(*) > 1
+order by row_count desc, last_seen_at desc;
+```
+
+같은 fingerprint가 여러 row로 나오면 dedupe 정책이 제대로 적용되지 않은 것입니다.
+
+RPC/인덱스 확인:
+
+```sql
+select
+  indexname,
+  indexdef
+from pg_indexes
+where schemaname = 'public'
+  and tablename = 'web_ops_events'
+  and indexdef ilike '%fingerprint%';
+```

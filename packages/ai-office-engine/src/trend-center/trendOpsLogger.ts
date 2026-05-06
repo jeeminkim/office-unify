@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { bumpOpsEventByFingerprint, insertOpsEvent } from '@office-unify/supabase-access';
+import { upsertOpsEventByFingerprint } from '@office-unify/supabase-access';
 import type { OfficeUserKey } from '@office-unify/shared-types';
 import type { TrendWarningCode } from './trendWarningCodes';
 
@@ -116,11 +116,7 @@ export async function logTrendOpsEvent(params: {
       reportRunId: params.reportRunId,
       ...params.detail,
     }) as Record<string, unknown>;
-    if (fingerprint) {
-      const bumped = await bumpOpsEventByFingerprint(params.supabase, fingerprint);
-      if (bumped) return true;
-    }
-    await insertOpsEvent(params.supabase, {
+    await upsertOpsEventByFingerprint(params.supabase, {
       user_key: params.userKey,
       event_type: eventType,
       severity,
@@ -131,7 +127,7 @@ export async function logTrendOpsEvent(params: {
       code: String(params.code).slice(0, 500),
       status: 'open',
       detail,
-      fingerprint: fingerprint ?? null,
+      fingerprint: fingerprint ?? buildTrendOpsFingerprint(['trend', String(params.userKey), params.topicKey, params.stage, String(params.code)]),
     });
     return true;
   } catch (e: unknown) {

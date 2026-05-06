@@ -127,6 +127,42 @@ limit 50;
 
 **원칙:** 기능을 대체하지 않으며, 로깅 실패는 앱 동작에 영향 없음. 민감정보는 저장하지 않는다.
 
+### DB-level fingerprint upsert RPC (옵션)
+
+**파일:** `docs/sql/append_web_ops_events_upsert_rpc.sql`
+
+- RPC: `public.upsert_web_ops_event_by_fingerprint(...)`
+- 목적: 멀티 인스턴스/동시 요청에서 동일 fingerprint 경합 시에도 단일 row 누적 보장
+- 정책:
+  - 신규 fingerprint: insert + `occurrence_count=1`
+  - 기존 fingerprint: update + `occurrence_count++`, `last_seen_at`/`detail`/`message` 최신화
+  - `resolved` 재발: `open`으로 reopen
+  - `ignored` 재발: `ignored` 유지(카운트/last_seen 갱신)
+- 앱 로거는 RPC 우선 호출 후 실패 시 앱 레벨 fallback(upsert by select/update/insert)로 동작한다.
+
+운영 점검 SQL:
+
+```sql
+select
+  routine_schema,
+  routine_name
+from information_schema.routines
+where routine_schema = 'public'
+  and routine_name = 'upsert_web_ops_event_by_fingerprint';
+```
+
+### today_candidates ops logging
+
+- domain: `today_candidates`
+- fingerprint 예시:
+  - `today_candidates:${userKey}:${yyyyMMdd}:generated`
+  - `today_candidates:${userKey}:${yyyyMMdd}:us_market_no_data`
+  - `today_candidates:${userKey}:${stockCode}:already_exists`
+  - `today_candidates:${userKey}:${stockCode}:add_success`
+  - `today_candidates:${userKey}:${yyyyMMdd}:${candidateId}:detail_opened`
+  - `today_candidates:${userKey}:${stockCode}:postprocess_success|postprocess_partial|postprocess_failed`
+  - `today_candidates:${userKey}:${yyyyMMdd}:ops_summary_unavailable`
+
 ## Decision Journal (비거래 의사결정 일지)
 
 **파일:** `docs/sql/append_web_decision_journal.sql`

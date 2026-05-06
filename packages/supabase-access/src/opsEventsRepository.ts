@@ -56,6 +56,34 @@ export type OpsEventInsertRow = {
   fingerprint?: string | null;
 };
 
+export type UpsertOpsEventByFingerprintInput = {
+  user_key?: string | null;
+  event_type: OpsEventType;
+  severity: OpsSeverity;
+  domain: string;
+  route?: string | null;
+  component?: string | null;
+  message: string;
+  code?: string | null;
+  status?: OpsEventStatus;
+  action_hint?: string | null;
+  detail?: unknown;
+  fingerprint: string;
+};
+
+export type UpsertOpsEventByFingerprintResult = {
+  ok: boolean;
+  via: 'rpc' | 'fallback';
+  inserted: boolean;
+  updated: boolean;
+  reopened: boolean;
+  ignored: boolean;
+  occurrence_count: number;
+  status: string;
+  id?: string;
+  warning?: string;
+};
+
 export type OpsEventListFilters = {
   status?: string;
   severity?: string;
@@ -110,6 +138,148 @@ export async function bumpOpsEventByFingerprint(
     .eq('id', (row as { id: string }).id);
   if (upErr) throw upErr;
   return { id: (row as { id: string }).id, occurrence_count: next };
+}
+
+type RpcUpsertRow = {
+  id: string;
+  inserted: boolean;
+  updated: boolean;
+  reopened: boolean;
+  ignored: boolean;
+  occurrence_count: number;
+  status: string;
+  last_seen_at: string;
+};
+
+function nextStatusByPolicy(existing: string): string {
+  if (existing === 'resolved') return 'open';
+  if (existing === 'ignored') return 'ignored';
+  if (existing === 'open' || existing === 'investigating' || existing === 'backlog') return existing;
+  return 'open';
+}
+
+export async function upsertOpsEventByFingerprint(
+  client: SupabaseClient,
+  input: UpsertOpsEventByFingerprintInput,
+): Promise<UpsertOpsEventByFingerprintResult> {
+  const status = input.status ?? 'open';
+  const rpcParams = {
+    p_user_key: input.user_key ?? null,
+    p_domain: input.domain,
+    p_event_type: input.event_type,
+    p_severity: input.severity,
+    p_code: input.code ?? null,
+    p_message: input.message,
+    p_detail: (input.detail ?? null) as Record<string, unknown> | null,
+    p_fingerprint: input.fingerprint,
+    p_status: status,
+    p_route: input.route ?? null,
+    p_component: input.component ?? null,
+    p_action_hint: input.action_hint ?? null,
+  };
+
+  try {
+    const { data, error } = await client.rpc('upsert_web_ops_event_by_fingerprint', rpcParams);
+    if (error) throw error;
+    const row = (Array.isArray(data) ? data[0] : data) as RpcUpsertRow | null;
+    if (row && row.id) {
+      return {
+        ok: true,
+        via: 'rpc',
+        inserted: Boolean(row.inserted),
+        updated: Boolean(row.updated),
+        reopened: Boolean(row.reopened),
+        ignored: Boolean(row.ignored),
+        occurrence_count: Number(row.occurrence_count ?? 1),
+        status: String(row.status ?? status),
+        id: row.id,
+      };
+    }
+  } catch (e: unknown) {
+    // fall through to app-level fallback
+    const warning = e instanceof Error ? e.message : 'rpc_failed';
+    const fallback = await upsertOpsEventByFingerprintFallback(client, input);
+    return { ...fallback, warning: warning.slice(0, 240) };
+  }
+
+  return upsertOpsEventByFingerprintFallback(client, input);
+}
+
+async function upsertOpsEventByFingerprintFallback(
+  client: SupabaseClient,
+  input: UpsertOpsEventByFingerprintInput,
+): Promise<UpsertOpsEventByFingerprintResult> {
+  const nowIso = new Date().toISOString();
+  const { data: row, error: selErr } = await client
+    .from('web_ops_events')
+    .select('id,status,occurrence_count')
+    .eq('fingerprint', input.fingerprint)
+    .maybeSingle();
+  if (selErr) throw selErr;
+
+  if (!row) {
+    const inserted = await insertOpsEvent(client, {
+      user_key: input.user_key ?? null,
+      event_type: input.event_type,
+      severity: input.severity,
+      domain: input.domain,
+      route: input.route ?? null,
+      component: input.component ?? null,
+      message: input.message,
+      code: input.code ?? null,
+      status: input.status ?? 'open',
+      action_hint: input.action_hint ?? null,
+      detail: input.detail ?? null,
+      fingerprint: input.fingerprint,
+    });
+    return {
+      ok: true,
+      via: 'fallback',
+      inserted: true,
+      updated: false,
+      reopened: false,
+      ignored: false,
+      occurrence_count: 1,
+      status: input.status ?? 'open',
+      id: inserted?.id,
+    };
+  }
+
+  const existing = row as { id: string; status: string; occurrence_count: number };
+  const nextStatus = nextStatusByPolicy(existing.status);
+  const nextOccurrence = (existing.occurrence_count ?? 1) + 1;
+  const { error: upErr } = await client
+    .from('web_ops_events')
+    .update({
+      occurrence_count: nextOccurrence,
+      last_seen_at: nowIso,
+      updated_at: nowIso,
+      domain: input.domain,
+      event_type: input.event_type,
+      severity: input.severity,
+      code: input.code ?? null,
+      message: input.message,
+      detail: input.detail ?? null,
+      route: input.route ?? null,
+      component: input.component ?? null,
+      action_hint: input.action_hint ?? null,
+      status: nextStatus,
+      resolved_at: existing.status === 'resolved' && nextStatus === 'open' ? null : undefined,
+    })
+    .eq('id', existing.id);
+  if (upErr) throw upErr;
+
+  return {
+    ok: true,
+    via: 'fallback',
+    inserted: false,
+    updated: true,
+    reopened: existing.status === 'resolved' && nextStatus === 'open',
+    ignored: nextStatus === 'ignored',
+    occurrence_count: nextOccurrence,
+    status: nextStatus,
+    id: existing.id,
+  };
 }
 
 export async function listOpsEvents(

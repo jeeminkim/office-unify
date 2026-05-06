@@ -10,6 +10,9 @@ import {
 } from '@office-unify/supabase-access';
 import { loadHoldingQuotes } from '@/lib/server/marketQuoteService';
 import { analyzeThesisHealth } from '@/lib/server/thesisHealthAnalyzer';
+import { buildTodayStockCandidates } from '@/lib/server/todayStockCandidateService';
+import { upsertOpsEventByFingerprint } from '@/lib/server/upsertOpsEventByFingerprint';
+import type { TodayBriefWithCandidatesResponse } from '@/lib/todayCandidatesContract';
 
 function toNum(v: number | string | null | undefined): number {
   const n = Number(v ?? 0);
@@ -208,14 +211,81 @@ export async function GET() {
       analytics ? 'JOURNAL_READY' : 'JOURNAL_DEGRADED',
     ];
 
-    return NextResponse.json({
+    const todayCandidates = await buildTodayStockCandidates({
+      supabase,
+      userKey: auth.userKey,
+      limitPerSection: 3,
+    });
+    const ymd = new Date().toISOString().slice(0, 10).replaceAll('-', '');
+    void upsertOpsEventByFingerprint({
+      userKey: String(auth.userKey),
+      domain: 'today_candidates',
+      eventType: 'info',
+      severity: 'info',
+      code: 'today_candidates_generated',
+      message: 'today candidates generated from brief API',
+      detail: {
+        userContextCount: todayCandidates.userContextCandidates.length,
+        usMarketKrCount: todayCandidates.usMarketKrCandidates.length,
+        usMarketAvailable: todayCandidates.usMarketSummary.available,
+        warnings: todayCandidates.warnings,
+      },
+      fingerprint: `today_candidates:${auth.userKey}:${ymd}:generated`,
+      status: 'open',
+      route: '/api/dashboard/today-brief',
+      component: 'today-brief',
+    });
+    if (!todayCandidates.usMarketSummary.available) {
+      void upsertOpsEventByFingerprint({
+        userKey: String(auth.userKey),
+        domain: 'today_candidates',
+        eventType: 'warning',
+        severity: 'warning',
+        code: 'today_candidates_us_market_no_data',
+        message: 'US market morning summary unavailable',
+        detail: { warnings: todayCandidates.usMarketSummary.warnings },
+        fingerprint: `today_candidates:${auth.userKey}:${ymd}:us_market_no_data`,
+        status: 'open',
+        route: '/api/dashboard/today-brief',
+        component: 'today-brief',
+      });
+    }
+    const response: TodayBriefWithCandidatesResponse = {
       ok: true,
       generatedAt: new Date().toISOString(),
       lines: [riskLine, perfLine, actionLine],
       badges,
       degraded: warnings.length > 0 || !quote.quoteAvailable || !analytics,
       warnings,
-    });
+      candidates: {
+        userContext: todayCandidates.userContextCandidates,
+        usMarketKr: todayCandidates.usMarketKrCandidates,
+      },
+      usMarketSummary: todayCandidates.usMarketSummary,
+      disclaimer:
+        '이 후보는 매수 권유가 아니라, 내 관심종목·대화 이력·섹터 흐름·미국시장 신호를 바탕으로 만든 관찰 목록입니다. 실제 매수 전에는 실적, 뉴스, 가격 위치, 손절 기준을 별도로 확인하세요.',
+      qualityMeta: {
+        todayCandidates: {
+          generatedAt: new Date().toISOString(),
+          userContextCount: todayCandidates.userContextCandidates.length,
+          usMarketKrCount: todayCandidates.usMarketKrCandidates.length,
+          usMarketDataAvailable: todayCandidates.usMarketSummary.available,
+          warnings: todayCandidates.warnings,
+        },
+      },
+    };
+    if (!todayCandidates.usMarketSummary.available || todayCandidates.usMarketSummary.conclusion === 'no_data') {
+      response.lines = [
+        ...response.lines.slice(0, 2),
+        {
+          title: '미국시장 데이터 상태',
+          body: '미국시장 데이터가 충분하지 않아 미국장 기반 한국주식 후보는 제한적으로 표시합니다. 오늘은 기존 관심종목과 Sector Radar 신뢰도 중심으로 확인하세요.',
+          severity: 'warn',
+          source: ['us_market_morning'],
+        },
+      ];
+    }
+    return NextResponse.json(response);
   } catch (error: unknown) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'unknown error' }, { status: 500 });
   }

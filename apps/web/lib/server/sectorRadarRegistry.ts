@@ -1,6 +1,6 @@
 import 'server-only';
-
 import type { WebPortfolioWatchlistRow } from '@office-unify/supabase-access';
+import { getSectorKeyByAliasName, normalizeSectorLabelForLookup } from '@/lib/sectorRadarRegistry.shared';
 
 export type SectorRadarMarket = 'KR' | 'US';
 
@@ -321,24 +321,11 @@ function normLower(s: string | null | undefined): string {
   return (s ?? '').trim().toLowerCase();
 }
 
-const SECTOR_LABEL_ALIAS_TO_KEYS: Record<string, string[]> = {
-  '바이오/헬스케어': ['bio'],
-  'k-콘텐츠/미디어': ['k_content'],
-  'ai/전력인프라': ['ai_power_infra'],
-  '소비/유통': ['consumer_retail'],
-  '항공/여행': ['airline_travel'],
-  '금융/핀테크': ['finance_fintech'],
-  '사이버보안': ['cybersecurity'],
-  '전기차/자율주행': ['ev_autonomous'],
-  'etf/인컴': ['etf_income'],
-  '조선/lng/소재': ['shipping_lng_material'],
-};
-
 export function getSectorKeyBySectorName(name: string | null | undefined): string | null {
-  const hs = normLower(name);
+  const hs = normalizeSectorLabelForLookup(name);
   if (!hs) return null;
-  const alias = SECTOR_LABEL_ALIAS_TO_KEYS[hs];
-  if (alias?.length) return alias[0] ?? null;
+  const alias = getSectorKeyByAliasName(hs);
+  if (alias) return alias;
   const cat = SECTOR_RADAR_CATEGORY_SEEDS.find((c) => normLower(c.name) === hs || hs.includes(normLower(c.name)));
   return cat?.key ?? null;
 }
@@ -371,9 +358,8 @@ export function listSectorKeysMatchingWatchlist(row: WebPortfolioWatchlistRow): 
   const blob = watchlistTextBlob(row);
   const hs = normLower(row.sector);
   const out = new Set<string>();
-  if (hs && SECTOR_LABEL_ALIAS_TO_KEYS[hs]) {
-    for (const k of SECTOR_LABEL_ALIAS_TO_KEYS[hs]) out.add(k);
-  }
+  const alias = getSectorKeyByAliasName(hs);
+  if (alias) out.add(alias);
   for (const cat of SECTOR_RADAR_CATEGORY_SEEDS) {
     if (categoryMatch(cat, blob)) out.add(cat.key);
     const catName = normLower(cat.name);

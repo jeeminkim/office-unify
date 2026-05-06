@@ -31,6 +31,14 @@
 - `watchlist_sector_match_db_update_failed`
 - `watchlist_sector_match_failed`
 
+## fingerprint / upsert 정책
+
+- 기본 fingerprint: `watchlist_sector:${userKey}:${market}:${symbol}:${code}`
+- batch 결과: `watchlist_sector:${userKey}:batch:${mode}:${code}`
+- 관련 anchor 로그: `portfolio_watchlist:${userKey}:${market}:${symbol}:related_anchors:${code}`
+- 앱은 공통 upsert 유틸을 통해 DB RPC를 우선 호출하며, RPC 실패 시 fallback 로직으로 계속 기록한다.
+- `resolved` 재발은 `open`으로 reopen, `ignored`는 유지한다.
+
 ## 운영 조회 SQL
 
 ```sql

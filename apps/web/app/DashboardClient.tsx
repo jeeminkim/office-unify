@@ -13,6 +13,7 @@ import {
   getVisibleSectorRadarWarningDetailsForSummary,
   getVisibleSectorRadarWarningsForSummary,
 } from "@/lib/sectorRadarWarningMessages";
+import type { TodayBriefWithCandidatesResponse, TodayStockCandidate } from "@/lib/todayCandidatesContract";
 
 type StatusSection = {
   key: string;
@@ -71,18 +72,15 @@ type DashboardResponse = {
   warnings: string[];
 };
 
-type TodayBriefResponse = {
+type TodayBriefResponse = TodayBriefWithCandidatesResponse;
+type TodayCandidatesOpsSummaryResponse = {
   ok: boolean;
-  generatedAt: string;
-  lines: Array<{
-    title: string;
-    body: string;
-    severity: "info" | "warn" | "danger" | "positive";
-    source: string[];
-  }>;
-  badges: string[];
-  degraded?: boolean;
-  warnings?: string[];
+  totals?: {
+    generated: number;
+    usMarketNoData: number;
+    alreadyExists: number;
+    addFailed: number;
+  };
 };
 
 type ProfitGoalSummaryResponse = {
@@ -157,6 +155,9 @@ export function DashboardClient() {
   const [opsOpenErrorCount, setOpsOpenErrorCount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloading, setReloading] = useState(false);
+  const [openedCandidateId, setOpenedCandidateId] = useState<string | null>(null);
+  const [watchlistAddState, setWatchlistAddState] = useState<Record<string, string>>({});
+  const [todayOpsSummary, setTodayOpsSummary] = useState<TodayCandidatesOpsSummaryResponse | null>(null);
 
   const watchQueueTop5 = useMemo(() => {
     const rows = watchQueue?.candidates ?? [];
@@ -169,13 +170,14 @@ export function DashboardClient() {
   const loadOverview = useCallback(async () => {
     setReloading(true);
     try {
-      const [statusRes, overviewRes, briefRes, profitGoalRes, patternRes, alertsRes] = await Promise.all([
+      const [statusRes, overviewRes, briefRes, profitGoalRes, patternRes, alertsRes, todayOpsRes] = await Promise.all([
         fetch("/api/system/status", { credentials: "same-origin" }),
         fetch("/api/dashboard/overview", { credentials: "same-origin" }),
         fetch("/api/dashboard/today-brief", { credentials: "same-origin" }),
         fetch("/api/dashboard/profit-goal-summary", { credentials: "same-origin" }),
         fetch("/api/trade-journal/pattern-analysis", { credentials: "same-origin" }),
         fetch("/api/portfolio/alerts", { credentials: "same-origin" }),
+        fetch("/api/dashboard/today-candidates/ops-summary?days=7", { credentials: "same-origin" }),
       ]);
       const statusJson = (await statusRes.json()) as { sections?: StatusSection[]; error?: string };
       const overviewJson = (await overviewRes.json()) as DashboardResponse & { error?: string };
@@ -183,6 +185,7 @@ export function DashboardClient() {
       const profitGoalJson = (await profitGoalRes.json()) as ProfitGoalSummaryResponse & { error?: string };
       const patternJson = (await patternRes.json()) as PatternAnalysisResponse & { error?: string };
       const alertsJson = (await alertsRes.json()) as { alerts?: Array<{ id: string; symbol: string; title: string; body: string; severity: string }>; error?: string };
+      const todayOpsJson = (await todayOpsRes.json()) as TodayCandidatesOpsSummaryResponse;
       if (!statusRes.ok) throw new Error(statusJson.error ?? `HTTP ${statusRes.status}`);
       if (!overviewRes.ok) throw new Error(overviewJson.error ?? `HTTP ${overviewRes.status}`);
       if (!briefRes.ok) throw new Error(briefJson.error ?? `HTTP ${briefRes.status}`);
@@ -195,6 +198,7 @@ export function DashboardClient() {
       setProfitGoal(profitGoalJson);
       setPattern(patternJson);
       setPortfolioAlerts(alertsJson.alerts ?? []);
+      setTodayOpsSummary(todayOpsJson);
       setError(null);
       try {
         const [sectorRes, watchRes, djRes, opsSumRes] = await Promise.all([
@@ -225,6 +229,48 @@ export function DashboardClient() {
       setError(e instanceof Error ? e.message : "대시보드 로드 실패");
     } finally {
       setReloading(false);
+    }
+  }, []);
+
+  const allTodayCandidates = useMemo(() => {
+    const user = todayBrief?.candidates?.userContext ?? [];
+    const us = todayBrief?.candidates?.usMarketKr ?? [];
+    return [...user, ...us];
+  }, [todayBrief]);
+
+  const onOpenReason = useCallback(async (candidate: TodayStockCandidate) => {
+    setOpenedCandidateId((prev) => (prev === candidate.candidateId ? null : candidate.candidateId));
+    try {
+      await fetch("/api/dashboard/today-candidates/event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ event: "detail_opened", candidateId: candidate.candidateId, stockCode: candidate.stockCode }),
+      });
+    } catch {
+      // no-op
+    }
+  }, []);
+
+  const onAddWatchlist = useCallback(async (candidate: TodayStockCandidate) => {
+    setWatchlistAddState((prev) => ({ ...prev, [candidate.candidateId]: "loading" }));
+    try {
+      const res = await fetch("/api/portfolio/watchlist/add-candidate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ candidate }),
+      });
+      const json = (await res.json()) as { status?: string; message?: string };
+      const pp = (json as { postProcess?: { warnings?: string[] } }).postProcess;
+      const status = json.status === "already_exists"
+        ? "이미 등록된 종목"
+        : json.status === "added"
+          ? (pp?.warnings?.length ? "추가됨 · 섹터/시세 메타 확인 필요" : "관심종목에 추가됨")
+          : (json.message ?? "추가 실패");
+      setWatchlistAddState((prev) => ({ ...prev, [candidate.candidateId]: status }));
+    } catch {
+      setWatchlistAddState((prev) => ({ ...prev, [candidate.candidateId]: "추가 실패" }));
     }
   }, []);
 
@@ -299,6 +345,90 @@ export function DashboardClient() {
             ))}
           </ol>
         )}
+        <div className="mt-3 rounded border border-violet-100 bg-white p-2 text-[11px] text-violet-900">
+          매수 권유 아님 · 관찰 후보 · 시세/뉴스/실적/리스크 확인 필요
+        </div>
+        {todayBrief?.disclaimer ? <p className="mt-2 text-[11px] text-violet-900/90">{todayBrief.disclaimer}</p> : null}
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <div className="rounded border border-violet-100 bg-white p-2">
+            <p className="text-xs font-semibold text-violet-950">내 관심사 기반 관찰 후보</p>
+            {(todayBrief?.candidates?.userContext ?? []).length === 0 ? (
+              <p className="mt-1 text-[11px] text-slate-600">데이터가 부족해 일부 후보를 생략했습니다.</p>
+            ) : (
+              <ul className="mt-2 space-y-2">
+                {(todayBrief?.candidates?.userContext ?? []).map((c) => (
+                  <li key={c.candidateId} className="rounded border border-violet-100 p-2">
+                    <p className="text-xs font-medium text-slate-900">{c.name} · {c.sector ?? "NO_DATA"} · 관찰 우선순위 {c.score}</p>
+                    <p className="mt-1 text-[11px] text-slate-700">{c.reasonSummary}</p>
+                    <div className="mt-1 flex gap-2 text-[11px]">
+                      <button type="button" className="rounded border border-slate-300 px-2 py-0.5" onClick={() => void onOpenReason(c)}>사유 보기</button>
+                      <button
+                        type="button"
+                        className="rounded border border-slate-300 px-2 py-0.5"
+                        onClick={() => void onAddWatchlist(c)}
+                        disabled={watchlistAddState[c.candidateId] === "loading" || c.alreadyInWatchlist}
+                      >
+                        {c.alreadyInWatchlist ? "이미 등록된 종목" : watchlistAddState[c.candidateId] === "loading" ? "추가 중..." : "관심종목에 추가"}
+                      </button>
+                    </div>
+                    {watchlistAddState[c.candidateId] ? <p className="mt-1 text-[10px] text-slate-600">{watchlistAddState[c.candidateId]}</p> : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="rounded border border-violet-100 bg-white p-2">
+            <p className="text-xs font-semibold text-violet-950">미국시장 신호 기반 한국주식 후보</p>
+            <p className="mt-1 text-[11px] text-slate-700">{todayBrief?.usMarketSummary?.summary ?? "미국시장 데이터가 충분하지 않아 제한적으로 표시합니다."}</p>
+            {(todayBrief?.candidates?.usMarketKr ?? []).length === 0 ? (
+              <p className="mt-1 text-[11px] text-slate-600">데이터가 부족해 일부 후보를 생략했습니다.</p>
+            ) : (
+              <ul className="mt-2 space-y-2">
+                {(todayBrief?.candidates?.usMarketKr ?? []).map((c) => (
+                  <li key={c.candidateId} className="rounded border border-violet-100 p-2">
+                    <p className="text-xs font-medium text-slate-900">{c.name} · {c.sector ?? "NO_DATA"} · 관찰 우선순위 {c.score}</p>
+                    <p className="mt-1 text-[11px] text-slate-700">{c.reasonSummary}</p>
+                    <div className="mt-1 flex gap-2 text-[11px]">
+                      <button type="button" className="rounded border border-slate-300 px-2 py-0.5" onClick={() => void onOpenReason(c)}>사유 보기</button>
+                      <button
+                        type="button"
+                        className="rounded border border-slate-300 px-2 py-0.5"
+                        onClick={() => void onAddWatchlist(c)}
+                        disabled={watchlistAddState[c.candidateId] === "loading" || c.alreadyInWatchlist}
+                      >
+                        {c.alreadyInWatchlist ? "이미 등록된 종목" : watchlistAddState[c.candidateId] === "loading" ? "추가 중..." : "관심종목에 추가"}
+                      </button>
+                    </div>
+                    {watchlistAddState[c.candidateId] ? <p className="mt-1 text-[10px] text-slate-600">{watchlistAddState[c.candidateId]}</p> : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+        {openedCandidateId ? (
+          <div className="mt-3 rounded border border-violet-200 bg-violet-50 p-3 text-xs">
+            <p className="font-semibold text-violet-950">선정 사유</p>
+            <p className="mt-1 text-[11px] text-violet-900">이 점수는 매수 점수가 아니라, 오늘 먼저 확인할 관찰 우선순위입니다.</p>
+            <ul className="mt-1 list-inside list-disc space-y-1 text-violet-950">
+              {(allTodayCandidates.find((c) => c.candidateId === openedCandidateId)?.reasonDetails ?? []).map((d, i) => <li key={`${openedCandidateId}-${i}`}>{d}</li>)}
+            </ul>
+            <p className="mt-2 font-semibold text-violet-950">긍정 신호</p>
+            <ul className="mt-1 list-inside list-disc space-y-1 text-violet-950">
+              {(allTodayCandidates.find((c) => c.candidateId === openedCandidateId)?.positiveSignals ?? []).map((d, i) => <li key={`p-${openedCandidateId}-${i}`}>{d}</li>)}
+            </ul>
+            <p className="mt-2 font-semibold text-violet-950">주의할 점</p>
+            <ul className="mt-1 list-inside list-disc space-y-1 text-violet-950">
+              {(allTodayCandidates.find((c) => c.candidateId === openedCandidateId)?.cautionNotes ?? []).map((d, i) => <li key={`c-${openedCandidateId}-${i}`}>{d}</li>)}
+            </ul>
+            <p className="mt-2 text-[11px] text-violet-900">매수 권유가 아닙니다. 장중 변동성/손절 기준을 반드시 별도 확인하세요.</p>
+          </div>
+        ) : null}
+        {todayOpsSummary?.totals ? (
+          <div className="mt-3 rounded border border-violet-100 bg-white p-2 text-[11px] text-violet-900">
+            운영 상태: 후보 생성 {todayOpsSummary.totals.generated}건 · 중복 추가 {todayOpsSummary.totals.alreadyExists}건 · 미국장 데이터 없음 {todayOpsSummary.totals.usMarketNoData}건
+          </div>
+        ) : null}
       </section>
 
       <section className="mb-5 rounded-xl border border-slate-200 bg-white p-4">

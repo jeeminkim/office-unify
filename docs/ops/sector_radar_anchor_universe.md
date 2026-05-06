@@ -30,6 +30,20 @@
 - `sector_radar:${userKey}:${sectorKey}:${code}`
 - `portfolio_watchlist:${userKey}:${symbol}:related_anchors:${code}`
 
+## quote coverage low / no_data 해결 절차
+
+1. `POST /api/sector-radar/refresh` 실행으로 `sector_radar_quotes` 탭 수식 재동기화
+2. 30~90초 후 `GET /api/sector-radar/status`에서 anchor별 `rowStatus` 확인
+3. `parse_failed`/`empty` anchor의 `googleTicker`/`quoteSymbol` 점검
+4. 필요 시 anchor registry(`sectorRadarRegistry.ts`)의 seed ticker 보정
+5. 재실행 후 `qualityMeta.sectorRadar`와 ops detail의 `missingSymbols` 감소 여부 확인
+
+## Registry 분리 메모
+
+- 서버 전용 로직은 `apps/web/lib/server/sectorRadarRegistry.ts`에서 유지합니다(`server-only` 포함).
+- 공용 정규화/alias 헬퍼는 `apps/web/lib/sectorRadarRegistry.shared.ts`로 분리했습니다.
+- 원칙: shared 파일에는 Supabase/Google Sheets/env 접근 코드 금지.
+
 ## 조회 SQL
 
 ```sql

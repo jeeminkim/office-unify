@@ -51,6 +51,8 @@
 
 동일 fingerprint는 신규 insert 대신 `occurrence_count` 증가 + `last_seen_at` 갱신.
 
+Trend logger는 DB RPC(`upsert_web_ops_event_by_fingerprint`)를 우선 사용하고, RPC 미설치/권한 오류 시 앱 fallback(update/insert)로 동작한다.
+
 `detail`에는 가능한 한 아래만 저장한다(API 키·토큰·원문 입력 전체·credential 제외).
 
 ```json

@@ -176,6 +176,7 @@ describe("sector radar explanation strings", () => {
       sectorKey: "test",
     });
     expect(withWl.interpretation).toContain("관찰 우선순위");
+    expect(withWl.watchlistConnectionSummary).toContain("관찰 우선순위");
 
     const noWl = buildSectorRadarExplanation({
       rawScore: 60,
@@ -194,5 +195,6 @@ describe("sector radar explanation strings", () => {
       sectorKey: "test",
     });
     expect(noWl.interpretation).toContain("시장 표본");
+    expect(noWl.watchlistConnectionSummary).toContain("시장 표본");
   });
 });

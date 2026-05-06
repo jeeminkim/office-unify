@@ -83,11 +83,28 @@ export async function buildSectorRadarSummaryForUser(
   const linkedBySector = countLinkedWatchlistBySector(watchlist);
   const sectors = scored.map((s) => enrichSectorRadarSector(s, linkedBySector[s.key] ?? 0));
 
+  const opsLogging = {
+    attempted: 0,
+    inserted: 0,
+    bumped: 0,
+    skippedByThrottle: 0,
+    failed: 0,
+    warnings: [] as string[],
+  };
   for (const s of sectors) {
-    void logSectorRadarQualityOps(userKey, s);
+    const ops = await logSectorRadarQualityOps(userKey, s);
+    opsLogging.attempted += ops.attempted;
+    opsLogging.inserted += ops.inserted;
+    opsLogging.bumped += ops.bumped;
+    opsLogging.skippedByThrottle += ops.skippedByThrottle;
+    opsLogging.failed += ops.failed;
+    if (ops.warnings.length && opsLogging.warnings.length < 30) {
+      opsLogging.warnings.push(...ops.warnings.slice(0, 30 - opsLogging.warnings.length));
+    }
   }
 
   const qualityMeta = buildSectorRadarQualityMeta(sectors);
+  qualityMeta.sectorRadar.opsLogging = opsLogging;
 
   return attachSectorRadarDisplayFields({
     ok: true,

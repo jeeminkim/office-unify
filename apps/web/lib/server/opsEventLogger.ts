@@ -1,13 +1,13 @@
 import 'server-only';
 
 import {
-  bumpOpsEventByFingerprint,
   insertOpsEvent,
   type OpsEventInsertRow,
   type OpsEventType,
   type OpsSeverity,
 } from '@office-unify/supabase-access';
 import { getServiceSupabase } from '@/lib/server/supabase-service';
+import { upsertOpsEventByFingerprint } from '@/lib/server/upsertOpsEventByFingerprint';
 
 const SENSITIVE_KEY_FRAGMENTS = [
   'token',
@@ -68,12 +68,6 @@ function defaultFingerprint(input: LogOpsEventInput): string | undefined {
   return `${uk}:${input.domain}:${code}:${route}:${sym}`.slice(0, 500);
 }
 
-function isUniqueFingerprintViolation(err: unknown): boolean {
-  if (!err || typeof err !== 'object') return false;
-  const code = (err as { code?: string }).code;
-  return code === '23505';
-}
-
 /**
  * 운영 관측 로그. 실패해도 throw 하지 않으며, 원 API 응답에는 영향 없음.
  */
@@ -81,11 +75,27 @@ export async function logOpsEvent(input: LogOpsEventInput): Promise<void> {
   try {
     const supabase = getServiceSupabase();
     if (!supabase) return;
-
     const severity: OpsSeverity = input.severity ?? (input.eventType === 'error' ? 'error' : 'info');
     const detail = input.detail != null ? (sanitizeOpsDetail(input.detail) as Record<string, unknown>) : null;
     const fingerprint = defaultFingerprint(input) ?? undefined;
-
+    const mappedSeverity: 'info' | 'warning' | 'error' = severity === 'error' ? 'error' : severity === 'warn' ? 'warning' : 'info';
+    if (fingerprint) {
+      await upsertOpsEventByFingerprint({
+        userKey: input.userKey ?? 'default',
+        domain: input.domain,
+        eventType: input.eventType,
+        severity: mappedSeverity,
+        code: input.code ?? 'ops_event',
+        message: input.message,
+        detail: detail ?? undefined,
+        fingerprint,
+        status: input.status,
+        route: input.route,
+        component: input.component,
+        actionHint: input.actionHint,
+      });
+      return;
+    }
     const row: OpsEventInsertRow = {
       user_key: input.userKey ?? null,
       event_type: input.eventType,
@@ -98,23 +108,9 @@ export async function logOpsEvent(input: LogOpsEventInput): Promise<void> {
       status: input.status ?? 'open',
       action_hint: input.actionHint?.slice(0, 4000) ?? null,
       detail,
-      fingerprint: fingerprint ?? null,
+      fingerprint: null,
     };
-
-    if (fingerprint) {
-      const bumped = await bumpOpsEventByFingerprint(supabase, fingerprint);
-      if (bumped) return;
-    }
-
-    try {
-      await insertOpsEvent(supabase, row);
-    } catch (e: unknown) {
-      if (fingerprint && isUniqueFingerprintViolation(e)) {
-        await bumpOpsEventByFingerprint(supabase, fingerprint);
-        return;
-      }
-      throw e;
-    }
+    await insertOpsEvent(supabase, row);
   } catch (e: unknown) {
     console.warn('[logOpsEvent] failed', e instanceof Error ? e.message : e);
   }

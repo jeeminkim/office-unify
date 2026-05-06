@@ -321,9 +321,10 @@ export function SectorRadarClient() {
           const explainOn = scoreExplainOpen[s.key] === true;
           const caps = SECTOR_RADAR_COMPONENT_CAPS;
           const wlRel =
-            related.length > 0
+            exp?.watchlistConnectionSummary ??
+            (related.length > 0
               ? "내 관심종목과 연결된 섹터이므로 관찰 우선순위를 높게 둘 수 있습니다."
-              : "이 섹터와 연결된 관심종목은 아직 없습니다. 점수는 시장 표본 기준입니다.";
+              : "이 섹터와 연결된 관심종목은 아직 없습니다. 점수는 시장 표본 기준입니다.");
           return (
             <div key={s.key} className={`rounded-lg border p-4 text-sm ${zoneCardClass(s.zone)}`}>
               <div className="flex items-baseline justify-between gap-2">

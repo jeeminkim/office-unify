@@ -48,6 +48,7 @@ export {
   OPS_EVENT_TYPES,
   OPS_SEVERITIES,
   OPS_STATUSES,
+  upsertOpsEventByFingerprint,
   updateOpsEvent,
 } from './opsEventsRepository';
 export type {
@@ -57,6 +58,8 @@ export type {
   OpsEventStatus,
   OpsEventType,
   OpsSeverity,
+  UpsertOpsEventByFingerprintInput,
+  UpsertOpsEventByFingerprintResult,
   WebOpsEventRow,
 } from './opsEventsRepository';
 export {

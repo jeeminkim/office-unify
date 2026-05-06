@@ -1,0 +1,126 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { OfficeUserKey } from '@office-unify/shared-types';
+import { listWebPortfolioHoldingsForUser, listWebPortfolioWatchlistForUser } from '@office-unify/supabase-access';
+import { buildSectorRadarSummaryForUser } from './sectorRadarSummaryService';
+import { buildUsMarketMorningSummary } from './usMarketMorningSummary';
+import { pickRulesFromUsSummary } from './todayCandidateRules';
+import type { TodayStockCandidate, UsMarketMorningSummary } from '../todayCandidatesContract';
+
+function clampScore(n: number): number {
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+export function scoreCandidate(input: { base: number; watchlistBoost?: number; usBoost?: number; confidencePenalty?: number; riskPenalty?: number }): number {
+  return clampScore(input.base + (input.watchlistBoost ?? 0) + (input.usBoost ?? 0) - (input.confidencePenalty ?? 0) - (input.riskPenalty ?? 0));
+}
+
+export async function buildTodayStockCandidates(input: {
+  supabase: SupabaseClient;
+  userKey: OfficeUserKey;
+  limitPerSection?: number;
+}): Promise<{
+  userContextCandidates: TodayStockCandidate[];
+  usMarketKrCandidates: TodayStockCandidate[];
+  usMarketSummary: UsMarketMorningSummary;
+  warnings: string[];
+}> {
+  const limit = Math.max(1, Math.min(5, input.limitPerSection ?? 3));
+  const warnings: string[] = [];
+
+  const [watchlist, holdings, sectorRadar, usSummary, trendSignalsRes] = await Promise.all([
+    listWebPortfolioWatchlistForUser(input.supabase, input.userKey).catch(() => []),
+    listWebPortfolioHoldingsForUser(input.supabase, input.userKey).catch(() => []),
+    buildSectorRadarSummaryForUser(input.supabase, input.userKey).catch(() => null),
+    buildUsMarketMorningSummary(),
+    input.supabase
+      .from('trend_memory_signals_v2')
+      .select('topic_key,signal_name,confidence')
+      .eq('user_key', input.userKey as string)
+      .order('last_seen_at', { ascending: false })
+      .limit(20),
+  ]);
+
+  const trendTopics = (trendSignalsRes.data ?? []).map((x) => `${x.topic_key ?? ''} ${x.signal_name ?? ''}`.toLowerCase());
+
+  const userContextCandidates: TodayStockCandidate[] = watchlist
+    .filter((w) => w.market === 'KR')
+    .slice(0, limit)
+    .map((w) => {
+      const related = trendTopics.filter((t) => t.includes((w.sector ?? '').toLowerCase())).slice(0, 2);
+      const sectorInfo = sectorRadar?.sectors.find((s) => (w.sector ?? '').includes(s.name));
+      const sectorConfidence = sectorInfo?.scoreExplanation?.confidence;
+      const confidencePenalty = sectorConfidence === 'very_low' || sectorConfidence === 'low' ? 12 : 0;
+      const riskPenalty = sectorInfo?.zone === 'extreme_greed' ? 8 : 0;
+      const score = scoreCandidate({ base: 50, watchlistBoost: 10, confidencePenalty, riskPenalty });
+      return {
+        candidateId: `user-context-${w.market}-${w.symbol}`,
+        name: w.name,
+        market: w.quote_symbol?.endsWith('.KQ') ? 'KOSDAQ' : 'KOSPI',
+        country: 'KR',
+        symbol: `${w.market}:${w.symbol}`,
+        stockCode: w.symbol,
+        googleTicker: w.google_ticker ?? undefined,
+        quoteSymbol: w.quote_symbol ?? undefined,
+        sector: w.sector ?? undefined,
+        source: 'user_context',
+        score,
+        confidence: confidencePenalty > 0 ? 'low' : 'medium',
+        riskLevel: riskPenalty > 0 ? 'high' : 'medium',
+        reasonSummary: '내 관심종목/섹터 관심 흐름과 연결된 관찰 후보입니다.',
+        reasonDetails: [
+          '관심종목에 이미 포함된 종목입니다.',
+          sectorInfo ? `Sector Radar ${sectorInfo.name} 신뢰도 ${sectorInfo.scoreExplanation?.confidence ?? 'unknown'}` : '섹터 레이더 연결 정보는 제한적입니다.',
+          related.length > 0 ? `최근 Trend memory 연관 키워드: ${related.join(', ')}` : '최근 Trend memory 직접 연결은 제한적입니다.',
+        ],
+        positiveSignals: ['관심종목 기반', '개인화 관찰 흐름 반영'],
+        cautionNotes: ['매수 권유 아님', '시세/뉴스/실적/리스크 확인 필요', '추격매수 주의'],
+        relatedUserContext: related,
+        relatedWatchlistSymbols: [`${w.market}:${w.symbol}`],
+        isBuyRecommendation: false,
+        alreadyInWatchlist: true,
+      };
+    });
+
+  const usRules = pickRulesFromUsSummary(usSummary);
+  if (!usSummary.available) warnings.push('us_market_no_data');
+  const usMarketKrCandidates: TodayStockCandidate[] = (!usSummary.available || usSummary.conclusion === 'no_data' ? [] : usRules)
+    .flatMap((r) =>
+      r.krCandidates.map((c) => {
+        const confidence: TodayStockCandidate['confidence'] = usSummary.available ? 'medium' : 'very_low';
+        return ({
+        candidateId: `us-${r.usSignalKey}-${c.stockCode}`,
+        name: c.name,
+        market: c.market,
+        country: 'KR' as const,
+        symbol: `KR:${c.stockCode}`,
+        stockCode: c.stockCode,
+        googleTicker: c.googleTicker,
+        quoteSymbol: c.quoteSymbol,
+        sector: c.sector,
+        source: 'us_market_morning' as const,
+        score: scoreCandidate({ base: 52, usBoost: 12, confidencePenalty: usSummary.available ? 0 : 12 }),
+        confidence,
+        riskLevel: 'medium' as const,
+        reasonSummary: `${r.label} 신호를 참고한 한국 상장 관찰 후보입니다. 매수 점수가 아닌 관찰 우선순위입니다.`,
+        reasonDetails: [r.conditionHint, c.reason, '미국 신호가 한국 종목 상승을 보장하지 않습니다.'],
+        positiveSignals: [r.label],
+        cautionNotes: ['매수 권유 아님', c.caution, '장 초반 급등 추격 주의'],
+        relatedUserContext: [],
+        relatedWatchlistSymbols: watchlist.filter((w) => w.market === 'KR').map((w) => `${w.market}:${w.symbol}`),
+        relatedUsMarketSignals: [r.usSignalKey],
+        isBuyRecommendation: false as const,
+        alreadyInWatchlist: watchlist.some((w) => w.market === 'KR' && (w.symbol === c.stockCode || (w.google_ticker ?? '') === c.googleTicker)),
+      })}),
+    )
+    .slice(0, Math.max(3, limit));
+
+  if (usSummary.available && usSummary.conclusion !== 'no_data' && usMarketKrCandidates.length === 0) warnings.push('us_market_candidates_empty');
+  if (holdings.length === 0 && watchlist.length === 0) warnings.push('user_context_sparse');
+
+  return {
+    userContextCandidates,
+    usMarketKrCandidates,
+    usMarketSummary: usSummary,
+    warnings,
+  };
+}

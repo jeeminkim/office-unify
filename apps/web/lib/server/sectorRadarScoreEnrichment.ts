@@ -5,7 +5,12 @@ import type {
   SectorRadarQualityMeta,
   SectorRadarSummarySector,
 } from '@/lib/sectorRadarContract';
-import { logOpsEvent } from '@/lib/server/opsEventLogger';
+import { SECTOR_RADAR_CATEGORY_SEEDS, normalizedSectorSymbol } from '@/lib/server/sectorRadarRegistry';
+import { classifySectorRadarWarningPolicy } from '@/lib/sectorRadarOpsPolicy';
+import {
+  logSectorRadarScoreQualityEvent,
+  type SectorRadarScoreOpsDetail,
+} from '@/lib/server/sectorRadarOpsLogger';
 import {
   buildBreakdownFromSector,
   buildSectorRadarExplanation,
@@ -56,41 +61,103 @@ export function enrichSectorRadarSector(
   }
 }
 
-export async function logSectorRadarQualityOps(userKey: OfficeUserKey, sector: SectorRadarSummarySector): Promise<void> {
+function buildOpsDetail(sector: SectorRadarSummarySector, code: string): SectorRadarScoreOpsDetail {
   const exp = sector.scoreExplanation;
-  if (!exp) return;
+  const seed = SECTOR_RADAR_CATEGORY_SEEDS.find((x) => x.key === sector.key);
+  const anchorSymbols = sector.anchors.map((a) => {
+    const match = seed?.anchors.find((s) => normalizedSectorSymbol(s.market ?? 'KR', s.symbol) === a.symbol);
+    const missing = a.dataStatus !== 'ok';
+    const quoteStatus: SectorRadarScoreOpsDetail['anchorSymbols'][number]['quoteStatus'] =
+      a.dataStatus === 'ok'
+        ? 'ok'
+        : a.dataStatus === 'parse_failed'
+          ? 'parse_failed'
+          : a.dataStatus === 'empty'
+            ? 'empty'
+            : missing
+              ? 'missing'
+              : 'unknown';
+    return {
+      name: a.name,
+      symbol: a.symbol,
+      googleTicker: a.googleTicker,
+      quoteSymbol: match?.quoteSymbol,
+      role: match?.role,
+      quoteStatus,
+    };
+  });
+  const missingSymbols = anchorSymbols.filter((x) => x.quoteStatus !== 'ok').map((x) => x.symbol);
+  const missingReasons = anchorSymbols
+    .filter((x) => x.quoteStatus !== 'ok')
+    .map((x) => ({
+      symbol: x.symbol,
+      reason:
+        x.quoteStatus === 'parse_failed'
+          ? 'price parse failed'
+          : x.quoteStatus === 'empty'
+            ? 'sheet value empty'
+            : x.quoteStatus === 'missing'
+              ? 'quote not available yet'
+              : 'unknown',
+    }));
+  const policy = classifySectorRadarWarningPolicy(code);
+  return {
+    feature: 'sector_radar_score_quality',
+    sector: sector.name,
+    sectorKey: sector.key,
+    code,
+    rawScore: exp?.rawScore ?? sector.rawScore ?? sector.score ?? null,
+    adjustedScore: exp?.adjustedScore ?? sector.adjustedScore ?? null,
+    temperature: exp?.temperature,
+    confidence: exp?.confidence,
+    sampleCount: exp?.quality.sampleCount ?? sector.sampleCount ?? sector.anchors.length,
+    quoteOkCount: exp?.quality.quoteOkCount ?? sector.quoteOkCount ?? sector.anchors.filter((a) => a.dataStatus === 'ok').length,
+    quoteMissingCount: exp?.quality.quoteMissingCount ?? sector.quoteMissingCount ?? Math.max(0, sector.anchors.length - sector.anchors.filter((a) => a.dataStatus === 'ok').length),
+    quoteCoverageRatio: exp?.quality.quoteCoverageRatio ?? 0,
+    anchorSymbols,
+    missingSymbols,
+    missingReasons,
+    suggestedAction: 'anchor quoteSymbol/googleTicker 확인 후 quote refresh를 다시 실행하세요.',
+    isOperationalError: policy.isOperationalError,
+    isObservationWarning: policy.isObservationWarning,
+  };
+}
+
+export async function logSectorRadarQualityOps(
+  userKey: OfficeUserKey,
+  sector: SectorRadarSummarySector,
+): Promise<{ attempted: number; inserted: number; bumped: number; skippedByThrottle: number; failed: number; warnings: string[] }> {
+  const exp = sector.scoreExplanation;
+  if (!exp) return { attempted: 0, inserted: 0, bumped: 0, skippedByThrottle: 0, failed: 0, warnings: [] };
 
   const codes = sectorRadarOpsCodesForQuality({
     quality: exp.quality,
     temperature: exp.temperature,
   });
 
+  const out = { attempted: 0, inserted: 0, bumped: 0, skippedByThrottle: 0, failed: 0, warnings: [] as string[] };
   for (const code of codes) {
-    void logOpsEvent({
+    const detail = buildOpsDetail(sector, code);
+    const res = await logSectorRadarScoreQualityEvent({
       userKey,
-      eventType: 'warning',
-      severity: 'warn',
-      domain: 'sector_radar',
-      route: '/api/sector-radar/summary',
-      component: 'sector-radar-score-quality',
       code,
+      severity: detail.isObservationWarning ? 'warning' : 'warning',
+      sectorKey: sector.key,
+      sectorLabel: sector.name,
       message: `sector radar score quality — ${sector.name}`,
-      fingerprint: `sector_radar:${userKey}:${sector.key}:${code}`,
-      detail: {
-        feature: 'sector_radar_score_quality',
-        sector: sector.name,
-        rawScore: exp.rawScore,
-        adjustedScore: exp.adjustedScore,
-        temperature: exp.temperature,
-        confidence: exp.confidence,
-        sampleCount: exp.quality.sampleCount,
-        quoteOkCount: exp.quality.quoteOkCount,
-        quoteMissingCount: exp.quality.quoteMissingCount,
-        mainDrivers: exp.mainDrivers.slice(0, 6),
-        riskNotes: exp.riskNotes.slice(0, 6),
-      },
-    }).catch(() => undefined);
+      detail,
+      throttleMinutes: classifySectorRadarWarningPolicy(code).throttleMinutes,
+    });
+    if (res.attempted) out.attempted += 1;
+    if (res.inserted) out.inserted += 1;
+    if (res.bumped) out.bumped += 1;
+    if (res.skippedByThrottle) out.skippedByThrottle += 1;
+    if (res.warning) {
+      out.failed += 1;
+      if (out.warnings.length < 10) out.warnings.push(`${sector.name}:${code}:${res.warning}`);
+    }
   }
+  return out;
 }
 
 export function buildSectorRadarQualityMeta(sectors: SectorRadarSummarySector[]): SectorRadarQualityMeta {
@@ -145,6 +212,7 @@ export function buildSectorRadarQualityMeta(sectors: SectorRadarSummarySector[])
       quoteMissingSectors,
       overheatedSectors,
       warnings: Array.from(new Set(warnings)).slice(0, 50),
+      opsLogging: undefined,
     },
   };
 }

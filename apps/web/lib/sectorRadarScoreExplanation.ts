@@ -418,6 +418,7 @@ export function buildSectorRadarExplanation(input: {
     conservativeActionHint,
     mainDrivers,
     riskNotes,
+    watchlistConnectionSummary: wlNote,
   };
 }
 

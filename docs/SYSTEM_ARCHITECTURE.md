@@ -1,3 +1,13 @@
+## Dashboard Today Candidates
+
+- 홈 `오늘의 3줄 브리핑` 응답에 optional `candidates` 블록을 추가한다.
+- 생성 서비스: `todayStockCandidateService`
+  - user context 후보: watchlist/보유/Sector Radar/Trend memory 참조
+  - us market 후보: `usMarketMorningSummary` + `todayCandidateRules` 매핑
+- 모든 후보는 `isBuyRecommendation=false`이며 관찰 후보로만 표기한다.
+- 상세 열람/관심종목 추가/중복 이벤트는 `web_ops_events`에 fingerprint upsert로 기록한다.
+- 관심종목 추가 API는 insert 후 postprocess를 best-effort로 실행해 sector/ticker 메타를 보정한다.
+- today candidates 운영 상태는 `today-candidates/ops-summary`로 집계해 대시보드에 소형 상태로 노출한다.
 # System Architecture (Personal Investment Console)
 
 ## 목적
@@ -124,6 +134,8 @@
 - `/api/sector-radar/summary`
   - 섹터별 온도·anchor 상태·components·warnings, 홈용 `fearCandidatesTop3` / `greedCandidatesTop3`
   - 선택 필드: `rawScore`/`adjustedScore`/`scoreExplanation`/`qualityMeta` — 기존 소비자 호환을 위해 additive
+  - `scoreExplanation`에는 `confidence`, `summary`, `conservativeActionHint`, `mainDrivers`, `riskNotes`, `watchlistConnectionSummary` 포함
+  - 높은 점수는 매수 추천이 아니라 최근 강한 움직임 관찰 신호로 해석(과열/위험 시 추격매수 주의 문구)
   - Sheets 미설정·탭 비어 있음 시 `degraded` + NO_DATA 유지
 - `/api/sector-radar/refresh`
   - `sector_radar_quotes` 탭 생성/덮어쓰기 및 GOOGLEFINANCE 수식 동기화(`USER_ENTERED`)
@@ -131,6 +143,7 @@
   - 시트 read-back 진단(anchor별 rowStatus, 선택 필드 `market`·`parsedVolumeAvg` 등)
 - `/api/sector-radar/watchlist-candidates`
   - `web_portfolio_watchlist` + Sector Radar 요약을 결합해 **관찰 우선순위 큐**(`readinessScore`/`readinessLabel`/`confidence`/`reasons`)를 반환. **매수 추천·자동 주문 없음**
+  - 관련 관심종목 연결성은 점수 가산이 아니라 별도 설명(`watchlistConnectionSummary`)으로 노출
 
 ### Trend 리포트 생성 플로우 (보강)
 

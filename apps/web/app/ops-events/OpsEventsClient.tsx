@@ -22,6 +22,50 @@ type OpsItem = {
   resolutionNote?: string;
 };
 
+function formatSectorRadarQuickStats(detail: unknown): string | null {
+  if (!detail || typeof detail !== "object") return null;
+  const d = detail as Record<string, unknown>;
+  const sampleCount = typeof d.sampleCount === "number" ? d.sampleCount : null;
+  const quoteOkCount = typeof d.quoteOkCount === "number" ? d.quoteOkCount : null;
+  const quoteMissingCount = typeof d.quoteMissingCount === "number" ? d.quoteMissingCount : null;
+  if (sampleCount == null || quoteOkCount == null || quoteMissingCount == null) return null;
+  return `표본 ${sampleCount}개 · 시세 성공 ${quoteOkCount}개 · 누락 ${quoteMissingCount}개`;
+}
+
+type SectorRadarDetail = {
+  feature?: string;
+  sector?: string;
+  rawScore?: number | null;
+  adjustedScore?: number | null;
+  confidence?: string;
+  sampleCount?: number;
+  quoteOkCount?: number;
+  quoteMissingCount?: number;
+  suggestedAction?: string;
+  isOperationalError?: boolean;
+  isObservationWarning?: boolean;
+  missingSymbols?: string[];
+  anchorSymbols?: Array<{
+    name?: string;
+    symbol?: string;
+    quoteSymbol?: string;
+    googleTicker?: string;
+    role?: string;
+    quoteStatus?: string;
+  }>;
+};
+
+function asSectorRadarDetail(detail: unknown): SectorRadarDetail | null {
+  if (!detail || typeof detail !== "object") return null;
+  const d = detail as Record<string, unknown>;
+  const isSectorShape =
+    d.feature === "sector_radar_score_quality" ||
+    Array.isArray(d.anchorSymbols) ||
+    typeof d.sampleCount === "number";
+  if (!isSectorShape) return null;
+  return d as SectorRadarDetail;
+}
+
 const STATUS_OPTS = ["", "open", "investigating", "resolved", "ignored", "backlog"] as const;
 const SEVERITY_OPTS = ["", "debug", "info", "warn", "error", "critical"] as const;
 const DOMAIN_OPTS = [
@@ -205,6 +249,9 @@ export function OpsEventsClient() {
               </div>
               <p className="mt-2 font-medium text-slate-900">{it.message}</p>
               {it.code ? <p className="mt-1 font-mono text-xs text-slate-600">code: {it.code}</p> : null}
+              {it.domain === "sector_radar" ? (
+                <p className="mt-1 text-xs text-slate-600">{formatSectorRadarQuickStats(it.detail) ?? "—"}</p>
+              ) : null}
               {it.actionHint ? <p className="mt-1 text-xs text-slate-600">{it.actionHint}</p> : null}
               <div className="mt-2 flex flex-wrap gap-1">
                 <button type="button" className="rounded border border-slate-300 px-2 py-0.5 text-[11px]" onClick={() => void patch(it.id, { status: "investigating" })}>
@@ -250,9 +297,75 @@ export function OpsEventsClient() {
                   <p className="text-slate-600">route: {it.route ?? "—"} · component: {it.component ?? "—"}</p>
                   <p className="mt-1 text-slate-600">first: {new Date(it.firstSeenAt).toLocaleString()}</p>
                   {it.resolvedAt ? <p className="text-slate-600">resolved: {new Date(it.resolvedAt).toLocaleString()}</p> : null}
+                  {it.domain === "sector_radar" && asSectorRadarDetail(it.detail) ? (
+                    <div className="mt-2 space-y-2 rounded border border-violet-100 bg-white p-2 text-[11px]">
+                      {(() => {
+                        const d = asSectorRadarDetail(it.detail)!;
+                        return (
+                          <>
+                            <div className="grid gap-1 sm:grid-cols-2">
+                              <p>섹터: {d.sector ?? "—"}</p>
+                              <p>
+                                점수: raw {typeof d.rawScore === "number" ? Math.round(d.rawScore) : "—"} / adj{" "}
+                                {typeof d.adjustedScore === "number" ? Math.round(d.adjustedScore) : "—"}
+                              </p>
+                              <p>신뢰도: {d.confidence ?? "—"}</p>
+                              <p>
+                                표본 {d.sampleCount ?? "—"} · 시세 성공 {d.quoteOkCount ?? "—"} · 시세 누락{" "}
+                                {d.quoteMissingCount ?? "—"}
+                              </p>
+                              <p>운영 오류 여부: {d.isOperationalError === true ? "true" : "false"}</p>
+                              <p>관찰 경고 여부: {d.isObservationWarning === true ? "true" : "false"}</p>
+                            </div>
+                            {Array.isArray(d.missingSymbols) && d.missingSymbols.length > 0 ? (
+                              <p className="rounded bg-amber-50 px-2 py-1 text-amber-900">
+                                시세 누락: {d.missingSymbols.join(", ")}
+                              </p>
+                            ) : null}
+                            {d.suggestedAction ? (
+                              <p className="rounded border border-sky-100 bg-sky-50 px-2 py-1 text-sky-900">
+                                {d.suggestedAction}
+                              </p>
+                            ) : null}
+                            {Array.isArray(d.anchorSymbols) && d.anchorSymbols.length > 0 ? (
+                              <div className="max-h-48 overflow-auto rounded border border-slate-200 bg-white">
+                                <table className="min-w-full text-[10px]">
+                                  <thead>
+                                    <tr className="border-b border-slate-100 text-left text-slate-600">
+                                      <th className="px-1 py-1">종목명</th>
+                                      <th className="px-1 py-1">symbol</th>
+                                      <th className="px-1 py-1">quoteSymbol</th>
+                                      <th className="px-1 py-1">googleTicker</th>
+                                      <th className="px-1 py-1">role</th>
+                                      <th className="px-1 py-1">quoteStatus</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {d.anchorSymbols.map((a, idx) => (
+                                      <tr key={`${a.symbol ?? "anchor"}-${idx}`} className="border-b border-slate-100">
+                                        <td className="px-1 py-1">{a.name ?? "—"}</td>
+                                        <td className="px-1 py-1 font-mono">{a.symbol ?? "—"}</td>
+                                        <td className="px-1 py-1 font-mono">{a.quoteSymbol ?? "—"}</td>
+                                        <td className="px-1 py-1 font-mono">{a.googleTicker ?? "—"}</td>
+                                        <td className="px-1 py-1">{a.role ?? "—"}</td>
+                                        <td className="px-1 py-1">{a.quoteStatus ?? "—"}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            ) : null}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  ) : null}
+                  <details className="mt-2">
+                    <summary className="cursor-pointer text-[11px] text-slate-600">원본 JSON 보기</summary>
                   <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all text-[10px] text-slate-800">
                     {it.detail != null ? JSON.stringify(it.detail, null, 2) : "—"}
                   </pre>
+                  </details>
                 </div>
               ) : null}
             </div>

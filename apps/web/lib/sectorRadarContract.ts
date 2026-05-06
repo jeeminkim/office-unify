@@ -74,6 +74,7 @@ export type SectorRadarScoreExplanation = {
   conservativeActionHint: string;
   mainDrivers: string[];
   riskNotes: string[];
+  watchlistConnectionSummary?: string;
 };
 
 export type SectorRadarQualityMeta = {
@@ -87,6 +88,14 @@ export type SectorRadarQualityMeta = {
     quoteMissingSectors: number;
     overheatedSectors: number;
     warnings: string[];
+    opsLogging?: {
+      attempted: number;
+      inserted: number;
+      bumped: number;
+      skippedByThrottle: number;
+      failed: number;
+      warnings: string[];
+    };
   };
 };
 

@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- **Today Candidates 후처리 강화:** 관심종목 추가 성공 후 sector match/ticker 정규화 best-effort postprocess를 추가하고 `postProcess` 상태(`warnings`)를 응답에 포함.
+- **Today Candidates Ops Summary:** `GET /api/dashboard/today-candidates/ops-summary` 추가(생성/no_data/중복/실패 집계).
+- **관찰 우선순위 설명 보강:** 대시보드 후보 점수를 `관찰 우선순위`로 표기하고 상세에 “매수 점수 아님” 설명/긍정신호/주의사항 표시.
+- **미국시장 no_data 보수화:** `usMarketSummary` no_data 시 미국장 기반 후보를 억지 생성하지 않도록 제한하고 경고 문구를 3줄 브리핑에 반영.
+- **오늘의 3줄 브리핑 관찰 후보 확장:** `today-brief` 응답에 개인화 관찰 후보(내 관심사 기반/미국시장 신호 기반 한국주식) optional 필드를 추가. 모든 후보는 `매수 권유 아님` 고지와 사유 보기 UI를 제공.
+- **오늘 후보 서비스 추가:** `todayStockCandidateService`, `usMarketMorningSummary`, `todayCandidateRules`를 추가해 rule-based 후보 생성(데이터 부족 시 no_data fallback).
+- **후보→관심종목 추가 API:** `POST /api/portfolio/watchlist/add-candidate` 추가(중복 판정 후 `added`/`already_exists` 반환).
+- **today_candidates ops logging:** 후보 생성/미국장 no_data/상세 열람/관심종목 추가 성공·중복·실패 이벤트를 `web_ops_events` fingerprint upsert로 적재.
+- **web_ops_events DB-level fingerprint upsert 전환:** `docs/sql/append_web_ops_events_upsert_rpc.sql`을 `returns table` 기반 RPC + partial unique index 보강으로 갱신. 상태 정책은 `resolved` 재발 시 `open` reopen, `ignored` 재발 시 `ignored` 유지.
+- **공통 upsert 유틸 추가:** `apps/web/lib/server/upsertOpsEventByFingerprint.ts` 추가(RPC 우선, 실패 시 fallback 결과 수용, sanitize 적용, throw 금지).
+- **Logger 전환:** `sectorRadarOpsLogger`, `trendOpsLogger`, `logOpsEvent`가 공통 upsert 경로를 사용하도록 변경해 멀티 인스턴스 경합 시 중복 row 가능성 완화.
+- **테스트/문서:** `upsertOpsEventByFingerprint.test.ts` 추가, 운영 문서(`DATABASE_SCHEMA`, `trend_ops_logging`, `watchlist_sector_match`, `sector_radar_score_quality`, `web_ops_events_upsert_rpc`)에 수동 적용/검증 SQL/정책 추가.
+- **Sector Radar ops dedupe/throttle:** `sectorRadarOpsLogger` 도입으로 score quality 경고를 안정 fingerprint(`sector_radar:${userKey}:${normalizedSectorKey}:${code}`)로 묶고, 동일 이벤트는 row 추가 대신 occurrence 누적 + last_seen_at/detail 갱신. 30분 기본 cooldown, `sector_radar_score_overheated`는 24시간 throttle. `qualityMeta.sectorRadar.opsLogging`(attempted/inserted/bumped/skippedByThrottle/failed) 추가.
+- **Sector Radar ops detail 강화:** `missingSymbols`, `missingReasons`, `anchorSymbols`, `suggestedAction`, `isOperationalError/isObservationWarning`를 detail에 저장해 원인 추적성 개선. `resolved` 재발 시 `open`으로 reopen, `ignored`는 유지 정책 적용.
+- **Ops events UI 보강:** `sector_radar` 이벤트 카드에 `표본/시세성공/누락` 요약 라인 추가, 상세에 `anchorSymbols` 표/누락 심볼/권장 조치/운영오류·관찰경고 배지를 구조화 렌더링(원본 JSON은 접기 유지).
+- **Sector Radar score explanation 확장:** `scoreExplanation.watchlistConnectionSummary`를 추가해 점수와 관심종목 연결성 문구를 분리 노출.
+- **Sector Radar registry 분리(부분):** 서버 전용 registry는 `server-only`를 유지하고, 공용 alias/정규화 헬퍼를 `sectorRadarRegistry.shared.ts`로 분리.
+- **Ops DB upsert 검토 SQL 추가:** `docs/sql/append_web_ops_events_upsert_rpc.sql` 초안 추가(운영 DB 자동 적용 없음).
 - **Trend Gemini finalizer fallback:** Gemini 최종 정리 호출에 타임아웃·1회 재시도 후 실패 시 OpenAI 리서치 브리프 기반 임시 마크다운으로 대체. `qualityMeta.finalizer`(provider/retry/degraded/fallback), 최소 `structuredMemory`, finalizer degraded 시 `trend_memory_signals_v2` upsert 생략. `web_ops_events`에 `trend_gemini_*`·`trend_final_report_fallback_used`·`trend_raw_error_report_blocked`·`trend_gemini_format_degraded` 등 기록.
 - **Trend UI:** 원문 마크다운·섹션 본문에 API/Gemini 오류 패턴이 있으면 치환 표시, degraded 시 상단 안내.
 - **Sheets `trend_requests`:** 탭·헤더 자동 생성, 따옴표 보호 A1 range·열 폭 동적 조정·append 후보 순차 시도, 실패 시 경고만.
