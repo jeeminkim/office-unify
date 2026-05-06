@@ -5,6 +5,10 @@ import {
   normalizeSectorRadarOpsKey,
   shouldSkipSectorRadarOpsByThrottle,
 } from "../sectorRadarOpsPolicy";
+import {
+  buildSectorRadarSummaryBatchDegradedFingerprint,
+  shouldLogSectorRadarSummaryBatchDegraded,
+} from "./opsAggregateWarnings";
 
 describe("sectorRadarOpsLogger fingerprint and throttle", () => {
   it("normalizes aliases to stable sector key", () => {
@@ -56,5 +60,30 @@ describe("sectorRadarOpsLogger fingerprint and throttle", () => {
     const noData = classifySectorRadarWarningPolicy("sector_radar_score_no_data");
     expect(noData.isOperationalError).toBe(true);
     expect(noData.isObservationWarning).toBe(false);
+  });
+
+  it("builds stable summary aggregate fingerprint", () => {
+    const fp = buildSectorRadarSummaryBatchDegradedFingerprint({
+      userKey: "user123",
+      ymdKst: "20260507",
+    });
+    expect(fp).toBe("sector_radar:user123:20260507:summary_batch_degraded");
+  });
+
+  it("detects summary batch degraded thresholds", () => {
+    expect(
+      shouldLogSectorRadarSummaryBatchDegraded({
+        noDataCount: 3,
+        quoteMissingSectors: 0,
+        veryLowConfidenceCount: 0,
+      }),
+    ).toBe(true);
+    expect(
+      shouldLogSectorRadarSummaryBatchDegraded({
+        noDataCount: 0,
+        quoteMissingSectors: 2,
+        veryLowConfidenceCount: 2,
+      }),
+    ).toBe(false);
   });
 });

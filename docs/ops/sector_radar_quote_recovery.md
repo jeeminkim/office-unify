@@ -15,7 +15,7 @@
 
 - `GET /api/sector-radar/summary`:
   - 경고는 응답(`qualityMeta`, `displayWarnings`)에 유지
-  - DB write는 기본 제한(read-only 억제)
+  - DB write는 기본 제한(read-only 억제), 심한 저하는 aggregate degraded 1건만 제한 기록
 - `POST /api/sector-radar/refresh`:
   - 시트 수식 동기화 후 재조회 시 필요한 상세 로그 기록 가능
   - cooldown/budget 정책 적용

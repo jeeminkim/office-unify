@@ -46,6 +46,9 @@
 - 같은 경고를 매 호출마다 `web_ops_events`에 쓰지 않는다.
 - `today_candidates_us_market_no_data`는 KST 날짜 fingerprint 기준 하루 1회만 기록한다.
   - fingerprint 예: `today_candidates:{userKey}:{yyyyMMdd}:us_market_no_data`
+- read-only 상태가 크게 저하되면 aggregate degraded 1건만 제한 기록한다.
+  - code: `today_candidates_summary_batch_degraded`
+  - fingerprint: `today_candidates:{userKey}:{yyyyMMdd}:summary_batch_degraded`
 - 사용자 액션 이벤트(사유 보기, 관심종목 추가 성공/실패)는 기존대로 기록 가능하다.
 - `qualityMeta` 경고와 `web_ops_events`는 목적이 다르다:
   - `qualityMeta`: 현재 화면 상태 전달
@@ -171,6 +174,7 @@ low/very_low 후보는 기본 숨김(토글로 표시) 정책을 사용한다.
 
 - `GET /api/dashboard/today-brief`는 화면 경고를 유지하고 DB write는 제한한다.
 - `today_candidates_us_market_no_data`는 같은 사용자 + KST 날짜 fingerprint 기준 하루 1회 수준으로 제한한다.
+- 심한 저하(no data 또는 low/very_low batch)에서는 aggregate degraded를 cooldown/예산 내에서만 제한 기록한다.
 - detail_opened/add_success/add_failed 같은 사용자 액션 이벤트는 별도 기록 가능하다.
 
 ## 수동 검증 시나리오

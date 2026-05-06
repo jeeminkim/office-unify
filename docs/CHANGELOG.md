@@ -10,6 +10,7 @@
 - **Ops log transaction budget 도입:** `opsLogBudget`를 추가해 read-only 경로 warning DB write를 기본 억제하고, cooldown/예산(요청당 max 3) 정책으로 단기 write 트랜잭션을 제한.
 - **Today brief no_data write 축소:** `today_candidates_us_market_no_data`는 KST 날짜 fingerprint 기준 하루 1회만 기록하고, 나머지는 `qualityMeta.todayCandidates.warnings`로만 노출.
 - **Sector Radar summary write 억제:** `/api/sector-radar/summary`에서는 품질 경고를 화면/qualityMeta에 유지하되 DB write를 기본 생략하도록 정책화.
+- **Read-only aggregate degraded 추가:** summary/today-brief는 개별 warning write를 억제하고, 심한 저하 시 `sector_radar_summary_batch_degraded` / `today_candidates_summary_batch_degraded`를 날짜 fingerprint + cooldown/budget 기준으로 제한 기록.
 - **US morning anchor universe 보강:** 미국장 요약 anchor를 SPY/QQQ/DIA/IWM/SOXX/SMH/XLK/XLF/TSLA/NVDA 기준으로 정리.
 - **조선/LNG/소재 ticker 보정:** 동성화인텍(033500) `googleTicker`를 `KOSDAQ:033500`으로 보정.
 - **Today Candidates primaryRisk 강제 노출:** 카드 뱃지 최대 4개 정책과 별도로 `primaryRisk`를 항상 노출해 과열/추격/급등/시세부족 등 핵심 리스크를 놓치지 않도록 개선.

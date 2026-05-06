@@ -30,7 +30,7 @@
 - `/decision-journal` : 비거래 의사결정 일지 — **실제 주문이 아니라** 사지 않음·팔지 않음·관망·대기 등의 판단을 기록. Trade Journal(실행 거래)과 구분.
 - `/ops-events` : 운영 로그·개선 포인트 — `web_ops_events` 조회·상태 변경·메모. 시스템 오류/경고와 사용자 **개선 메모**를 같은 테이블에서 backlog로 관리(자동 수정 없음).
 
-## Dashboard Today Candidates
+### Dashboard Today Candidates
 
 - 홈 `오늘의 3줄 브리핑` 응답은 기존 3줄 라인 + optional `candidates` 확장을 함께 사용한다.
 - 후보 축:
@@ -44,7 +44,7 @@
 - low/very_low 후보는 기본 숨김(토글로 표시) 정책을 사용한다.
 - `POST /api/portfolio/watchlist/add-candidate`는 `added|already_exists`를 반환하고, 성공 후 postprocess를 best-effort로 수행한다.
 - 운영 요약은 `GET /api/dashboard/today-candidates/ops-summary`로 조회한다.
-- read-only 경로(`GET /api/dashboard/today-brief`)는 warning을 `qualityMeta`에 유지하고 `web_ops_events` write는 제한한다(일 1회/cooldown/budget).
+- read-only 경로(`GET /api/dashboard/today-brief`)는 warning을 `qualityMeta`에 유지하고 `web_ops_events` write는 제한한다(개별 warning 억제, aggregate degraded는 일 1회/cooldown/budget).
 
 ## 서버 API 계층
 
@@ -214,5 +214,6 @@
   - `qualityMeta`: 현재 요청의 사용자 표시 상태
   - `web_ops_events`: 운영 추적용 누적 상태
 - read-only API의 warning은 가능한 한 DB write를 억제하고, 명시적 refresh/critical/error/state transition/cooldown 경과 시에만 기록한다.
+- read-only에서 상태가 심하게 나쁠 때는 aggregate degraded code(`sector_radar_summary_batch_degraded`, `today_candidates_summary_batch_degraded`)만 제한적으로 기록한다.
 - 요청 단위 write budget(`opsLogBudget`)을 적용해 단기 트랜잭션 폭증을 방지한다.
 

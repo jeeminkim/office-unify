@@ -33,3 +33,4 @@
 - 자동 매매/자동 주문/확정 수익률 표현 금지
 - "추천 종목"보다 "관찰 후보", "관찰 우선순위", "판단 보조" 우선
 - secret/token/API key 실값 문서 기재 금지
+- read-only warning은 qualityMeta 유지 + 개별 DB write 억제 + aggregate degraded 제한 기록 원칙 유지

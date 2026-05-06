@@ -56,4 +56,18 @@ describe("opsLogBudget", () => {
     expect(d.shouldWrite).toBe(false);
     expect(d.reason).toBe("skipped_budget_exceeded");
   });
+
+  it("allows critical aggregate warning on read-only route", () => {
+    const d = shouldWriteOpsEvent({
+      domain: "sector_radar",
+      code: "sector_radar_summary_batch_degraded",
+      severity: "warning",
+      fingerprint: "f-critical",
+      isReadOnlyRoute: true,
+      isCritical: true,
+      cooldownMinutes: 30,
+    });
+    expect(d.shouldWrite).toBe(true);
+    expect(d.reason).toBe("critical_error");
+  });
 });

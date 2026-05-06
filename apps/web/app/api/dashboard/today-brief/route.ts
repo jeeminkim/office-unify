@@ -13,6 +13,11 @@ import { analyzeThesisHealth } from '@/lib/server/thesisHealthAnalyzer';
 import { buildTodayStockCandidates } from '@/lib/server/todayStockCandidateService';
 import { upsertOpsEventByFingerprint } from '@/lib/server/upsertOpsEventByFingerprint';
 import { OPS_LOG_MAX_WRITES_PER_REQUEST, shouldWriteOpsEvent } from '@/lib/server/opsLogBudget';
+import {
+  buildTodayCandidatesSummaryBatchDegradedFingerprint,
+  OPS_AGGREGATE_WARNING_CODES,
+  shouldLogTodayCandidatesSummaryBatchDegraded,
+} from '@/lib/server/opsAggregateWarnings';
 import type { TodayBriefWithCandidatesResponse } from '@/lib/todayCandidatesContract';
 
 function toNum(v: number | string | null | undefined): number {
@@ -247,7 +252,8 @@ export async function GET() {
         code: 'today_candidates_us_market_no_data',
         severity: 'warning',
         fingerprint,
-        isReadOnlyRoute: false,
+        isReadOnlyRoute: true,
+        isCritical: true,
         lastSeenAt: existing?.last_seen_at ?? null,
         cooldownMinutes: 60 * 24,
         writesUsed: opsLogging.written,
@@ -277,6 +283,71 @@ export async function GET() {
         });
         if (write.ok) opsLogging.written += 1;
         else if (opsLogging.warnings.length < 10) opsLogging.warnings.push(write.warning ?? 'today_candidates_us_market_no_data_log_failed');
+      }
+    }
+    const totalCandidates = todayCandidates.userContextCandidates.length + todayCandidates.usMarketKrCandidates.length;
+    const shouldAggregate = shouldLogTodayCandidatesSummaryBatchDegraded({
+      usMarketDataAvailable: todayCandidates.usMarketSummary.available,
+      userContextCount: todayCandidates.userContextCandidates.length,
+      usMarketKrCount: todayCandidates.usMarketKrCandidates.length,
+      lowConfidenceCount: todayCandidates.confidenceCounts.low,
+      veryLowConfidenceCount: todayCandidates.confidenceCounts.very_low,
+      totalCount: totalCandidates,
+    });
+    if (shouldAggregate) {
+      const fingerprint = buildTodayCandidatesSummaryBatchDegradedFingerprint({
+        userKey: String(auth.userKey),
+        ymdKst: ymd,
+      });
+      const { data: existing } = await supabase
+        .from('web_ops_events')
+        .select('last_seen_at')
+        .eq('fingerprint', fingerprint)
+        .maybeSingle<{ last_seen_at: string }>();
+      const decision = shouldWriteOpsEvent({
+        domain: 'today_candidates',
+        code: OPS_AGGREGATE_WARNING_CODES.TODAY_CANDIDATES_SUMMARY_BATCH_DEGRADED,
+        severity: 'warning',
+        fingerprint,
+        isReadOnlyRoute: true,
+        isExplicitRefresh: false,
+        isCritical: true,
+        lastSeenAt: existing?.last_seen_at ?? null,
+        cooldownMinutes: 60 * 24,
+        writesUsed: opsLogging.written,
+        maxWritesPerRequest: OPS_LOG_MAX_WRITES_PER_REQUEST,
+      });
+      opsLogging.attempted += 1;
+      if (!decision.shouldWrite) {
+        if (decision.reason === 'skipped_read_only') opsLogging.skippedReadOnly += 1;
+        if (decision.reason === 'skipped_cooldown') opsLogging.skippedCooldown += 1;
+        if (decision.reason === 'skipped_budget_exceeded') opsLogging.skippedBudgetExceeded += 1;
+      } else {
+        const write = await upsertOpsEventByFingerprint({
+          userKey: String(auth.userKey),
+          domain: 'today_candidates',
+          eventType: 'warning',
+          severity: 'warning',
+          code: OPS_AGGREGATE_WARNING_CODES.TODAY_CANDIDATES_SUMMARY_BATCH_DEGRADED,
+          message: 'Today candidates summary degraded in read-only mode',
+          detail: {
+            route: '/api/dashboard/today-brief',
+            component: 'today-brief',
+            usMarketDataAvailable: todayCandidates.usMarketSummary.available,
+            userContextCount: todayCandidates.userContextCandidates.length,
+            usMarketKrCount: todayCandidates.usMarketKrCandidates.length,
+            lowConfidenceCount: todayCandidates.confidenceCounts.low,
+            veryLowConfidenceCount: todayCandidates.confidenceCounts.very_low,
+            skippedIndividualWarnings: true,
+            reason: 'read_only_aggregate_degraded',
+          },
+          fingerprint,
+          status: 'open',
+          route: '/api/dashboard/today-brief',
+          component: 'today-brief',
+        });
+        if (write.ok) opsLogging.written += 1;
+        else if (opsLogging.warnings.length < 10) opsLogging.warnings.push(write.warning ?? 'today_candidates_summary_batch_degraded_log_failed');
       }
     }
     const { data: ppRows, error: ppErr } = await supabase

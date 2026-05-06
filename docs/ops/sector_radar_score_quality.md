@@ -98,6 +98,7 @@ Sector Radar 점수는 **매수 추천이 아니라 섹터 관찰 신호**입니
 
 - `GET /api/sector-radar/summary`는 기본적으로 read-only 경로로 간주한다.
 - 이 경로에서는 `sector_radar_score_no_data`, `sector_radar_score_quote_coverage_low`, `sector_radar_score_very_low_confidence`를 qualityMeta/화면에는 유지하되 DB write는 기본 생략한다.
+- 요약 상태가 심하게 나쁘면 aggregate code `sector_radar_summary_batch_degraded`를 날짜 fingerprint 기준으로 제한 기록한다.
 - `POST /api/sector-radar/refresh` 같은 명시적 새로고침 이후 점검 흐름에서만 write를 허용한다.
 - `qualityMeta.sectorRadar.opsLogging`에는 `attempted/written/skippedReadOnly/skippedCooldown/skippedBudgetExceeded`를 기록한다.
 - 목적은 이슈 은닉이 아니라, read-only 조회 반복으로 인한 Supabase write transaction 급증을 줄이는 것이다.

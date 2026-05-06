@@ -38,6 +38,7 @@
 - Ops
   - `web_ops_events` fingerprint upsert RPC 우선
   - `opsLogBudget` 기반 write budget/cooldown/read-only 억제
+  - read-only 요약 경로는 개별 warning 대신 aggregate degraded를 제한 기록
 - Portfolio Quote Recovery
   - quotes/ticker/sector-radar 각각 전용 refresh API
   - read-back 지연/빈값을 NO_DATA 경고로 표시

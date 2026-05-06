@@ -91,6 +91,9 @@ limit 100;
 ## Read-only 경로 write 억제 정책
 
 - read-only API(`GET /api/dashboard/today-brief`, `GET /api/sector-radar/summary`)는 화면 경고용 상태를 `qualityMeta.warnings`로 전달하고, DB write는 제한한다.
+- read-only API는 개별 warning write를 기본 생략하고, 요약 상태가 심하게 나쁠 때만 aggregate degraded code를 날짜 fingerprint 기준으로 제한 기록한다.
+  - `sector_radar_summary_batch_degraded`
+  - `today_candidates_summary_batch_degraded`
 - DB write는 아래 상황 중심으로만 허용한다.
   - 최초 발생(first seen)
   - cooldown 경과 후 재발

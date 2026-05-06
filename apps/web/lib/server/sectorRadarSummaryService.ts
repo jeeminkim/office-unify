@@ -21,6 +21,13 @@ import {
 } from '@/lib/server/sectorRadarSheetService';
 import { attachSectorRadarDisplayFields } from '@/lib/sectorRadarWarningMessages';
 import type { SectorRadarSummaryResponse, SectorRadarSummarySector } from '@/lib/sectorRadarContract';
+import {
+  buildSectorRadarSummaryBatchDegradedFingerprint,
+  OPS_AGGREGATE_WARNING_CODES,
+  shouldLogSectorRadarSummaryBatchDegraded,
+} from '@/lib/server/opsAggregateWarnings';
+import { shouldWriteOpsEvent } from '@/lib/server/opsLogBudget';
+import { upsertOpsEventByFingerprint } from '@/lib/server/upsertOpsEventByFingerprint';
 function pickTop3(
   sectors: SectorRadarSummarySector[],
   zones: Array<SectorRadarSummarySector['zone']>,
@@ -119,6 +126,81 @@ export async function buildSectorRadarSummaryForUser(
   }
 
   const qualityMeta = buildSectorRadarQualityMeta(sectors);
+  const ymdKst = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date()).replaceAll('-', '');
+  const shouldAggregate = shouldLogSectorRadarSummaryBatchDegraded({
+    noDataCount: qualityMeta.sectorRadar.noDataCount,
+    quoteMissingSectors: qualityMeta.sectorRadar.quoteMissingSectors,
+    veryLowConfidenceCount: qualityMeta.sectorRadar.veryLowConfidence,
+  });
+  if (shouldAggregate) {
+    const fingerprint = buildSectorRadarSummaryBatchDegradedFingerprint({
+      userKey: String(userKey),
+      ymdKst,
+    });
+    opsLogging.attempted += 1;
+    try {
+      const { data: existing } = await supabase
+        .from('web_ops_events')
+        .select('last_seen_at')
+        .eq('fingerprint', fingerprint)
+        .maybeSingle<{ last_seen_at: string }>();
+      const decision = shouldWriteOpsEvent({
+        domain: 'sector_radar',
+        code: OPS_AGGREGATE_WARNING_CODES.SECTOR_RADAR_SUMMARY_BATCH_DEGRADED,
+        severity: 'warning',
+        fingerprint,
+        isReadOnlyRoute: options?.isReadOnlyRoute ?? true,
+        isExplicitRefresh: options?.isExplicitRefresh ?? false,
+        isCritical: true,
+        lastSeenAt: existing?.last_seen_at ?? null,
+        cooldownMinutes: 60 * 24,
+        writesUsed,
+        maxWritesPerRequest: options?.maxOpsWritesPerRequest,
+      });
+      if (!decision.shouldWrite) {
+        if (decision.reason === 'skipped_read_only') opsLogging.skippedReadOnly += 1;
+        if (decision.reason === 'skipped_cooldown') opsLogging.skippedCooldown += 1;
+        if (decision.reason === 'skipped_budget_exceeded') opsLogging.skippedBudgetExceeded += 1;
+      } else {
+        const write = await upsertOpsEventByFingerprint({
+          userKey: String(userKey),
+          domain: 'sector_radar',
+          eventType: 'warning',
+          severity: 'warning',
+          code: OPS_AGGREGATE_WARNING_CODES.SECTOR_RADAR_SUMMARY_BATCH_DEGRADED,
+          message: 'Sector radar summary degraded in read-only mode',
+          detail: {
+            route: '/api/sector-radar/summary',
+            component: 'sector-radar-summary',
+            noDataCount: qualityMeta.sectorRadar.noDataCount,
+            quoteMissingSectors: qualityMeta.sectorRadar.quoteMissingSectors,
+            veryLowConfidenceCount: qualityMeta.sectorRadar.veryLowConfidence,
+            skippedIndividualWarnings: true,
+            reason: 'read_only_aggregate_degraded',
+          },
+          fingerprint,
+          status: 'open',
+          route: '/api/sector-radar/summary',
+          component: 'sector-radar-summary',
+        });
+        if (write.ok) {
+          opsLogging.written += 1;
+          writesUsed += 1;
+        } else if (opsLogging.warnings.length < 30) {
+          opsLogging.warnings.push(write.warning ?? 'sector_radar_summary_batch_degraded_log_failed');
+        }
+      }
+    } catch (e: unknown) {
+      if (opsLogging.warnings.length < 30) {
+        opsLogging.warnings.push(e instanceof Error ? e.message : 'sector_radar_summary_batch_degraded_log_failed');
+      }
+    }
+  }
   qualityMeta.sectorRadar.opsLogging = opsLogging;
 
   return attachSectorRadarDisplayFields({
