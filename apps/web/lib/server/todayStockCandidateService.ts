@@ -5,6 +5,7 @@ import { buildSectorRadarSummaryForUser } from './sectorRadarSummaryService';
 import { buildUsMarketMorningSummary } from './usMarketMorningSummary';
 import { pickRulesFromUsSummary } from './todayCandidateRules';
 import type { TodayStockCandidate, UsMarketMorningSummary } from '../todayCandidatesContract';
+import { buildCandidateDataQuality } from '../todayCandidateDataQuality';
 
 function clampScore(n: number): number {
   return Math.max(0, Math.min(100, Math.round(n)));
@@ -23,6 +24,12 @@ export async function buildTodayStockCandidates(input: {
   usMarketKrCandidates: TodayStockCandidate[];
   usMarketSummary: UsMarketMorningSummary;
   warnings: string[];
+  confidenceCounts: {
+    high: number;
+    medium: number;
+    low: number;
+    very_low: number;
+  };
 }> {
   const limit = Math.max(1, Math.min(5, input.limitPerSection ?? 3));
   const warnings: string[] = [];
@@ -78,6 +85,15 @@ export async function buildTodayStockCandidates(input: {
         relatedWatchlistSymbols: [`${w.market}:${w.symbol}`],
         isBuyRecommendation: false,
         alreadyInWatchlist: true,
+        dataQuality: buildCandidateDataQuality({
+          confidence: confidencePenalty > 0 ? 'low' : 'medium',
+          quoteReady: Boolean(w.quote_symbol || w.google_ticker),
+          sectorConfidence: sectorConfidence ?? 'unknown',
+          usMarketDataAvailable: usSummary.available,
+          hasWatchlistLink: true,
+          cautionNotes: ['매수 권유 아님', '시세/뉴스/실적/리스크 확인 필요', '추격매수 주의'],
+          source: 'user_context',
+        }),
       };
     });
 
@@ -110,17 +126,34 @@ export async function buildTodayStockCandidates(input: {
         relatedUsMarketSignals: [r.usSignalKey],
         isBuyRecommendation: false as const,
         alreadyInWatchlist: watchlist.some((w) => w.market === 'KR' && (w.symbol === c.stockCode || (w.google_ticker ?? '') === c.googleTicker)),
+        dataQuality: buildCandidateDataQuality({
+          confidence,
+          quoteReady: Boolean(c.quoteSymbol || c.googleTicker),
+          sectorConfidence: 'unknown',
+          usMarketDataAvailable: usSummary.available,
+          hasWatchlistLink: watchlist.some((w) => w.market === 'KR' && w.symbol === c.stockCode),
+          cautionNotes: ['매수 권유 아님', c.caution, '장 초반 급등 추격 주의'],
+          source: 'us_market_morning',
+        }),
       })}),
     )
     .slice(0, Math.max(3, limit));
 
   if (usSummary.available && usSummary.conclusion !== 'no_data' && usMarketKrCandidates.length === 0) warnings.push('us_market_candidates_empty');
   if (holdings.length === 0 && watchlist.length === 0) warnings.push('user_context_sparse');
+  const all = [...userContextCandidates, ...usMarketKrCandidates];
+  const confidenceCounts = {
+    high: all.filter((x) => x.confidence === 'high').length,
+    medium: all.filter((x) => x.confidence === 'medium').length,
+    low: all.filter((x) => x.confidence === 'low').length,
+    very_low: all.filter((x) => x.confidence === 'very_low').length,
+  };
 
   return {
     userContextCandidates,
     usMarketKrCandidates,
     usMarketSummary: usSummary,
     warnings,
+    confidenceCounts,
   };
 }

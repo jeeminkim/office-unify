@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Today Candidates low confidence 요약:** `dataQuality.summary`를 추가해 low/very_low 후보의 낮은 신뢰도 원인을 1문장으로 표시.
+- **DataQuality 뱃지 세분화:** 신뢰도/시세/섹터/미국장/과열/관심종목 기준으로 우선순위 뱃지 생성(최대 4개 노출).
+- **후보 상세 신뢰도 가독성 개선:** 데이터 신뢰도 요약과 이유 목록을 상세 패널에 분리 표시.
+- **Today Candidates 신뢰도 뱃지/토글:** 후보별 `dataQuality` 뱃지(시세/섹터/미국장/과열/데이터제한) 추가, low/very_low 후보 기본 숨김 토글 추가.
+- **Today Candidates Ops 카드화:** 대시보드에 최근 7일 운영 상태 카드(생성/사유열람/추가/중복/no_data/실패) 분리 노출.
+- **qualityMeta 확장:** `qualityMeta.todayCandidates`에 confidence 분포와 postprocess(success/partial/failed) 집계 추가.
+- **ops logging 보강:** `today_candidate_low_confidence_batch`, `today_candidate_data_quality_degraded` 코드 추가.
 - **Today Candidates 후처리 강화:** 관심종목 추가 성공 후 sector match/ticker 정규화 best-effort postprocess를 추가하고 `postProcess` 상태(`warnings`)를 응답에 포함.
 - **Today Candidates Ops Summary:** `GET /api/dashboard/today-candidates/ops-summary` 추가(생성/no_data/중복/실패 집계).
 - **관찰 우선순위 설명 보강:** 대시보드 후보 점수를 `관찰 우선순위`로 표기하고 상세에 “매수 점수 아님” 설명/긍정신호/주의사항 표시.

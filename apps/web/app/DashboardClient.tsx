@@ -14,6 +14,7 @@ import {
   getVisibleSectorRadarWarningsForSummary,
 } from "@/lib/sectorRadarWarningMessages";
 import type { TodayBriefWithCandidatesResponse, TodayStockCandidate } from "@/lib/todayCandidatesContract";
+import { filterCandidatesByConfidence } from "@/lib/todayCandidateDataQuality";
 
 type StatusSection = {
   key: string;
@@ -78,6 +79,8 @@ type TodayCandidatesOpsSummaryResponse = {
   totals?: {
     generated: number;
     usMarketNoData: number;
+    detailOpened: number;
+    watchlistAdded: number;
     alreadyExists: number;
     addFailed: number;
   };
@@ -158,6 +161,7 @@ export function DashboardClient() {
   const [openedCandidateId, setOpenedCandidateId] = useState<string | null>(null);
   const [watchlistAddState, setWatchlistAddState] = useState<Record<string, string>>({});
   const [todayOpsSummary, setTodayOpsSummary] = useState<TodayCandidatesOpsSummaryResponse | null>(null);
+  const [showLowConfidenceCandidates, setShowLowConfidenceCandidates] = useState(false);
 
   const watchQueueTop5 = useMemo(() => {
     const rows = watchQueue?.candidates ?? [];
@@ -237,6 +241,32 @@ export function DashboardClient() {
     const us = todayBrief?.candidates?.usMarketKr ?? [];
     return [...user, ...us];
   }, [todayBrief]);
+
+  const filteredTodayCandidates = useMemo(() => {
+    if (showLowConfidenceCandidates) {
+      return {
+        userContext: todayBrief?.candidates?.userContext ?? [],
+        usMarketKr: todayBrief?.candidates?.usMarketKr ?? [],
+      };
+    }
+    return {
+      userContext: filterCandidatesByConfidence(todayBrief?.candidates?.userContext ?? [], false),
+      usMarketKr: filterCandidatesByConfidence(todayBrief?.candidates?.usMarketKr ?? [], false),
+    };
+  }, [todayBrief, showLowConfidenceCandidates]);
+
+  const lowConfidenceOnly = useMemo(() => {
+    const rows = allTodayCandidates;
+    if (rows.length === 0) return false;
+    return rows.every((c) => c.confidence === "low" || c.confidence === "very_low");
+  }, [allTodayCandidates]);
+
+  const badgeTone = useCallback((badge: string) => {
+    if (badge.includes("낮음") || badge.includes("제한") || badge.includes("과열")) return "bg-amber-100 text-amber-900";
+    if (badge.includes("신뢰도 높음")) return "bg-emerald-100 text-emerald-900";
+    if (badge.includes("시세 확인 필요")) return "bg-slate-200 text-slate-700";
+    return "bg-blue-100 text-blue-900";
+  }, []);
 
   const onOpenReason = useCallback(async (candidate: TodayStockCandidate) => {
     setOpenedCandidateId((prev) => (prev === candidate.candidateId ? null : candidate.candidateId));
@@ -349,17 +379,38 @@ export function DashboardClient() {
           매수 권유 아님 · 관찰 후보 · 시세/뉴스/실적/리스크 확인 필요
         </div>
         {todayBrief?.disclaimer ? <p className="mt-2 text-[11px] text-violet-900/90">{todayBrief.disclaimer}</p> : null}
+        <label className="mt-2 flex items-center gap-2 text-[11px] text-violet-900">
+          <input
+            type="checkbox"
+            checked={showLowConfidenceCandidates}
+            onChange={(e) => setShowLowConfidenceCandidates(e.target.checked)}
+          />
+          낮은 신뢰도 후보도 보기
+        </label>
+        {!showLowConfidenceCandidates ? (
+          <p className="mt-1 text-[11px] text-violet-900/90">
+            낮은 신뢰도 후보는 데이터가 부족하거나 시세/섹터 연결이 약한 항목입니다. 매수 판단에 사용하지 말고 관찰만 하세요.
+          </p>
+        ) : null}
+        {!showLowConfidenceCandidates && lowConfidenceOnly ? (
+          <p className="mt-1 text-[11px] text-amber-800">데이터 신뢰도가 낮은 후보만 있습니다. 필요 시 토글을 켜서 확인하세요.</p>
+        ) : null}
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           <div className="rounded border border-violet-100 bg-white p-2">
             <p className="text-xs font-semibold text-violet-950">내 관심사 기반 관찰 후보</p>
-            {(todayBrief?.candidates?.userContext ?? []).length === 0 ? (
+            {(filteredTodayCandidates.userContext ?? []).length === 0 ? (
               <p className="mt-1 text-[11px] text-slate-600">데이터가 부족해 일부 후보를 생략했습니다.</p>
             ) : (
               <ul className="mt-2 space-y-2">
-                {(todayBrief?.candidates?.userContext ?? []).map((c) => (
+                {(filteredTodayCandidates.userContext ?? []).map((c) => (
                   <li key={c.candidateId} className="rounded border border-violet-100 p-2">
                     <p className="text-xs font-medium text-slate-900">{c.name} · {c.sector ?? "NO_DATA"} · 관찰 우선순위 {c.score}</p>
                     <p className="mt-1 text-[11px] text-slate-700">{c.reasonSummary}</p>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {(c.dataQuality?.badges ?? []).map((b) => (
+                        <span key={`${c.candidateId}-${b}`} className={`rounded px-1.5 py-0.5 text-[10px] ${badgeTone(b)}`}>{b}</span>
+                      ))}
+                    </div>
                     <div className="mt-1 flex gap-2 text-[11px]">
                       <button type="button" className="rounded border border-slate-300 px-2 py-0.5" onClick={() => void onOpenReason(c)}>사유 보기</button>
                       <button
@@ -372,6 +423,9 @@ export function DashboardClient() {
                       </button>
                     </div>
                     {watchlistAddState[c.candidateId] ? <p className="mt-1 text-[10px] text-slate-600">{watchlistAddState[c.candidateId]}</p> : null}
+                    {(c.confidence === "low" || c.confidence === "very_low") && c.dataQuality?.summary ? (
+                      <p className="mt-1 text-[10px] text-amber-800">{c.dataQuality.summary}</p>
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -380,14 +434,19 @@ export function DashboardClient() {
           <div className="rounded border border-violet-100 bg-white p-2">
             <p className="text-xs font-semibold text-violet-950">미국시장 신호 기반 한국주식 후보</p>
             <p className="mt-1 text-[11px] text-slate-700">{todayBrief?.usMarketSummary?.summary ?? "미국시장 데이터가 충분하지 않아 제한적으로 표시합니다."}</p>
-            {(todayBrief?.candidates?.usMarketKr ?? []).length === 0 ? (
+            {(filteredTodayCandidates.usMarketKr ?? []).length === 0 ? (
               <p className="mt-1 text-[11px] text-slate-600">데이터가 부족해 일부 후보를 생략했습니다.</p>
             ) : (
               <ul className="mt-2 space-y-2">
-                {(todayBrief?.candidates?.usMarketKr ?? []).map((c) => (
+                {(filteredTodayCandidates.usMarketKr ?? []).map((c) => (
                   <li key={c.candidateId} className="rounded border border-violet-100 p-2">
                     <p className="text-xs font-medium text-slate-900">{c.name} · {c.sector ?? "NO_DATA"} · 관찰 우선순위 {c.score}</p>
                     <p className="mt-1 text-[11px] text-slate-700">{c.reasonSummary}</p>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {(c.dataQuality?.badges ?? []).map((b) => (
+                        <span key={`${c.candidateId}-${b}`} className={`rounded px-1.5 py-0.5 text-[10px] ${badgeTone(b)}`}>{b}</span>
+                      ))}
+                    </div>
                     <div className="mt-1 flex gap-2 text-[11px]">
                       <button type="button" className="rounded border border-slate-300 px-2 py-0.5" onClick={() => void onOpenReason(c)}>사유 보기</button>
                       <button
@@ -400,6 +459,9 @@ export function DashboardClient() {
                       </button>
                     </div>
                     {watchlistAddState[c.candidateId] ? <p className="mt-1 text-[10px] text-slate-600">{watchlistAddState[c.candidateId]}</p> : null}
+                    {(c.confidence === "low" || c.confidence === "very_low") && c.dataQuality?.summary ? (
+                      <p className="mt-1 text-[10px] text-amber-800">{c.dataQuality.summary}</p>
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -422,13 +484,36 @@ export function DashboardClient() {
               {(allTodayCandidates.find((c) => c.candidateId === openedCandidateId)?.cautionNotes ?? []).map((d, i) => <li key={`c-${openedCandidateId}-${i}`}>{d}</li>)}
             </ul>
             <p className="mt-2 text-[11px] text-violet-900">매수 권유가 아닙니다. 장중 변동성/손절 기준을 반드시 별도 확인하세요.</p>
+            <p className="mt-2 font-semibold text-violet-950">데이터 신뢰도</p>
+            <p className="mt-1 text-[11px] text-violet-900">
+              신뢰도: {allTodayCandidates.find((c) => c.candidateId === openedCandidateId)?.dataQuality?.overall ?? "unknown"} ·
+              섹터 확인: {allTodayCandidates.find((c) => c.candidateId === openedCandidateId)?.dataQuality?.sectorConfidence ?? "unknown"} ·
+              시세 확인: {allTodayCandidates.find((c) => c.candidateId === openedCandidateId)?.dataQuality?.quoteReady ? "됨" : "필요"} ·
+              미국장 데이터: {allTodayCandidates.find((c) => c.candidateId === openedCandidateId)?.dataQuality?.usMarketDataAvailable ? "확인됨" : "없음/제한"}
+            </p>
+            {allTodayCandidates.find((c) => c.candidateId === openedCandidateId)?.dataQuality?.summary ? (
+              <p className="mt-1 text-[11px] text-amber-800">
+                요약: {allTodayCandidates.find((c) => c.candidateId === openedCandidateId)?.dataQuality?.summary}
+              </p>
+            ) : null}
+            <p className="mt-2 font-semibold text-violet-950">신뢰도 판단 이유</p>
+            <ul className="mt-1 list-inside list-disc space-y-1 text-violet-900">
+              {(allTodayCandidates.find((c) => c.candidateId === openedCandidateId)?.dataQuality?.reasons ?? []).map((d, i) => (
+                <li key={`dq-${openedCandidateId}-${i}`}>{d}</li>
+              ))}
+            </ul>
           </div>
         ) : null}
+      </section>
+      <section className="mb-5 rounded-xl border border-violet-200 bg-white p-4">
+        <h2 className="text-sm font-semibold text-violet-900">후보 운영 상태 · 최근 7일</h2>
         {todayOpsSummary?.totals ? (
-          <div className="mt-3 rounded border border-violet-100 bg-white p-2 text-[11px] text-violet-900">
-            운영 상태: 후보 생성 {todayOpsSummary.totals.generated}건 · 중복 추가 {todayOpsSummary.totals.alreadyExists}건 · 미국장 데이터 없음 {todayOpsSummary.totals.usMarketNoData}건
-          </div>
-        ) : null}
+          <p className="mt-2 text-xs text-violet-900">
+            생성 {todayOpsSummary.totals.generated}회 · 사유 보기 {todayOpsSummary.totals.detailOpened}회 · 관심추가 {todayOpsSummary.totals.watchlistAdded}회 · 중복 {todayOpsSummary.totals.alreadyExists}회 · 미국장 no_data {todayOpsSummary.totals.usMarketNoData}회 · 추가 실패 {todayOpsSummary.totals.addFailed}회
+          </p>
+        ) : (
+          <p className="mt-2 text-xs text-amber-800">후보 운영 상태를 불러오지 못했습니다.</p>
+        )}
       </section>
 
       <section className="mb-5 rounded-xl border border-slate-200 bg-white p-4">

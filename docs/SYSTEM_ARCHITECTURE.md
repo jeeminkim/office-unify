@@ -8,6 +8,8 @@
 - 상세 열람/관심종목 추가/중복 이벤트는 `web_ops_events`에 fingerprint upsert로 기록한다.
 - 관심종목 추가 API는 insert 후 postprocess를 best-effort로 실행해 sector/ticker 메타를 보정한다.
 - today candidates 운영 상태는 `today-candidates/ops-summary`로 집계해 대시보드에 소형 상태로 노출한다.
+- 후보별 `dataQuality`(신뢰도/뱃지/근거)를 응답에 포함하고, low confidence는 기본 숨김+토글 노출을 사용한다.
+- `qualityMeta.todayCandidates`에 confidence 분포(high/medium/low/very_low)와 postprocess 요약을 누적한다.
 # System Architecture (Personal Investment Console)
 
 ## 목적

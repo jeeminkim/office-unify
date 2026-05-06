@@ -250,6 +250,74 @@ export async function GET() {
         component: 'today-brief',
       });
     }
+    const lowConfidenceCount = todayCandidates.confidenceCounts.low + todayCandidates.confidenceCounts.very_low;
+    if (lowConfidenceCount > 0) {
+      void upsertOpsEventByFingerprint({
+        userKey: String(auth.userKey),
+        domain: 'today_candidates',
+        eventType: 'warning',
+        severity: 'warning',
+        code: 'today_candidate_low_confidence_batch',
+        message: 'low confidence candidates present in batch',
+        detail: {
+          lowConfidenceCount,
+          total: todayCandidates.userContextCandidates.length + todayCandidates.usMarketKrCandidates.length,
+        },
+        fingerprint: `today_candidates:${auth.userKey}:${ymd}:low_confidence_batch`,
+        status: 'open',
+        route: '/api/dashboard/today-brief',
+        component: 'today-brief',
+      });
+    }
+    const degradedCandidates = [...todayCandidates.userContextCandidates, ...todayCandidates.usMarketKrCandidates]
+      .filter((c) => c.confidence === 'very_low')
+      .slice(0, 3);
+    for (const c of degradedCandidates) {
+      void upsertOpsEventByFingerprint({
+        userKey: String(auth.userKey),
+        domain: 'today_candidates',
+        eventType: 'warning',
+        severity: 'warning',
+        code: 'today_candidate_data_quality_degraded',
+        message: 'candidate data quality degraded',
+        detail: { candidateId: c.candidateId, stockCode: c.stockCode, confidence: c.confidence },
+        fingerprint: `today_candidates:${auth.userKey}:${c.candidateId}:data_quality_degraded`,
+        status: 'open',
+        route: '/api/dashboard/today-brief',
+        component: 'today-brief',
+      });
+    }
+    const { data: ppRows, error: ppErr } = await supabase
+      .from('web_ops_events')
+      .select('code,detail,last_seen_at')
+      .eq('domain', 'today_candidates')
+      .eq('user_key', auth.userKey as string)
+      .in('code', [
+        'today_candidate_watchlist_add_postprocess_success',
+        'today_candidate_watchlist_add_postprocess_partial',
+        'today_candidate_watchlist_add_postprocess_failed',
+      ])
+      .gte('last_seen_at', `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`)
+      .limit(100);
+    const postProcessWarnings: string[] = [];
+    let postProcessSuccess = 0;
+    let postProcessPartial = 0;
+    let postProcessFailed = 0;
+    if (!ppErr) {
+      for (const row of ppRows ?? []) {
+        if (row.code === 'today_candidate_watchlist_add_postprocess_success') postProcessSuccess += 1;
+        if (row.code === 'today_candidate_watchlist_add_postprocess_partial') {
+          postProcessPartial += 1;
+          const w = (row.detail as Record<string, unknown> | null)?.warnings;
+          if (Array.isArray(w)) {
+            for (const item of w) {
+              if (typeof item === 'string' && postProcessWarnings.length < 20) postProcessWarnings.push(item);
+            }
+          }
+        }
+        if (row.code === 'today_candidate_watchlist_add_postprocess_failed') postProcessFailed += 1;
+      }
+    }
     const response: TodayBriefWithCandidatesResponse = {
       ok: true,
       generatedAt: new Date().toISOString(),
@@ -270,6 +338,16 @@ export async function GET() {
           userContextCount: todayCandidates.userContextCandidates.length,
           usMarketKrCount: todayCandidates.usMarketKrCandidates.length,
           usMarketDataAvailable: todayCandidates.usMarketSummary.available,
+          highConfidenceCount: todayCandidates.confidenceCounts.high,
+          mediumConfidenceCount: todayCandidates.confidenceCounts.medium,
+          lowConfidenceCount: todayCandidates.confidenceCounts.low,
+          veryLowConfidenceCount: todayCandidates.confidenceCounts.very_low,
+          postProcess: {
+            successCount: postProcessSuccess,
+            partialCount: postProcessPartial,
+            failedCount: postProcessFailed,
+            warnings: postProcessWarnings,
+          },
           warnings: todayCandidates.warnings,
         },
       },

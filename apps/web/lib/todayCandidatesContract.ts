@@ -9,6 +9,17 @@ export type TodayCandidateSource =
 
 export type TodayCandidateRiskLevel = 'low' | 'medium' | 'high' | 'unknown';
 
+export interface TodayCandidateDataQuality {
+  overall: 'high' | 'medium' | 'low' | 'very_low';
+  badges: string[];
+  reasons: string[];
+  summary?: string;
+  quoteReady?: boolean;
+  sectorConfidence?: 'high' | 'medium' | 'low' | 'very_low' | 'unknown';
+  usMarketDataAvailable?: boolean;
+  warnings: string[];
+}
+
 export interface TodayStockCandidate {
   candidateId: string;
   name: string;
@@ -33,6 +44,7 @@ export interface TodayStockCandidate {
   isBuyRecommendation: false;
   alreadyInWatchlist?: boolean;
   watchlistItemId?: string;
+  dataQuality?: TodayCandidateDataQuality;
 }
 
 export interface UsMarketMorningSummary {
@@ -74,6 +86,16 @@ export interface TodayBriefWithCandidatesResponse {
       userContextCount: number;
       usMarketKrCount: number;
       usMarketDataAvailable: boolean;
+      highConfidenceCount?: number;
+      mediumConfidenceCount?: number;
+      lowConfidenceCount?: number;
+      veryLowConfidenceCount?: number;
+      postProcess?: {
+        successCount: number;
+        partialCount: number;
+        failedCount: number;
+        warnings: string[];
+      };
       warnings: string[];
     };
   };
