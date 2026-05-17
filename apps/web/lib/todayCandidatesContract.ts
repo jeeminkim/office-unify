@@ -148,6 +148,9 @@ export interface TodayStockCandidate {
   decisionTrace?: CandidateDecisionTrace;
   /** additive: 관찰 점수와 별개의 판단 근거 성숙도 */
   judgmentQuality?: CandidateJudgmentQuality;
+  /** additive: Sector Radar DB 스냅샷 fallback 참조 */
+  sectorSnapshotRunId?: string;
+  sectorSnapshotStale?: boolean;
 }
 
 export interface UsMarketMorningSummary {
@@ -218,6 +221,8 @@ export interface TodayBriefWithCandidatesResponse {
       /** 브리핑 계산에서 평가 제외된 간편 등록(incomplete) 보유 행 수 */
       incompleteHoldingCount?: number;
       userContextCount: number;
+      /** Sector Radar snapshot fallback seed count (live summary degraded). */
+      sectorSnapshotSeedCount?: number;
       usMarketKrCount: number;
       usMarketDataAvailable: boolean;
       highConfidenceCount?: number;
@@ -299,6 +304,14 @@ export interface TodayBriefWithCandidatesResponse {
       /** additive: 덱에 오르지 않은 후보 요약(상위 N) */
       suppressedCandidates?: CandidateDecisionTrace[];
       rejectedCandidates?: CandidateDecisionTrace[];
+      /** additive: 미국 후보 단계별 진단 */
+      usCandidateDiagnostics?: import('@office-unify/shared-types').UsCandidateDiagnostics;
+      /** additive: 7일 노출·관심종목 비중 진단 */
+      exposureDiagnostics?: import('@office-unify/shared-types').TodayCandidateExposureDiagnostics;
+      /** additive: Sector Radar DB 스냅샷 메타 */
+      sectorRadarSnapshot?: import('@office-unify/shared-types').SectorRadarSnapshotMeta;
+      /** additive: 관심종목 등록 후보(승인 전 자동 등록 없음) */
+      recommendationCandidates?: import('@office-unify/shared-types').RecommendationCandidatesQualityMeta;
     };
   };
 }

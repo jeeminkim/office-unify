@@ -3,6 +3,7 @@
  */
 
 import type { ResearchCenterStage } from './researchCenterErrors';
+import type { ResearchReportDiffPayload, ResearchReportHistoryMeta } from './todayCandidateIntegration';
 
 export type { ResearchCenterStage };
 
@@ -33,6 +34,8 @@ export type ResearchCenterGenerateRequestBody = {
   saveToSheets?: boolean;
   /** 재생성 시 Chief Editor 비교용 */
   previousEditorVerdict?: string;
+  /** 명시적 새 생성(7일 미만이어도 허용) */
+  forceRefresh?: boolean;
 };
 
 export type ResearchCenterFailedStage = ResearchCenterStage;
@@ -198,6 +201,10 @@ export type ResearchCenterGenerateResponseBody = {
   errorCode?: string;
   message?: string;
   actionHint?: string;
+  reportHistory?: ResearchReportHistoryMeta;
+  reportDiff?: ResearchReportDiffPayload;
+  reusedExistingReport?: boolean;
+  generationFailedButFallbackUsed?: boolean;
   qualityMeta?: {
     researchCenter?: ResearchCenterQualityMeta;
   };

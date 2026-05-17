@@ -1,24 +1,29 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  insertSpy: vi.fn(),
-  sampleRows: [
-    {
-      domain: "today_candidates",
-      code: "us_signal_candidates_empty",
-      occurrence_count: 2,
-      last_seen_at: "2026-05-10T12:00:00.000Z",
-      detail: { primaryReason: "usToKrMappingEmpty" },
-    },
-    {
-      domain: "today_brief",
-      code: "us_signal_candidates_empty",
-      occurrence_count: 1,
-      last_seen_at: "2026-05-09T08:00:00.000Z",
-      detail: { reasonCodes: ["staleUsData"] },
-    },
-  ],
-}));
+const mocks = vi.hoisted(() => {
+  const recent = new Date().toISOString();
+  const weekAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+  return {
+    insertSpy: vi.fn(),
+    /** occurrence_count 가중 합 3 — `summarizeTodayCandidateOps` 7d inRange(동적 날짜). 고정 과거 날짜 mock은 totalCount=0이 됨. */
+    sampleRows: [
+      {
+        domain: "today_candidates",
+        code: "us_signal_candidates_empty",
+        occurrence_count: 2,
+        last_seen_at: recent,
+        detail: { primaryReason: "usToKrMappingEmpty" },
+      },
+      {
+        domain: "today_brief",
+        code: "us_signal_candidates_empty",
+        occurrence_count: 1,
+        last_seen_at: weekAgo,
+        detail: { reasonCodes: ["staleUsData"] },
+      },
+    ],
+  };
+});
 
 vi.mock("@/lib/server/persona-chat-auth", () => ({
   requirePersonaChatAuth: vi.fn(async () => ({ ok: true as const, userKey: "u1" })),

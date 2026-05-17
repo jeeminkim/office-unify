@@ -80,6 +80,7 @@ export type TodayCandidateCardKind =
   | 'watchlist_observation'
   | 'sector_representative'
   | 'us_signal_mapped'
+  | 'us_market_check'
   | 'risk_review';
 
 /** 카드 상단 데이터 상태(요약 라벨). */
@@ -133,6 +134,7 @@ export type TodayBriefDeckSlot =
   | 'interest_stock'
   | 'sector_etf'
   | 'us_signal_kr'
+  | 'us_market_check'
   | 'risk_review';
 
 /**

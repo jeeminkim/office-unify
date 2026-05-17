@@ -124,6 +124,70 @@ export function SectorRadarClient() {
   const [sectorKeywordResult, setSectorKeywordResult] = useState<WatchlistSectorMatchApiResponse | null>(null);
   const [showSectorRadarRawWarnings, setShowSectorRadarRawWarnings] = useState(false);
   const [scoreExplainOpen, setScoreExplainOpen] = useState<Record<string, boolean>>({});
+  const [snapRuns, setSnapRuns] = useState<
+    Array<{
+      id: string;
+      generated_at: string;
+      status: string;
+      degraded: boolean;
+      summary: string | null;
+      itemCount: number;
+    }>
+  >([]);
+  const [snapItemsByRun, setSnapItemsByRun] = useState<
+    Record<
+      string,
+      Array<{
+        rank?: number;
+        sectorName?: string;
+        symbol?: string;
+        name?: string;
+        market?: string;
+        score?: number;
+        confidence?: string;
+        dataStatus?: string;
+        riskFlags?: unknown[];
+      }>
+    >
+  >({});
+  const [snapLoading, setSnapLoading] = useState(false);
+  const [snapHint, setSnapHint] = useState<string | null>(null);
+  const [snapOpen, setSnapOpen] = useState(false);
+
+  const loadSnapRuns = useCallback(async () => {
+    setSnapLoading(true);
+    setSnapHint(null);
+    try {
+      const res = await fetch("/api/sector-radar/runs?limit=8", { credentials: "same-origin" });
+      const data = (await res.json()) as { ok?: boolean; runs?: typeof snapRuns; actionHint?: string };
+      if (!res.ok || !data.ok) {
+        setSnapHint(data.actionHint ?? "스냅샷 run 조회 실패");
+        setSnapRuns([]);
+        return;
+      }
+      setSnapRuns(data.runs ?? []);
+    } catch (e: unknown) {
+      setSnapHint(e instanceof Error ? e.message : "스냅샷 조회 실패");
+      setSnapRuns([]);
+    } finally {
+      setSnapLoading(false);
+    }
+  }, []);
+
+  const loadSnapItems = useCallback(async (runId: string) => {
+    if (snapItemsByRun[runId]) return;
+    try {
+      const res = await fetch(`/api/sector-radar/items?runId=${encodeURIComponent(runId)}`, {
+        credentials: "same-origin",
+      });
+      const data = (await res.json()) as { ok?: boolean; items?: typeof snapItemsByRun[string] };
+      if (res.ok && data.ok && Array.isArray(data.items)) {
+        setSnapItemsByRun((prev) => ({ ...prev, [runId]: data.items ?? [] }));
+      }
+    } catch {
+      /* optional */
+    }
+  }, [snapItemsByRun]);
 
   const bySectorKey = useMemo(() => {
     const m = new Map<string, SectorWatchlistCandidateItem[]>();
@@ -708,6 +772,56 @@ export function SectorRadarClient() {
           </div>
         )}
       </div>
+
+      <details
+        className="mt-4 rounded-lg border border-teal-200 bg-teal-50/50 p-3 text-xs"
+        open={snapOpen}
+        onToggle={(e) => {
+          const open = (e.target as HTMLDetailsElement).open;
+          setSnapOpen(open);
+          if (open && snapRuns.length === 0) void loadSnapRuns();
+        }}
+      >
+        <summary className="cursor-pointer font-semibold text-teal-950">
+          최근 스냅샷 (검토·복기용 — 매수 권유 아님)
+        </summary>
+        <p className="mt-1 text-[10px] text-teal-900/90">
+          저장된 Sector Radar run/item을 read-only로 확인합니다. item feedback API는 후속 과제입니다.
+        </p>
+        {snapLoading ? <p className="mt-1 text-teal-800">불러오는 중…</p> : null}
+        {snapHint ? <p className="mt-1 text-amber-900">{snapHint}</p> : null}
+        <ul className="mt-2 space-y-2">
+          {snapRuns.map((run) => (
+            <li key={run.id} className="rounded border border-teal-100 bg-white p-2">
+              <p className="font-medium text-slate-900">
+                {run.generated_at} · {run.status}
+                {run.degraded ? " · degraded" : ""} · {run.itemCount}건
+              </p>
+              {run.summary ? <p className="text-slate-600">{run.summary}</p> : null}
+              <details
+                className="mt-1"
+                onToggle={(e) => {
+                  if ((e.target as HTMLDetailsElement).open) void loadSnapItems(run.id);
+                }}
+              >
+                <summary className="cursor-pointer text-teal-900">항목 보기</summary>
+                <ul className="mt-1 max-h-48 space-y-1 overflow-auto">
+                  {(snapItemsByRun[run.id] ?? []).map((it, idx) => (
+                    <li key={`${run.id}-${it.symbol ?? idx}`} className="border-t border-slate-100 pt-1 text-[10px]">
+                      #{it.rank ?? idx + 1} {it.sectorName} · {it.name} ({it.market}:{it.symbol}) · 점수 {it.score ?? "—"} ·{" "}
+                      {it.confidence ?? "—"} · {it.dataStatus ?? "—"}
+                      {(it.riskFlags ?? []).length > 0 ? ` · 리스크 ${(it.riskFlags ?? []).length}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            </li>
+          ))}
+        </ul>
+        {!snapLoading && snapRuns.length === 0 && !snapHint ? (
+          <p className="mt-1 text-slate-600">저장된 스냅샷이 없습니다. POST /api/sector-radar/snapshot 으로 저장할 수 있습니다.</p>
+        ) : null}
+      </details>
 
       {status?.rows?.length ? (
         <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs">

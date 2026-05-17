@@ -10,6 +10,26 @@ export const OPS_TODAY_CANDIDATES_EVENT_CODES = {
   US_MARKET_NO_DATA: "today_candidates_us_market_no_data",
   /** 미국 신호 기반 한국 후보가 0건일 때(진단 코드만 detail). */
   US_SIGNAL_CANDIDATES_EMPTY: "us_signal_candidates_empty",
+  US_CANDIDATES_ZERO: "today_candidates_us_candidates_zero",
+  US_CANDIDATES_SUPPRESSED: "today_candidates_us_candidates_suppressed",
+  US_QUOTE_DEGRADED: "today_candidates_us_quote_degraded",
+  US_SLOT_EMPTY: "today_candidates_us_slot_empty",
+} as const;
+
+/** Research report history ops (generation route; budget/cooldown). */
+export const OPS_RESEARCH_REPORT_EVENT_CODES = {
+  REUSED_EXISTING: "research_report_reused_existing",
+  REGENERATED_WITH_DIFF: "research_report_regenerated_with_diff",
+  GENERATION_FAILED_FALLBACK: "research_report_generation_failed_fallback_used",
+  FORCE_REFRESH: "research_report_force_refresh_used",
+} as const;
+
+/** Watchlist recommendation approval flow (explicit user action on approve). */
+export const OPS_WATCHLIST_RECOMMENDATION_EVENT_CODES = {
+  GENERATED: "watchlist_recommendation_generated",
+  APPROVED: "watchlist_recommendation_approved",
+  REJECTED: "watchlist_recommendation_rejected",
+  DUPLICATE_SKIPPED: "watchlist_recommendation_duplicate_skipped",
 } as const;
 
 /** Event codes that may bypass read-only suppression when `isCritical` is true (still subject to budget/cooldown/fingerprint). */
@@ -114,6 +134,34 @@ export function buildUsSignalCandidatesEmptyFingerprint(input: {
   primaryReason: string;
 }): string {
   return `today_candidates:${input.userKey}:${input.ymdKst}:us_signal_empty:${input.primaryReason}`;
+}
+
+export function buildTodayCandidatesUsCandidatesZeroFingerprint(input: {
+  userKey: string;
+  ymdKst: string;
+}): string {
+  return `today_candidates:${input.userKey}:${input.ymdKst}:us_candidates_zero`;
+}
+
+export function buildTodayCandidatesUsCandidatesSuppressedFingerprint(input: {
+  userKey: string;
+  ymdKst: string;
+}): string {
+  return `today_candidates:${input.userKey}:${input.ymdKst}:us_candidates_suppressed`;
+}
+
+export function buildTodayCandidatesUsQuoteDegradedFingerprint(input: {
+  userKey: string;
+  ymdKst: string;
+}): string {
+  return `today_candidates:${input.userKey}:${input.ymdKst}:us_quote_degraded`;
+}
+
+export function buildTodayCandidatesUsSlotEmptyFingerprint(input: {
+  userKey: string;
+  ymdKst: string;
+}): string {
+  return `today_candidates:${input.userKey}:${input.ymdKst}:us_slot_empty`;
 }
 
 export function collectSectorRadarBatchDegradedReasonCodes(input: {

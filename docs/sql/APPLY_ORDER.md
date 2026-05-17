@@ -103,7 +103,36 @@ select count(*) from information_schema.tables
 
 ---
 
-## 8. 기타 문서화된 append 스크립트 (기능별)
+## 8. Today Candidates · Sector Radar · Research · 관심 등록 후보 (통합 보강)
+
+| 순서 | 파일 | 목적 | 미적용 시 증상(예) |
+|-----:|------|------|---------------------|
+| 17 | `append_today_candidate_impressions.sql` | 후보 노출 이력 | 7일 관심종목 반복·미국 후보 absent 진단 DB 불가 |
+| 18 | `append_sector_radar_snapshots.sql` | Sector Radar run/item 스냅샷 | 스냅샷 기반 Today 연계·최근 run 조회 불가 |
+| 19 | `append_research_report_history.sql` | 리포트 이력·diff | 동일 종목 리포트 재사용·7일 diff 불가 |
+| 20 | `append_watchlist_recommendation_candidates.sql` | 관심 등록 후보(pending) | 승인형 관찰 후보 저장 불가 |
+
+> `append_web_portfolio_ledger.sql`(관심·보유) 이후 적용 권장. Research follow-up(§3)과 병행 가능.
+
+**적용 후 확인:**
+
+```sql
+select table_name from information_schema.tables
+ where table_schema = 'public'
+   and table_name in (
+     'today_candidate_impressions',
+     'sector_radar_runs',
+     'sector_radar_items',
+     'research_report_runs',
+     'research_report_diffs',
+     'watchlist_recommendation_candidates'
+   )
+ order by 1;
+```
+
+---
+
+## 9. 기타 문서화된 append 스크립트 (기능별)
 
 아래는 제품 플래그에 따라 필요 시 적용합니다.
 

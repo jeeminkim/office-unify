@@ -64,6 +64,7 @@ function relationLabelFor(
 ): string {
   if (slot === 'sector_etf') return '섹터 대표 · Sector Radar ETF';
   if (slot === 'us_signal_kr') return '미국 신호 · 한국 상장 관찰';
+  if (slot === 'us_market_check') return '미국 시장 점검 · 관심·보유';
   if (slot === 'risk_review') return '리스크 점검 · 기업 이벤트';
   return c.source === 'us_market_morning' ? '미국 신호 · 한국 상장 관찰' : '관심종목 · 관찰';
 }
@@ -71,6 +72,7 @@ function relationLabelFor(
 function cardKindFromSlot(slot: NonNullable<TodayStockCandidate['briefDeckSlot']>): TodayCandidateCardKind {
   if (slot === 'sector_etf') return 'sector_representative';
   if (slot === 'us_signal_kr') return 'us_signal_mapped';
+  if (slot === 'us_market_check') return 'us_market_check';
   if (slot === 'risk_review') return 'risk_review';
   return 'watchlist_observation';
 }

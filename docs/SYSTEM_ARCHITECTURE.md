@@ -45,6 +45,14 @@
 - `/decision-journal` : 비거래 의사결정 일지 — **실제 주문이 아니라** 사지 않음·팔지 않음·관망·대기 등의 판단을 기록. Trade Journal(실행 거래)과 구분.
 - `/ops-events` : 운영 로그·개선 포인트 — `web_ops_events` 조회·상태 변경·메모. 시스템 오류/경고와 사용자 **개선 메모**를 같은 테이블에서 backlog로 관리(자동 수정 없음).
 
+### Dashboard Today Candidates (통합 보강 2026-05)
+
+- **US diagnostics:** `qualityMeta.todayCandidates.usCandidateDiagnostics`
+- **Impressions:** `today_candidate_impressions` → `exposureDiagnostics`
+- **Sector snapshot fallback:** live Sector Radar degraded 시 DB snapshot seed → `sourceRefs.sector_radar_snapshot`
+- **Watchlist recommendations:** `watchlist_recommendation_candidates` · approve 시에만 `web_portfolio_watchlist` write
+- **Research history:** `research_report_runs` / `research_report_diffs` · reuse·7일 diff
+
 ### Dashboard Today Candidates
 
 - 홈 `오늘의 3줄 브리핑` 응답은 기존 3줄 라인 + optional `candidates` 확장을 함께 사용한다.

@@ -251,6 +251,44 @@ low/very_low 후보는 기본 숨김(토글로 표시) 정책을 사용한다.
 - 심한 저하(no data 또는 low/very_low batch)에서는 aggregate degraded를 cooldown/예산 내에서만 제한 기록한다.
 - detail_opened/add_success/add_failed 같은 사용자 액션 이벤트는 별도 기록 가능하다.
 
+## 미국 후보 진단 · 노출 이력 (2026-05-17, additive)
+
+### `usCandidateDiagnostics`
+
+Today Brief `qualityMeta.todayCandidates.usCandidateDiagnostics`에서 단계별 확인:
+
+1. `userUsWatchlistCount` / `userUsHoldingCount`
+2. `poolUsDirectCount` / `poolUsKrMappedCount` / `seedSymbolCount`
+3. `quoteOkCount` / `quoteMissingCount` / `usMarketSummaryStatus`
+4. `selectedUsCandidateCount` vs `suppressedUsCandidateCount` / `rejectedUsCandidateCount`
+5. `topRejectReasons` / `topSuppressReasons` / `actionHint`
+
+Ops(6h cooldown·fingerprint·request budget): `today_candidates_us_candidates_zero`, `today_candidates_us_candidates_suppressed`, `today_candidates_us_quote_degraded`, `today_candidates_us_slot_empty`.
+
+### `today_candidate_impressions` · `exposureDiagnostics`
+
+- DDL: `docs/sql/append_today_candidate_impressions.sql` (APPLY_ORDER §8 순서 17).
+- Today Brief **성공 후** selected 덱만 insert(실패해도 API 200 유지).
+- `exposureDiagnostics.warningCodes`: `watchlist_dominance_high`, `repeat_exposure_high`, `us_candidate_absent_7d`.
+
+### ops-summary `usKrEmptyReasonHistogram.totalCount`
+
+- `GET /api/dashboard/today-candidates/ops-summary`는 `summarizeTodayCandidateOps` 결과를 그대로 반환합니다.
+- `totalCount`는 **`us_signal_candidates_empty` 이벤트만** 대상으로, 각 행의 `occurrence_count`를 reason 버킷별로 **가중 합**한 값입니다.
+- 신규 ops code(`today_candidates_us_candidates_zero` 등)는 이 히스토그램에 **포함하지 않습니다**(별도 ops 집계).
+- `detail.primaryReason` 우선, 없으면 `detail.reasonCodes[0]`, 없으면 `unknown`.
+
+```sql
+-- 최근 7일 관심종목 비중(예시)
+select
+  count(*) filter (where is_user_watchlist) as watchlist_hits,
+  count(*) as total,
+  round(100.0 * count(*) filter (where is_user_watchlist) / nullif(count(*), 0), 1) as pct
+from public.today_candidate_impressions
+where user_key = :user_key
+  and run_date >= current_date - interval '7 days';
+```
+
 ## 수동 검증 시나리오
 
 1. today-brief 응답에서 `candidates.userContext`/`candidates.usMarketKr` optional 확인

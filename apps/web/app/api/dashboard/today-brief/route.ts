@@ -41,6 +41,16 @@ import {
 } from '@/lib/server/todayCandidateRules';
 import { applyRepeatExposurePenaltiesToDeck } from '@/lib/server/todayCandidateScoring';
 import { enrichDeckWithDecisionTraces } from '@/lib/server/todayCandidateDecisionTrace';
+import { buildUsCandidateDiagnostics } from '@/lib/server/todayCandidateUsDiagnostics';
+import { emitUsCandidateDiagnosticsOps } from '@/lib/server/todayCandidateUsDiagnosticsOps';
+import {
+  buildExposureDiagnosticsFromRows,
+  fetchTodayCandidateExposureStats,
+  saveTodayCandidateImpressions,
+} from '@/lib/server/todayCandidateImpressionStore';
+import { fetchLatestSectorRadarSnapshot } from '@/lib/server/sectorRadarSnapshotStore';
+import { appendSectorSnapshotSeedCandidates } from '@/lib/server/todayCandidateSectorSnapshotSeed';
+import { listPendingRecommendations } from '@/lib/server/watchlistRecommendationService';
 import {
   computeCandidateJudgmentQuality,
   summarizeJudgmentQualityDeck,
@@ -309,8 +319,23 @@ export async function GET() {
       limitPerSection: 5,
     });
 
+    const snapshotSeed = await appendSectorSnapshotSeedCandidates({
+      supabase,
+      userKey: auth.userKey,
+      sectorRadarSummary: todayCandidates.sectorRadarSummary,
+      existingCandidates: [
+        ...todayCandidates.userContextCandidates,
+        ...todayCandidates.usMarketKrCandidates,
+        ...todayCandidates.usDirectCandidates,
+      ],
+    });
+    const userContextWithSnapshot = [
+      ...todayCandidates.userContextCandidates,
+      ...snapshotSeed.candidates,
+    ];
+
     const poolRepeatIds = [
-      ...todayCandidates.userContextCandidates.map((c) => c.candidateId),
+      ...userContextWithSnapshot.map((c) => c.candidateId),
       ...todayCandidates.usMarketKrCandidates.map((c) => c.candidateId),
     ];
     const repeatByCandidateIdPool = await fetchTodayCandidateRepeatStats7d(
@@ -320,10 +345,12 @@ export async function GET() {
     );
 
     const composedDeck = composeTodayBriefCandidates({
-      userContextCandidates: todayCandidates.userContextCandidates,
+      userContextCandidates: userContextWithSnapshot,
       sectorRadarSummary: todayCandidates.sectorRadarSummary,
       usMarketSummary: todayCandidates.usMarketSummary,
       usMarketKrCandidates: todayCandidates.usMarketKrCandidates,
+      usDirectCandidates: todayCandidates.usDirectCandidates,
+      userUsWatchlistCount: todayCandidates.userUsWatchlistCount,
       repeatByCandidateId: repeatByCandidateIdPool,
     });
 
@@ -416,7 +443,11 @@ export async function GET() {
 
     const tracePack = enrichDeckWithDecisionTraces({
       deck: primaryCandidateDeck,
-      pool: [...todayCandidates.userContextCandidates, ...todayCandidates.usMarketKrCandidates],
+      pool: [
+        ...userContextWithSnapshot,
+        ...todayCandidates.usMarketKrCandidates,
+        ...todayCandidates.usDirectCandidates,
+      ],
       repeatByCandidateId: repeatByCandidateIdPool,
       usCoverageStatus: usCoverageStatusEarly,
       profileStatus: profileStatusForScoreExplanation,
@@ -433,7 +464,66 @@ export async function GET() {
     }));
     const judgmentQualitySummary = summarizeJudgmentQualityDeck(primaryCandidateDeck);
 
+    const usCandidateDiagnostics = buildUsCandidateDiagnostics({
+      usMarketSummary: todayCandidates.usMarketSummary,
+      userUsWatchlistCount: todayCandidates.userUsWatchlistCount,
+      userUsHoldingCount: todayCandidates.userUsHoldingCount,
+      pool: [
+        ...userContextWithSnapshot,
+        ...todayCandidates.usMarketKrCandidates,
+        ...todayCandidates.usDirectCandidates,
+      ],
+      usDirectCandidates: todayCandidates.usDirectCandidates,
+      usKrMappedCandidates: todayCandidates.usMarketKrCandidates,
+      selectedDeck: primaryCandidateDeck,
+      suppressedTraces: tracePack.suppressedCandidates,
+      rejectedTraces: tracePack.rejectedCandidates,
+      seedSymbolCount: todayCandidates.usMarketSummary.diagnostics?.anchorSymbolsRequested,
+    });
+
+    const exposureFetch = await fetchTodayCandidateExposureStats({
+      supabase,
+      userKey: String(auth.userKey),
+      days: 7,
+    });
+    const exposureDiagnostics = buildExposureDiagnosticsFromRows(
+      exposureFetch.rows,
+      7,
+      exposureFetch.tableMissing,
+    );
+
+    const sectorRadarSnap = await fetchLatestSectorRadarSnapshot({
+      supabase,
+      userKey: String(auth.userKey),
+    });
+    const sectorRadarSnapshot = sectorRadarSnap.tableMissing
+      ? { saved: false, errorCode: 'sector_radar_snapshots_table_missing', stale: true }
+      : {
+          saved: Boolean(sectorRadarSnap.run),
+          runId: sectorRadarSnap.run?.id,
+          itemCount: sectorRadarSnap.run?.itemCount,
+          stale: sectorRadarSnap.stale,
+          lastGeneratedAt: sectorRadarSnap.run?.generated_at,
+        };
+
+    const pendingRecs = await listPendingRecommendations({ supabase, userKey: String(auth.userKey) });
+    const recommendationCandidates: import('@office-unify/shared-types').RecommendationCandidatesQualityMeta = {
+      status: pendingRecs.length > 0 ? 'ok' : 'empty',
+      generatedCount: pendingRecs.length,
+      pendingApprovalCount: pendingRecs.length,
+      sourceMix: {},
+    };
+
     const ymd = ymdKst();
+
+    void saveTodayCandidateImpressions({
+      supabase,
+      userKey: String(auth.userKey),
+      candidates: primaryCandidateDeck,
+      qualityMeta: { usCandidateDiagnostics, exposureDiagnostics },
+      idempotencyKey: `today-brief-${ymd}`,
+    });
+
     const opsLogging: {
       attempted: number;
       written: number;
@@ -656,6 +746,14 @@ export async function GET() {
       }
     }
 
+    await emitUsCandidateDiagnosticsOps({
+      supabase,
+      userKey: String(auth.userKey),
+      ymdKst: ymd,
+      diagnostics: usCandidateDiagnostics,
+      opsLogging,
+    });
+
     const { data: ppRows, error: ppErr } = await supabase
       .from('web_ops_events')
       .select('code,detail,last_seen_at')
@@ -730,7 +828,7 @@ export async function GET() {
       degraded: warnings.length > 0 || !quote.quoteAvailable || !analytics,
       warnings,
       candidates: {
-        userContext: todayCandidates.userContextCandidates.map(withTodayCandidateDisplayMetrics),
+        userContext: userContextWithSnapshot.map(withTodayCandidateDisplayMetrics),
         usMarketKr: todayCandidates.usMarketKrCandidates.map(withTodayCandidateDisplayMetrics),
       },
       primaryCandidateDeck,
@@ -742,7 +840,8 @@ export async function GET() {
         todayCandidates: {
           generatedAt: new Date().toISOString(),
           incompleteHoldingCount,
-          userContextCount: todayCandidates.userContextCandidates.length,
+          userContextCount: userContextWithSnapshot.length,
+          sectorSnapshotSeedCount: snapshotSeed.candidates.length,
           usMarketKrCount: todayCandidates.usMarketKrCandidates.length,
           usMarketDataAvailable: todayCandidates.usMarketSummary.available,
           highConfidenceCount: todayCandidates.confidenceCounts.high,
@@ -774,6 +873,10 @@ export async function GET() {
           judgmentQualitySummary,
           suppressedCandidates: tracePack.suppressedCandidates,
           rejectedCandidates: tracePack.rejectedCandidates,
+          usCandidateDiagnostics,
+          exposureDiagnostics,
+          sectorRadarSnapshot,
+          recommendationCandidates,
         },
       },
     };

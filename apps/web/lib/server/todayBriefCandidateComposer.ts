@@ -197,11 +197,65 @@ function pickInterestSlots(input: {
   return out;
 }
 
+function ensureUsMarketCheckInDeck(
+  deck: TodayStockCandidate[],
+  usDirectCandidates: TodayStockCandidate[],
+  userUsWatchlistCount: number,
+  usMarketSummary: UsMarketMorningSummary,
+): TodayStockCandidate[] {
+  if (userUsWatchlistCount === 0 && usDirectCandidates.length === 0) return deck;
+  const hasUsCheck = deck.some(
+    (c) => c.briefDeckSlot === 'us_market_check' || (c.country === 'US' && c.briefDeckSlot !== 'sector_etf'),
+  );
+  if (hasUsCheck) return deck;
+  const top = usDirectCandidates[0];
+  if (!top) return deck;
+
+  const withSlot: TodayStockCandidate = {
+    ...top,
+    briefDeckSlot: 'us_market_check',
+    reasonSummary: '미국 시장 점검 카드 — 등록 관심·보유와 시장 데이터 상태를 확인하는 관찰 후보입니다.',
+    cautionNotes: [...(top.cautionNotes ?? []), '매수 권유 아님', '미국 시장 점검용'],
+  };
+
+  const replaceIdx = deck.findIndex((c) => c.briefDeckSlot === 'interest_stock' || c.source === 'user_context');
+  if (replaceIdx >= 0) {
+    const next = [...deck];
+    next[replaceIdx] = withSlot;
+    return next.map((c) => ({
+      ...c,
+      displayMetrics: buildTodayCandidateDisplayMetrics(c, { briefDeckSlot: c.briefDeckSlot, usMarketSummary }),
+    }));
+  }
+  if (deck.length >= 3) {
+    return deck.map((c, i) =>
+      i === deck.length - 1
+        ? {
+            ...withSlot,
+            displayMetrics: buildTodayCandidateDisplayMetrics(withSlot, {
+              briefDeckSlot: 'us_market_check',
+              usMarketSummary,
+            }),
+          }
+        : c,
+    );
+  }
+  return [
+    ...deck,
+    {
+      ...withSlot,
+      displayMetrics: buildTodayCandidateDisplayMetrics(withSlot, { briefDeckSlot: 'us_market_check', usMarketSummary }),
+    },
+  ].slice(0, 3);
+}
+
 export function composeTodayBriefCandidates(input: {
   userContextCandidates: TodayStockCandidate[];
   sectorRadarSummary: SectorRadarSummaryResponse | null;
   usMarketSummary: UsMarketMorningSummary;
   usMarketKrCandidates: TodayStockCandidate[];
+  usDirectCandidates?: TodayStockCandidate[];
+  userUsWatchlistCount?: number;
   repeatByCandidateId?: Map<string, TodayCandidateRepeatStat>;
 }): {
   deck: TodayStockCandidate[];
@@ -266,13 +320,20 @@ export function composeTodayBriefCandidates(input: {
     }
   }
 
-  const enriched = deck.map((c) => {
+  let enriched = deck.map((c) => {
     const briefDeckSlot: TodayStockCandidate['briefDeckSlot'] =
       c.briefDeckSlot ?? (c.source === 'sector_radar' ? 'sector_etf' : 'interest_stock');
     const withSlot = { ...c, briefDeckSlot };
     const dm = buildTodayCandidateDisplayMetrics(withSlot, { briefDeckSlot, usMarketSummary: input.usMarketSummary });
     return { ...withSlot, displayMetrics: dm };
   });
+
+  enriched = ensureUsMarketCheckInDeck(
+    enriched,
+    input.usDirectCandidates ?? [],
+    input.userUsWatchlistCount ?? 0,
+    input.usMarketSummary,
+  ) as typeof enriched;
 
   return {
     deck: enriched,

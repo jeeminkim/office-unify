@@ -84,6 +84,10 @@ export async function buildTodayStockCandidates(input: {
   /** 빈 KR 매핑 ops용 */
   usKrRulesMatchedCount: number;
   usKrMappedRawCount: number;
+  /** 미국 관심·보유 직접 관찰 후보(ETF seed·KR 매핑과 분리) */
+  usDirectCandidates: TodayStockCandidate[];
+  userUsWatchlistCount: number;
+  userUsHoldingCount: number;
 }> {
   const limit = Math.max(1, Math.min(5, input.limitPerSection ?? 3));
   const warnings: string[] = [];
@@ -279,8 +283,89 @@ export async function buildTodayStockCandidates(input: {
   if (usRules.length > 0 && mappedRawAll.length > 0 && usMarketKrCandidates.length === 0) warnings.push('us_market_candidates_empty_after_trim');
   if ((usSummary.signals?.length ?? 0) > 0 && usMarketKrCandidates.length === 0) warnings.push('us_market_candidates_empty');
 
+  const userUsWatchlistCount = watchlist.filter((w) => w.market === 'US').length;
+  const userUsHoldingCount = holdings.filter((h) => h.market === 'US').length;
+
+  const usDirectSeen = new Set<string>();
+  const usDirectCandidates: TodayStockCandidate[] = [];
+  const pushUsDirect = (row: { symbol: string; name: string; market: 'US'; google_ticker?: string | null; quote_symbol?: string | null; sector?: string | null }, bucket: 'watchlist' | 'holding') => {
+    const sym = String(row.symbol ?? '').trim();
+    if (!sym || usDirectSeen.has(sym)) return;
+    usDirectSeen.add(sym);
+    const quoteReady = Boolean(row.quote_symbol || row.google_ticker);
+    const baseScore = sparseDataBaseScore(`us-${sym}`);
+    const finalScore = scoreCandidate({ base: baseScore, watchlistBoost: bucket === 'watchlist' ? 6 : 4 });
+    usDirectCandidates.push({
+      candidateId: `us-direct-${bucket}-${sym}`,
+      name: row.name,
+      market: 'US',
+      country: 'US',
+      symbol: `US:${sym}`,
+      stockCode: sym,
+      googleTicker: row.google_ticker ?? undefined,
+      quoteSymbol: row.quote_symbol ?? undefined,
+      sector: row.sector ?? undefined,
+      source: bucket === 'watchlist' ? 'watchlist' : 'user_context',
+      score: finalScore,
+      confidence: quoteReady && usSummary.available ? 'medium' : 'low',
+      riskLevel: 'medium',
+      reasonSummary:
+        bucket === 'watchlist'
+          ? '등록한 미국 관심종목 기반 미국 시장 점검 후보입니다.'
+          : '보유 중인 미국 종목의 데이터·리스크 점검 후보입니다.',
+      reasonDetails: [
+        '미국 시장 점검 카드(매수 권유 아님).',
+        usSummary.available ? '미국 시장 요약 데이터가 일부 연결되었습니다.' : '미국 시장 요약 데이터가 부족합니다.',
+      ],
+      positiveSignals: ['미국 관심·보유 연결'],
+      cautionNotes: ['매수 권유 아님', '환율·시차·시세 확인 필요'],
+      relatedUserContext: [],
+      relatedWatchlistSymbols: bucket === 'watchlist' ? [`US:${sym}`] : [],
+      isBuyRecommendation: false,
+      alreadyInWatchlist: bucket === 'watchlist',
+      scoreBreakdown: {
+        baseScore,
+        watchlistBoost: bucket === 'watchlist' ? 6 : 4,
+        sectorBoost: 0,
+        usSignalBoost: 0,
+        quoteQualityPenalty: quoteReady ? 0 : 10,
+        repeatExposurePenalty: 0,
+        corporateActionPenalty: 0,
+        riskPenalty: 0,
+        finalScore,
+      },
+      dataQuality: buildCandidateDataQuality({
+        confidence: quoteReady ? 'medium' : 'low',
+        quoteReady,
+        sectorConfidence: 'unknown',
+        usMarketDataAvailable: usSummary.available,
+        hasWatchlistLink: bucket === 'watchlist',
+        cautionNotes: ['매수 권유 아님'],
+        source: 'watchlist',
+      }),
+    });
+  };
+
+  for (const w of watchlist.filter((x) => x.market === 'US')) {
+    pushUsDirect({ ...w, market: 'US' }, 'watchlist');
+  }
+  for (const h of holdings.filter((x) => x.market === 'US')) {
+    pushUsDirect(
+      {
+        symbol: h.symbol,
+        name: h.name,
+        market: 'US',
+        google_ticker: h.google_ticker,
+        quote_symbol: h.quote_symbol,
+        sector: h.sector,
+      },
+      'holding',
+    );
+  }
+  usDirectCandidates.sort((a, b) => b.score - a.score);
+
   if (holdings.length === 0 && watchlist.length === 0) warnings.push('user_context_sparse');
-  const all = [...userContextCandidates, ...usMarketKrCandidates];
+  const all = [...userContextCandidates, ...usMarketKrCandidates, ...usDirectCandidates];
   const confidenceCounts = {
     high: all.filter((x) => x.confidence === 'high').length,
     medium: all.filter((x) => x.confidence === 'medium').length,
@@ -297,5 +382,8 @@ export async function buildTodayStockCandidates(input: {
     confidenceCounts,
     usKrRulesMatchedCount: usRules.length,
     usKrMappedRawCount,
+    usDirectCandidates,
+    userUsWatchlistCount,
+    userUsHoldingCount,
   };
 }

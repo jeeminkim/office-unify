@@ -282,6 +282,18 @@ export type {
   TodayCandidatesJudgmentQualitySummary,
 } from './candidateDecisionTrace';
 export type {
+  RecommendationCandidatesQualityMeta,
+  ResearchReportDiffPayload,
+  ResearchReportFreshness,
+  ResearchReportHistoryMeta,
+  SectorRadarSnapshotMeta,
+  TodayCandidateExposureDiagnostics,
+  UsCandidateDiagnostics,
+  UsCandidateDiagnosticsStatus,
+  WatchlistRecommendationCandidate,
+  WatchlistRecommendationCandidateSourceRef,
+} from './todayCandidateIntegration';
+export type {
   PersonaPortfolioContextStructured,
   PersonaRole,
   PersonaScoreAdjustmentSuggestion,

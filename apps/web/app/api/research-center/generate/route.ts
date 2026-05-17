@@ -35,6 +35,14 @@ import {
 import { mergeResearchTimingWarnings, shouldWarnNearTimeout } from "@/lib/server/researchCenterTimings";
 import { getServiceSupabase } from "@/lib/server/supabase-service";
 import { upsertOpsEventByFingerprint } from "@/lib/server/upsertOpsEventByFingerprint";
+import {
+  buildResearchReportDiff,
+  buildResearchReportHistoryMeta,
+  findLatestResearchReport,
+  saveResearchReportDiff,
+  saveResearchReportRun,
+  shouldReuseResearchReport,
+} from "@/lib/server/researchReportHistoryStore";
 
 const DESK_IDS: readonly ResearchDeskId[] = [
   "goldman_buy",
@@ -88,6 +96,7 @@ function parseBody(raw: unknown): ResearchCenterGenerateRequestBody | null {
     keyQuestion: typeof o.keyQuestion === "string" ? o.keyQuestion : undefined,
     includeSheetContext: o.includeSheetContext === true,
     saveToSheets: o.saveToSheets === true,
+    forceRefresh: o.forceRefresh === true,
     previousEditorVerdict:
       typeof o.previousEditorVerdict === "string" ? o.previousEditorVerdict : undefined,
   };
@@ -317,6 +326,50 @@ export async function POST(req: Request) {
     });
   }
 
+  const forceRefresh = body.forceRefresh === true;
+  const { row: priorReport, tableMissing: reportTableMissing } = await findLatestResearchReport({
+    supabase,
+    userKey: String(userKey),
+    symbol: body.symbol,
+  });
+  const reuseDecision = shouldReuseResearchReport({ latest: priorReport, forceRefresh });
+  const reportHistory = buildResearchReportHistoryMeta(priorReport, reuseDecision, reportTableMissing);
+  if (reuseDecision.reuse && priorReport?.report_body) {
+    await logEvent({
+      eventCode: "research_report_reused_existing",
+      severity: "info",
+      stage: "reuse",
+      message: "Reused existing research report",
+      detail: { symbol: body.symbol, reportId: priorReport.id, reason: reuseDecision.reason },
+    });
+    finalizeQualityTiming();
+    qualityMeta.status = "ok";
+    return NextResponse.json({
+      ok: true,
+      reports: {},
+      editor: priorReport.report_body,
+      contextNote: "기존에 생성된 리포트를 표시합니다. 새 분석이 필요하면 「그래도 새로 생성」을 사용하세요.",
+      isHolding: false,
+      isWatchlist: false,
+      sheetsAppended: false,
+      warnings: [],
+      reportRef: priorReport.id,
+      reusedExistingReport: true,
+      reportHistory,
+      qualityMeta: { researchCenter: qualityMeta },
+      meta: buildGenerateMeta({
+        body,
+        fallbackUsed: false,
+        providerRetryCount: 0,
+        resultMode: "full",
+        sheetsAppendAttempted: false,
+        sheetsAppendSucceeded: false,
+      }),
+    });
+  }
+
+  const priorForDiff = priorReport;
+
   const desks = normalizeDesksList(body.selectedDesks);
   await logEvent({
     eventCode: "research_report_generation_started",
@@ -388,6 +441,50 @@ export async function POST(req: Request) {
       qualityMeta.warnings = Array.from(
         new Set([...qualityMeta.warnings, "research_editor_fallback_desk_synthesis"]),
       );
+    }
+
+    let reportDiffOut: import("@office-unify/shared-types").ResearchReportDiffPayload | undefined;
+    let reportHistoryOut = reportHistory;
+    const savedRun = await saveResearchReportRun({
+      supabase,
+      userKey: String(userKey),
+      symbol: body.symbol,
+      name: body.name,
+      market: body.market,
+      reportBody: result.editor,
+      requestId: qualityMeta.requestId,
+      provider: "gemini",
+    });
+    if (savedRun.row) {
+      reportHistoryOut = buildResearchReportHistoryMeta(
+        savedRun.row,
+        { reuse: false, reason: "stale_regenerate", daysSince: 0 },
+        savedRun.tableMissing,
+      );
+      if (priorForDiff) {
+        const daysSincePrior = Math.floor(
+          Math.abs(Date.now() - new Date(priorForDiff.generated_at).getTime()) / (24 * 60 * 60 * 1000),
+        );
+        if (daysSincePrior >= 7) {
+          reportDiffOut = buildResearchReportDiff({ previous: priorForDiff, current: savedRun.row });
+          await saveResearchReportDiff({
+            supabase,
+            userKey: String(userKey),
+            symbol: body.symbol,
+            diff: reportDiffOut,
+          });
+          reportHistoryOut.reportFreshness = "regenerated_with_diff";
+          await logEvent({
+            eventCode: "research_report_regenerated_with_diff",
+            severity: "info",
+            stage: "diff",
+            message: "Research report regenerated with diff",
+            detail: { diffDays: reportDiffOut.diffDays, previousId: priorForDiff.id },
+          });
+        } else {
+          reportHistoryOut.reportFreshness = "fresh";
+        }
+      }
     }
 
     if (body.saveToSheets) {
@@ -617,6 +714,8 @@ export async function POST(req: Request) {
           ...result.warnings,
           ...(!sheets.ok ? ["리포트는 생성됐지만 Google Sheets 일부 저장에 실패했습니다."] : []),
         ],
+        reportHistory: reportHistoryOut,
+        reportDiff: reportDiffOut,
         qualityMeta: { researchCenter: qualityMeta },
         meta: buildGenerateMeta({
           body,
@@ -641,6 +740,8 @@ export async function POST(req: Request) {
       ...result,
       ok: true,
       requestId: qualityMeta.requestId,
+      reportHistory: reportHistoryOut,
+      reportDiff: reportDiffOut,
       qualityMeta: { researchCenter: qualityMeta },
       meta: buildGenerateMeta({
         body,

@@ -12,6 +12,7 @@ import {
   type ResearchFollowupRowDto,
   type ResearchFollowupStatus,
   type ResearchFollowupSummary,
+  type ResearchReportHistoryMeta,
   type ResearchToneMode,
   normalizeResearchFollowupDedupeTitle,
 } from "@office-unify/shared-types";
@@ -63,6 +64,8 @@ export function ResearchCenterClient() {
   const [keyQuestion, setKeyQuestion] = useState("");
   const [includeSheetContext, setIncludeSheetContext] = useState(false);
   const [saveToSheets, setSaveToSheets] = useState(false);
+  const [forceRefresh, setForceRefresh] = useState(false);
+  const [reportHistoryPreview, setReportHistoryPreview] = useState<ResearchReportHistoryMeta | null>(null);
   const [previousEditorVerdict, setPreviousEditorVerdict] = useState("");
 
   const [loading, setLoading] = useState(false);
@@ -179,6 +182,29 @@ export function ResearchCenterClient() {
     return arr;
   }, [selectedDesks]);
 
+  useEffect(() => {
+    const sym = symbol.trim();
+    if (!sym) {
+      setReportHistoryPreview(null);
+      return;
+    }
+    const ac = new AbortController();
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/research-center/reports?symbol=${encodeURIComponent(sym)}`,
+          { credentials: "same-origin", signal: ac.signal },
+        );
+        if (!res.ok) return;
+        const data = (await res.json()) as { reportHistory?: ResearchReportHistoryMeta };
+        setReportHistoryPreview(data.reportHistory ?? null);
+      } catch {
+        /* preview optional */
+      }
+    })();
+    return () => ac.abort();
+  }, [symbol]);
+
   const generate = useCallback(async () => {
     setError(null);
     setLoading(true);
@@ -209,6 +235,7 @@ export function ResearchCenterClient() {
           keyQuestion: keyQuestion.trim() || undefined,
           includeSheetContext,
           saveToSheets,
+          forceRefresh: forceRefresh || undefined,
           previousEditorVerdict: previousEditorVerdict.trim() || undefined,
         }),
       }).finally(() => clearTimeout(timeout));
@@ -261,6 +288,7 @@ export function ResearchCenterClient() {
     keyQuestion,
     includeSheetContext,
     saveToSheets,
+    forceRefresh,
     previousEditorVerdict,
   ]);
 
@@ -684,6 +712,19 @@ export function ResearchCenterClient() {
             />
             생성 후 시트에 요약 저장 (research_requests / research_reports_log / research_context_cache)
           </label>
+          {reportHistoryPreview?.latestGeneratedAt ? (
+            <p className="text-xs text-slate-600">
+              최근 리포트: {reportHistoryPreview.latestGeneratedAt}
+              {reportHistoryPreview.daysSinceLatest != null
+                ? ` (${reportHistoryPreview.daysSinceLatest}일 전)`
+                : ""}
+              {reportHistoryPreview.actionHint ? ` — ${reportHistoryPreview.actionHint}` : ""}
+            </p>
+          ) : null}
+          <label className="flex items-center gap-2 text-xs text-slate-700">
+            <input type="checkbox" checked={forceRefresh} onChange={(e) => setForceRefresh(e.target.checked)} />
+            그래도 새로 생성 (7일 미만이면 기본 재사용)
+          </label>
           <textarea
             className="min-h-[56px] rounded border border-slate-200 px-2 py-1.5 font-mono text-xs text-slate-600"
             placeholder="재생성 시 비교용: 이전 Chief Editor 한 줄 (선택)"
@@ -699,7 +740,7 @@ export function ResearchCenterClient() {
             disabled={loading || !symbol.trim() || !name.trim() || selectedDesks.size === 0}
             onClick={() => void generate()}
           >
-            {loading ? "생성 중…" : "리포트 생성"}
+            {loading ? "생성 중…" : forceRefresh ? "리포트 새로 생성" : "리포트 생성"}
           </button>
           <Link href="/" className="text-xs text-slate-500 underline underline-offset-2">
             ← 홈
@@ -752,6 +793,24 @@ export function ResearchCenterClient() {
               ) : null}
               {result.sheetsAppended ? (
                 <p className="mt-1 text-xs text-emerald-700">Google Sheets에 요약이 저장되었습니다.</p>
+              ) : null}
+              {result.reportHistory?.reusedExistingReport ? (
+                <p className="mt-1 text-xs text-sky-800">
+                  기존 리포트 표시 ({result.reportHistory.reportFreshness ?? "reused"})
+                  {result.reportHistory.actionHint ? ` — ${result.reportHistory.actionHint}` : ""}
+                </p>
+              ) : null}
+              {result.reportDiff?.diffSummary ? (
+                <details className="mt-2 rounded border border-amber-200 bg-amber-50/80 p-2 text-xs text-amber-950">
+                  <summary className="cursor-pointer font-medium">지난 리포트 이후 달라진 점</summary>
+                  <p className="mt-1">{result.reportDiff.diffSummary}</p>
+                  {(result.reportDiff.newRisks ?? []).length > 0 ? (
+                    <p className="mt-1">새 리스크: {(result.reportDiff.newRisks ?? []).join(" · ")}</p>
+                  ) : null}
+                  {(result.reportDiff.removedRisks ?? []).length > 0 ? (
+                    <p className="mt-1">완화·사라진 리스크: {(result.reportDiff.removedRisks ?? []).join(" · ")}</p>
+                  ) : null}
+                </details>
               ) : null}
               {result.qualityMeta?.researchCenter?.status === "degraded" ? (
                 <p className="mt-1 text-xs text-amber-700">

@@ -22,6 +22,11 @@ npm run pre-live-smoke --workspace=apps/web
 
 ## 3. Today Brief / Today Candidates
 
+- [ ] `docs/sql/APPLY_ORDER.md` §8(17–20) 적용 후 impression·sector snapshot·research history·recommendation 테이블 존재 확인.
+- [ ] Dashboard 「미국 후보 진단」「7일 노출 진단」「관심종목 등록 후보」접이식 섹션 동작(승인 전 watchlist 미등록).
+- [ ] Sector Radar 「최근 스냅샷」read-only 조회(run/items).
+- [ ] Research Center: 기존 리포트 재사용·forceRefresh·7일+ diff 표시.
+- [ ] `npm run build --workspace=apps/web` · `npm run pre-live-smoke --workspace=apps/web` (dry-run 최소) 통과.
 - [ ] 후보 점수가 “항상 60”처럼 보이지 않는지(희소 데이터는 45–55대 등 분산).
 - [ ] 응답에 `scoreBreakdown`(additive)이 있는지, 기존 `score` 필드가 유지되는지.
 - [ ] `028300`(HLB 예시) 등 **기업 이벤트 리스크** 레지스트리가 켜진 종목은 **50점 이하·리스크 점검 톤**으로 보이는지.

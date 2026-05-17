@@ -20,6 +20,7 @@ import {
   usKrEmptyReasonHistogramReasonLabel,
 } from "@office-unify/shared-types";
 import type {
+  WatchlistRecommendationCandidate,
   DecisionRetroCoachPostQualityMeta,
   DecisionRetroCoachSuggestion,
   DecisionRetroOutcome,
@@ -343,6 +344,9 @@ export function DashboardClient() {
     >
   >({});
   const [retroCoachSaveBusy, setRetroCoachSaveBusy] = useState<number | null>(null);
+  const [watchRecs, setWatchRecs] = useState<WatchlistRecommendationCandidate[]>([]);
+  const [watchRecBusy, setWatchRecBusy] = useState<string | null>(null);
+  const [watchRecHint, setWatchRecHint] = useState<string | null>(null);
 
   const watchQueueTop5 = useMemo(() => {
     const rows = watchQueue?.candidates ?? [];
@@ -386,12 +390,13 @@ export function DashboardClient() {
       setTodayOpsSummary(todayOpsJson);
       setError(null);
       try {
-        const [sectorRes, watchRes, djRes, opsSumRes, portfolioSummaryRes] = await Promise.all([
+        const [sectorRes, watchRes, djRes, opsSumRes, portfolioSummaryRes, watchRecRes] = await Promise.all([
           fetch("/api/sector-radar/summary", { credentials: "same-origin" }),
           fetch("/api/sector-radar/watchlist-candidates", { credentials: "same-origin" }),
           fetch("/api/decision-journal/review-due", { credentials: "same-origin" }),
           fetch("/api/ops/summary", { credentials: "same-origin" }),
           fetch("/api/portfolio/summary", { credentials: "same-origin" }),
+          fetch("/api/watchlist/recommendations", { credentials: "same-origin" }),
         ]);
         const sectorJson = (await sectorRes.json()) as SectorRadarSummaryResponse;
         const watchJson = (await watchRes.json()) as SectorWatchlistCandidateResponse;
@@ -414,9 +419,13 @@ export function DashboardClient() {
         else setDecisionReviewDueCount(null);
         if (opsSumRes.ok && typeof opsSumJson.openErrorCount === "number") setOpsOpenErrorCount(opsSumJson.openErrorCount);
         else setOpsOpenErrorCount(null);
+        const watchRecJson = (await watchRecRes.json()) as { candidates?: WatchlistRecommendationCandidate[] };
+        if (watchRecRes.ok && Array.isArray(watchRecJson.candidates)) setWatchRecs(watchRecJson.candidates);
+        else setWatchRecs([]);
       } catch {
         setSectorRadar(null);
         setWatchQueue(null);
+        setWatchRecs([]);
         setDecisionReviewDueCount(null);
         setOpsOpenErrorCount(null);
         setPortfolioHealth(null);
@@ -470,6 +479,56 @@ export function DashboardClient() {
       setError(e instanceof Error ? e.message : "대시보드 로드 실패");
     } finally {
       setReloading(false);
+    }
+  }, []);
+
+  const approveWatchRec = useCallback(
+    async (rec: WatchlistRecommendationCandidate) => {
+      if (!rec.recommendationId || rec.alreadyInWatchlist) return;
+      setWatchRecBusy(rec.recommendationId);
+      setWatchRecHint(null);
+      try {
+        const res = await fetch("/api/watchlist/recommendations/approve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ recommendationId: rec.recommendationId, symbol: rec.symbol, market: rec.market }),
+        });
+        const data = (await res.json()) as { ok?: boolean; actionHint?: string };
+        setWatchRecHint(data.actionHint ?? (data.ok ? "처리되었습니다." : "승인에 실패했습니다."));
+        if (data.ok) {
+          setWatchRecs((prev) => prev.filter((x) => x.recommendationId !== rec.recommendationId));
+          void loadOverview();
+        }
+      } catch (e: unknown) {
+        setWatchRecHint(e instanceof Error ? e.message : "승인 요청 실패");
+      } finally {
+        setWatchRecBusy(null);
+      }
+    },
+    [loadOverview],
+  );
+
+  const rejectWatchRec = useCallback(async (rec: WatchlistRecommendationCandidate) => {
+    if (!rec.recommendationId) return;
+    setWatchRecBusy(rec.recommendationId);
+    setWatchRecHint(null);
+    try {
+      const res = await fetch("/api/watchlist/recommendations/reject", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ recommendationId: rec.recommendationId }),
+      });
+      const data = (await res.json()) as { ok?: boolean };
+      if (data.ok) {
+        setWatchRecs((prev) => prev.filter((x) => x.recommendationId !== rec.recommendationId));
+        setWatchRecHint("관련 없음으로 표시했습니다.");
+      }
+    } catch (e: unknown) {
+      setWatchRecHint(e instanceof Error ? e.message : "거절 요청 실패");
+    } finally {
+      setWatchRecBusy(null);
     }
   }, []);
 
@@ -1333,7 +1392,88 @@ export function DashboardClient() {
                 ) : null}
               </details>
             ) : null}
+            {todayBrief?.qualityMeta?.todayCandidates?.usCandidateDiagnostics ? (
+              <details className="mt-2 rounded border border-sky-200 bg-sky-50/80 p-2 text-[10px] text-sky-950">
+                <summary className="cursor-pointer select-none font-medium">미국 후보 진단 (데이터 상태 점검)</summary>
+                <p className="mt-1">
+                  상태: {todayBrief.qualityMeta.todayCandidates.usCandidateDiagnostics.status} · 미국 관심{" "}
+                  {todayBrief.qualityMeta.todayCandidates.usCandidateDiagnostics.userUsWatchlistCount} · 덱 노출{" "}
+                  {todayBrief.qualityMeta.todayCandidates.usCandidateDiagnostics.selectedUsCandidateCount}
+                </p>
+                {todayBrief.qualityMeta.todayCandidates.usCandidateDiagnostics.actionHint ? (
+                  <p className="mt-1 text-sky-800">{todayBrief.qualityMeta.todayCandidates.usCandidateDiagnostics.actionHint}</p>
+                ) : null}
+              </details>
+            ) : null}
+            {todayBrief?.qualityMeta?.todayCandidates?.exposureDiagnostics ? (
+              <details className="mt-2 rounded border border-amber-200 bg-amber-50/80 p-2 text-[10px] text-amber-950">
+                <summary className="cursor-pointer select-none font-medium">
+                  최근 {todayBrief.qualityMeta.todayCandidates.exposureDiagnostics.windowDays}일 후보 노출 진단
+                </summary>
+                <p className="mt-1">
+                  관심종목 비중{" "}
+                  {(todayBrief.qualityMeta.todayCandidates.exposureDiagnostics.watchlistDominanceRatio * 100).toFixed(0)}%
+                </p>
+                {(todayBrief.qualityMeta.todayCandidates.exposureDiagnostics.warningCodes ?? []).length > 0 ? (
+                  <p className="mt-1">경고: {todayBrief.qualityMeta.todayCandidates.exposureDiagnostics.warningCodes.join(", ")}</p>
+                ) : null}
+              </details>
+            ) : null}
           </div>
+        ) : null}
+
+        {watchRecs.length > 0 ? (
+          <details className="mt-3 rounded-lg border border-violet-200 bg-violet-50/60 p-2">
+            <summary className="cursor-pointer select-none text-xs font-semibold text-violet-950">
+              관심종목 등록 후보 ({watchRecs.length}건 · 승인 전 미등록)
+            </summary>
+            <p className="mt-1 text-[10px] text-violet-900">
+              내 관심사와 최근 리서치·섹터 흐름을 바탕으로 만든 관찰 후보입니다. 승인 전에는 관심종목에 등록되지 않습니다.
+              매수 추천이 아니라 추적할지 여부를 고르는 단계입니다.
+            </p>
+            {watchRecHint ? <p className="mt-1 text-[10px] text-violet-800">{watchRecHint}</p> : null}
+            <ul className="mt-2 space-y-2">
+              {watchRecs.map((rec) => (
+                <li key={rec.recommendationId ?? `${rec.market}-${rec.symbol}`} className="rounded border border-violet-100 bg-white p-2 text-[11px]">
+                  <p className="font-medium text-slate-900">
+                    {rec.name} · {rec.market}:{rec.symbol}
+                  </p>
+                  <p className="text-slate-600">
+                    신뢰도 {rec.confidence} · 데이터 {rec.dataStatus}
+                    {rec.alreadyInWatchlist ? " · 이미 등록됨" : ""}
+                  </p>
+                  {(rec.displayReasons ?? []).slice(0, 2).map((r, i) => (
+                    <p key={i} className="text-slate-700">
+                      {r}
+                    </p>
+                  ))}
+                  {(rec.sourceRefs ?? []).length > 0 ? (
+                    <p className="text-[10px] text-slate-500">
+                      근거: {(rec.sourceRefs ?? []).map((s) => s.label ?? s.sourceType).join(" · ")}
+                    </p>
+                  ) : null}
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    <button
+                      type="button"
+                      className="rounded border border-violet-300 px-2 py-0.5 text-[10px] disabled:opacity-50"
+                      disabled={watchRecBusy === rec.recommendationId || rec.alreadyInWatchlist}
+                      onClick={() => void approveWatchRec(rec)}
+                    >
+                      {rec.alreadyInWatchlist ? "이미 등록됨" : watchRecBusy === rec.recommendationId ? "처리 중…" : "관심종목에 추가"}
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded border border-slate-300 px-2 py-0.5 text-[10px] disabled:opacity-50"
+                      disabled={watchRecBusy === rec.recommendationId}
+                      onClick={() => void rejectWatchRec(rec)}
+                    >
+                      관련 없음
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </details>
         ) : null}
 
         <details className="mt-3 rounded-lg border border-indigo-100 bg-indigo-50/50 p-2">

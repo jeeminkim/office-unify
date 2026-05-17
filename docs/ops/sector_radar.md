@@ -1,20 +1,24 @@
-# Sector Radar 운영 메모
+# Sector Radar — 스냅샷 · UI
 
-## 목적
+관찰·복기용입니다. 매수 권유·자동 주문 없음.
 
-- Sector Radar는 **관찰·판단 보조**(과열/조정 구간 참고)이며 **자동매매·자동 주문·포트 자동 리밸런싱이 아니다.**
+## 스냅샷 저장
 
-## 관심종목 섹터 라벨 키워드 보정 (원장)
+- DDL: `docs/sql/append_sector_radar_snapshots.sql` (APPLY_ORDER §8 순서 18)
+- **write:** `POST /api/sector-radar/summary` 경로의 명시 저장 또는 `POST /api/sector-radar/snapshot`
+- **read-only:** `GET /api/sector-radar/runs`, `GET /api/sector-radar/items?runId=`
+- preview/read-only summary 경로에서는 snapshot insert 없음
 
-- 전용 화면 **`/sector-radar`** 에서 `POST /api/portfolio/watchlist/sector-match`를 호출한다.
-- **미리보기(`mode=preview`):** DB 변경 없음. `qualityMeta.keywordMatch.previewCount`, `applyPossibleCount`, `needsReviewCount`, `unmatchedCount` 등을 확인한다.
-- **적용(`mode=apply`):** 사용자가 명시할 때만 원장 `web_portfolio_watchlist.sector` 및 매칭 메타를 갱신한다. `appliedCount`, `skippedCount`, `stillUnmatchedCount`, `appliedAt`, `mappingVersion`, `unmatchedReasonCounts`를 확인한다.
-- UI는 적용 요청에 **90초 Abort 타임아웃**을 두고, 성공 후 Sector Radar 요약 API를 다시 불러온다.
-- 이 도구는 **새 관찰 후보를 만들지 않으며**, Sector Radar 점수 산식을 바꾸지 않고 **라벨·테마 연결 보정**에 한정한다.
+## UI
 
-## 관련 문서
+- `/sector-radar` 페이지 「최근 스냅샷」접이식: run 목록(시각·status·degraded·itemCount·summary) → run별 items
 
-- `docs/sql/APPLY_ORDER.md` (`append_watchlist_sector_match.sql` 등 DDL 순서)
-- `docs/ops/sector_radar_quote_recovery.md`
-- `docs/ops/sector_radar_score_quality.md`
-- `docs/ops/today_candidates.md` (Today Brief와의 경계)
+## Today Candidates 연계
+
+- 실시간 summary가 degraded/empty일 때만 최신 DB snapshot에서 seed(최대 3)
+- `decisionTrace.sourceRefs`: `sector_radar_snapshot`
+- stale snapshot: `missingEvidence` `sector_radar_snapshot_stale`
+
+## 후속(선택)
+
+- `sector_radar_item_feedback` 테이블·POST feedback API

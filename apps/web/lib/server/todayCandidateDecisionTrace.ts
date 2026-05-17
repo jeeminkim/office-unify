@@ -49,7 +49,16 @@ function sourceRefsFor(c: TodayStockCandidate): CandidateDecisionSourceRef[] {
     });
   }
   if (c.source === 'sector_radar') {
-    refs.push({ sourceType: 'sector_radar', label: c.sectorEtfThemeHint ?? c.sector, confidence: 'medium' });
+    if (c.sectorSnapshotRunId) {
+      refs.push({
+        sourceType: 'sector_radar_snapshot',
+        sourceId: c.sectorSnapshotRunId,
+        label: c.sectorEtfThemeHint ?? c.sector ?? '스냅샷',
+        confidence: c.sectorSnapshotStale ? 'low' : 'medium',
+      });
+    } else {
+      refs.push({ sourceType: 'sector_radar', label: c.sectorEtfThemeHint ?? c.sector, confidence: 'medium' });
+    }
   }
   if (c.corporateActionRisk?.active && c.corporateActionRisk.sourceLabel === 'manual_registry') {
     refs.push({
@@ -96,7 +105,15 @@ export function buildDecisionTraceForDeckCandidate(input: {
     selectedReasons.push(traceReason('watchlist_linked', '관심종목과 연결됨'));
   }
   if (c.source === 'sector_radar') {
-    selectedReasons.push(traceReason('sector_radar_theme', 'Sector Radar 테마와 연결됨'));
+    selectedReasons.push(
+      traceReason(
+        c.sectorSnapshotRunId ? 'sector_radar_snapshot' : 'sector_radar_theme',
+        c.sectorSnapshotRunId ? '최근 Sector Radar 스냅샷 기반 관찰' : 'Sector Radar 테마와 연결됨',
+      ),
+    );
+    if (c.sectorSnapshotStale) {
+      missingEvidence.push(traceReason('sector_radar_snapshot_stale', 'Sector Radar 스냅샷이 오래되었습니다'));
+    }
   }
   if (c.source === 'us_market_morning') {
     selectedReasons.push(traceReason('us_signal_linked', '미국 시장 신호와 연결됨'));

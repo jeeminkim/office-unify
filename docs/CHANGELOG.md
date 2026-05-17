@@ -4,6 +4,20 @@
 
 > 문서 관리 메모: Unreleased 항목이 누적되어 길어졌습니다. 이력은 유지하고, 현재 운영 기준은 `docs/CURRENT_SYSTEM_BASELINE.md`를 우선 참조합니다.
 
+### 2026-05-17 Today Candidates · Sector Radar · Research · 관심 등록 후보 통합 보강
+
+- **미국 후보 진단:** `qualityMeta.todayCandidates.usCandidateDiagnostics`(풀·시세·슬롯·reject/suppress histogram·actionHint); ops `today_candidates_us_candidates_zero` 등(fingerprint/cooldown).
+- **노출 이력:** `today_candidate_impressions` append SQL · Today Brief 성공 후 selected 저장 · `exposureDiagnostics`(7일 관심종목 비중·반복·US absent 경고).
+- **Sector Radar 스냅샷:** `sector_radar_runs`/`sector_radar_items` · `POST /api/sector-radar/snapshot` · `GET runs`/`items`(read-only).
+- **Research 리포트 이력:** `research_report_runs`/`research_report_diffs` · 재사용(당일·7일 미만)·`forceRefresh` · 7일+ diff · `GET /api/research-center/reports`·`reports/diff`(read-only).
+- **관심 등록 후보:** `watchlist_recommendation_candidates` · generate/approve/reject API(승인 시에만 `web_portfolio_watchlist` write).
+- **UI:** 대시보드 미국·노출 진단·관심종목 등록 후보(승인형); Sector Radar 최근 스냅샷; 리서치센터 리포트 이력·diff·forceRefresh.
+- **Sector snapshot → Today:** live summary degraded 시 DB snapshot seed(최대 3)·`sourceRefs.sector_radar_snapshot`·stale 시 `sector_radar_snapshot_stale`.
+- **ops-summary:** `usKrEmptyReasonHistogram.totalCount` = `us_signal_candidates_empty`만 occurrence 가중 합(동적 7d inRange).
+- **검증:** test 353/353 · typecheck · build · pre-live-smoke dry-run PASS.
+- **DDL:** `docs/sql/APPLY_ORDER.md` §8 (순서 17–20).
+- **후속:** `sector_radar_item_feedback` API·추천 UI 고도화·snapshot 보존 정책.
+
 ### 2026-05-16 Persona-chat NDJSON · 구조화 출력 패리티
 
 - **`/api/persona-chat/message/stream`**가 비스트림 경로와 동일하게 `buildPersonaStructuredLayer` → **`mergePersonaStructuredLayerIntoChatResponse`**를 거치도록 정렬; DB 저장 어시스턴트 문구는 sanitize 후 표시문.

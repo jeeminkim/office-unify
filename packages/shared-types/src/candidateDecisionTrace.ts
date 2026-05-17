@@ -30,8 +30,13 @@ export type CandidateDecisionSourceRef = {
     | 'watchlist'
     | 'holding'
     | 'sector_radar'
+    | 'sector_radar_snapshot'
     | 'us_market'
     | 'research'
+    | 'research_report'
+    | 'research_report_diff'
+    | 'watchlist_recommendation'
+    | 'today_candidate_impression'
     | 'trend'
     | 'manual_registry'
     | 'unknown';
