@@ -51,6 +51,26 @@ describe("Today Brief / Today Candidates contract regression", () => {
     expect(c.isBuyRecommendation).toBe(false);
   });
 
+  it("risk review candidate may include riskReviewActions (additive)", () => {
+    const snap = resolveCorporateActionRiskForStockCode("028300");
+    const withActions = {
+      ...minimalDeckCandidate(),
+      corporateActionRisk: snap,
+      candidateAction: "review_required" as const,
+      riskReviewActions: [
+        {
+          actionKey: "open_risk_detail" as const,
+          label: "리스크 상세",
+          description: "d",
+          actionType: "local_expand" as const,
+          priority: "primary" as const,
+          dangerLevel: "none" as const,
+        },
+      ],
+    };
+    expect(withActions.riskReviewActions?.length).toBe(1);
+  });
+
   it("additive fields may exist without breaking type: scoreBreakdown, corporateActionRisk, candidateAction", () => {
     const c = minimalDeckCandidate();
     const withAdditive: TodayStockCandidate = {

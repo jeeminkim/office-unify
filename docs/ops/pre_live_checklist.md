@@ -5,6 +5,7 @@
 ## 1. SQL 적용 확인
 
 - [ ] [`docs/sql/APPLY_ORDER.md`](../sql/APPLY_ORDER.md)의 순서와 사전 점검을 따랐는지 확인합니다.
+- [ ] 웹 **`/ops/sql-readiness`**(또는 `GET /api/system/sql-readiness`)에서 §8(17–20)·`web_ops_events`/RPC·core 항목이 **ready** 또는 의도한 **optional** 인지 확인합니다(SQL 자동 적용 없음, read-only 점검).
 - [ ] 보유 종목 테이블(`web_portfolio_watchlist` 등)이 기대 스키마인지 확인합니다.
 - [ ] 홀딩 API에서 `portfolio_holdings_table_missing` 또는 스키마 불일치 `actionHint`가 나오지 않는지 확인합니다.
 
@@ -19,6 +20,11 @@ npm run pre-live-smoke --workspace=apps/web
 - **PASS**: 실사용 전 기본 데이터 연결이 정상에 가깝습니다.
 - **WARN**: 일부만 충족 — 앱은 degraded로 동작할 수 있으나 항목별 안내를 확인합니다.
 - **FAIL**: 조치 필요 — 출력된 `actionHint`와 `docs/sql/APPLY_ORDER.md`를 우선 확인합니다.
+
+## 2b. read-only GET (ops/DB write 없음)
+
+- [ ] `GET /api/system/sql-readiness` · `GET /api/research-center/reports/diff` · `GET /api/watchlist/recommendations` 호출 시 **DB insert/update·ops upsert 없음**(단위 테스트 `readOnlyRouteAudit.test.ts`).
+- [ ] 예외: `GET /api/dashboard/today-candidates/ops-summary`는 조회 실패 시에만 fingerprint upsert(문서화됨). `GET /api/sector-radar/summary`는 Supabase 미설정·예외 시에만 `logOpsEvent`.
 
 ## 3. Today Brief / Today Candidates
 

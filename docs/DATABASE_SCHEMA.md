@@ -1,5 +1,5 @@
 # 데이터베이스 스키마 (웹 앱 요약)
-SQL 적용 상태/우선순위는 `docs/ops/sql-application-status.md` 및 **`docs/sql/APPLY_ORDER.md`(append 스크립트 권장 순서·증상·인덱스 사전 점검)**를 함께 참고한다.
+SQL 적용 상태/우선순위는 `docs/ops/sql-application-status.md` 및 **`docs/sql/APPLY_ORDER.md`(append 스크립트 권장 순서·증상·인덱스 사전 점검)**를 함께 참고한다. 운영 DB 점검 UI는 **`/ops/sql-readiness`**(read-only probe; SQL 자동 적용 없음).
 
 
 웹 앱이 Supabase(Postgres)에 기대는 **문서화된 DDL 조각**과의 대응 관계를 정리한다. 전체 레거시(Discord 등) 스키마는 이 저장소 범위를 넘을 수 있다.

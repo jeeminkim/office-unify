@@ -141,6 +141,52 @@ export type TodayBriefDeckSlot =
  * 미국장 신호 → 한국 후보가 비었을 때 진단 코드(qualityMeta / ops).
  * additive — 기존 warnings 문자열과 병행.
  */
+/** 리스크 점검 후보 카드에서 사용자가 선택할 수 있는 액션(additive, 자동 실행 없음). */
+export type TodayCandidateRiskReviewActionKey =
+  | 'open_risk_detail'
+  | 'check_disclosure'
+  | 'generate_research_report'
+  | 'view_report_history'
+  | 'create_decision_retrospective'
+  | 'create_trade_journal_seed'
+  | 'check_holding_exposure'
+  | 'update_watchlist_note'
+  | 'mark_risk_reviewed'
+  | 'hide_for_7d'
+  | 'keep_observing';
+
+export type TodayCandidateRiskReviewActionType =
+  | 'navigate'
+  | 'api_post'
+  | 'local_expand'
+  | 'external_hint'
+  | 'copy_hint';
+
+/** UI·테스트용 정책 분류(additive, actionType과 병행). */
+export type TodayCandidateRiskReviewPolicyKind =
+  | 'local_expand'
+  | 'navigate'
+  | 'api_post_confirmed'
+  | 'disabled_todo';
+
+export type TodayCandidateRiskReviewAction = {
+  actionKey: TodayCandidateRiskReviewActionKey;
+  label: string;
+  description: string;
+  actionType: TodayCandidateRiskReviewActionType;
+  href?: string;
+  method?: 'GET' | 'POST';
+  payloadHint?: Record<string, unknown>;
+  priority: 'primary' | 'secondary' | 'tertiary';
+  dangerLevel: 'none' | 'caution' | 'high';
+  requiresConfirmation?: boolean;
+  writeAction?: boolean;
+  /** UI에서 아직 미구현(후속) */
+  deferred?: boolean;
+  /** @additive 정책 분류 — 렌더·테스트용 */
+  policyKind?: TodayCandidateRiskReviewPolicyKind;
+};
+
 export type UsKrSignalEmptyReasonCode =
   | 'usMarketDataMissing'
   | 'usSignalProviderDisabled'

@@ -180,12 +180,32 @@ export function TradeJournalClient() {
     const stockCode = searchParams.get('seedStockCode') ?? searchParams.get('seedSymbol') ?? '';
     const market = (searchParams.get('seedMarket') ?? 'KR').toUpperCase();
     const trace = searchParams.get('seedTrace') ?? '';
+    const riskReview = searchParams.get('seedRiskReview') === '1';
+    const riskFlags = (searchParams.get('seedRiskFlags') ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 12);
+    const nextChecks = (searchParams.get('seedNextChecks') ?? '')
+      .split('|')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 8);
+    const doNotDo = (searchParams.get('seedDoNotDo') ?? '')
+      .split('|')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 6);
     const seed: TradeJournalTodayCandidateSeedContext = {
       source: 'today_candidate',
       stockCode: stockCode || undefined,
       symbol: stockCode || undefined,
       market,
       decisionTraceSummary: trace || undefined,
+      ...(riskReview ? { riskReview: true } : {}),
+      ...(riskFlags.length ? { riskFlags } : {}),
+      ...(nextChecks.length ? { nextChecks } : {}),
+      ...(doNotDo.length ? { doNotDo } : {}),
     };
     setPendingSeed(seed);
     setDraft((d) => ({
@@ -433,15 +453,22 @@ export function TradeJournalClient() {
       {message ? <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">{message}</div> : null}
       {pendingSeed?.source === 'today_candidate' ? (
         <div className="rounded border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-950">
-          <p className="font-semibold">당시 후보 판단 (시드)</p>
+          <p className="font-semibold">
+            {pendingSeed.riskReview ? '리스크 점검 후보에서 넘어온 관찰 메모' : '당시 후보 판단 (시드)'}
+          </p>
           <p className="mt-1 text-violet-900">
             종목 {pendingSeed.stockCode ?? pendingSeed.symbol ?? '—'} · 시장 {pendingSeed.market ?? '—'}
           </p>
           {pendingSeed.decisionTraceSummary ? (
             <p className="mt-1 text-violet-800">요약: {pendingSeed.decisionTraceSummary}</p>
           ) : null}
+          {(pendingSeed.nextChecks ?? []).length > 0 ? (
+            <p className="mt-1 text-violet-800">
+              확인할 것: {(pendingSeed.nextChecks ?? []).slice(0, 4).join(' · ')}
+            </p>
+          ) : null}
           <p className="mt-1 text-[10px] text-violet-800">
-            저장 시 메모에 자동으로 붙습니다. 매수·매도 지시 아님.
+            실제 매매 기록이 아니라 판단·복기 메모로 시작할 수 있습니다. 매수·매도 지시 아님.
           </p>
         </div>
       ) : null}

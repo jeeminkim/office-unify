@@ -4,6 +4,30 @@
 
 > 문서 관리 메모: Unreleased 항목이 누적되어 길어졌습니다. 이력은 유지하고, 현재 운영 기준은 `docs/CURRENT_SYSTEM_BASELINE.md`를 우선 참조합니다.
 
+### 2026-05-17 방향성 감사 · Today Candidate 액션 정책 · read-only 감사
+
+- **제품 방향(명시):** 종목을 맞히는 추천 시스템이 아니라, 후보 관찰·리스크 확인·판단 복기·반복 실수 감소를 위한 **개인 투자 운영체제**. 자동매매·자동주문·자동 리밸런싱 없음.
+- **액션 정책:** `todayCandidateNavigationLinks` · `todayCandidateActionPolicy` · 서버 `todayCandidateRiskReviewActions`에 `policyKind`(local_expand / navigate / api_post_confirmed / disabled_todo) additive.
+- **UI copy:** `normalizeObservationCopy`·필수 면책 문구 상수 · 중복 리스크 문구 dedupe 유지.
+- **read-only 감사 테스트:** `sql-readiness` · `reports/diff` · `watchlist/recommendations` GET · sector summary 성공 경로 ops write 0회.
+- **대시보드:** 「실사용 점검」SQL 블록에 `/ops/sql-readiness` 링크.
+- **후속 TODO:** hide_7d/mark_reviewed feedback API · 30일 판단 품질 복기 리포트 · Dashboard 컴포넌트 추가 분리.
+
+### 2026-05-17 Today Candidate 리스크 점검 액션 패널
+
+- **riskReviewActions** additive contract(리포트·복기·관찰 메모·노출 점검 등 navigate/api_post).
+- **Dashboard** 리스크 점검 카드: 요약·「리스크 점검하기」패널·복기/리포트 버튼(명시 클릭 시만 저장).
+- **Research Center** `riskReview=1`·symbol query prefill · 진입 배너.
+- **Trade Journal** `seedRiskReview`·nextChecks/doNotDo 시드.
+- hide_7d / mark_reviewed API는 후속(TODO, UI에 deferred 표시).
+
+### 2026-05-17 운영 SQL 준비 상태(read-only) · UI 점검 보강
+
+- **SQL readiness:** `docs/sql/APPLY_ORDER.md` 기반 registry · `GET /api/system/sql-readiness`(read-only PostgREST probe) · `/ops/sql-readiness` 카드/체크리스트 UI.
+- **연계:** `GET /api/system/status`에 `sqlReadinessSummary` additive · 대시보드 「실사용 점검」패널 요약·링크.
+- **원칙:** SQL 자동 적용 없음 · secret 미반환 · missing=degraded(장애 단정 아님) · 인덱스는 checkSqlPreview 수동 확인.
+- **테스트:** registry/check/UI/API 단위 테스트 추가.
+
 ### 2026-05-17 Today Candidates · Sector Radar · Research · 관심 등록 후보 통합 보강
 
 - **미국 후보 진단:** `qualityMeta.todayCandidates.usCandidateDiagnostics`(풀·시세·슬롯·reject/suppress histogram·actionHint); ops `today_candidates_us_candidates_zero` 등(fingerprint/cooldown).

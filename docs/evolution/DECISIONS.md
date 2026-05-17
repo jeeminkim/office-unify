@@ -14,6 +14,22 @@
 
 ---
 
+### 2026-05-17 — Today Candidate 액션은 정책 모듈로 생성하고 UI는 렌더만 한다
+
+- **결정:** 채택
+- **이유:** 리스크 점검 카드에서 Research·복기·관찰 메모로의 연결이 코드 곳곳에 흩어지면 매수 권유·자동 실행으로 오해되기 쉽다. `policyKind`·navigation 링크·면책 copy를 한곳에 두고 액션 생성만으로 DB write를 금지한다.
+- **대안:** DashboardClient에 버튼 href 하드코딩 유지(책임 과다·회귀 위험).
+- **링크:** `todayCandidateActionPolicy.ts`, `todayCandidateNavigationLinks.ts`, `todayCandidateRiskReviewActions.ts`
+
+### 2026-05-17 — read-only GET은 DB·ops write 기본 금지(문서화된 예외만)
+
+- **결정:** 채택
+- **이유:** `sql-readiness`·`reports/diff`·`watchlist/recommendations` 등 진단 경로에서 write가 섞이면 운영 데이터가 오염된다. 성공 경로 0 write 테스트로 회귀를 막고, `ops-summary` 오류 시 upsert 등 예외는 문서에 명시한다.
+- **대안:** 모든 GET에서 오류 시 `logOpsEvent` 허용(누적·비용 증가).
+- **링크:** `readOnlyRouteAudit.test.ts`, `docs/ops/pre_live_checklist.md`
+
+---
+
 ### 2026-05-16 — 운영 append SQL은 APPLY_ORDER로 묶고 배포 전 pre-live 스모크를 둔다 (EVO-010)
 
 - **결정:** 채택

@@ -158,6 +158,8 @@ export type TradeJournalTodayCandidateSeedContext = {
   market?: string;
   candidateDate?: string;
   decisionTraceSummary?: string;
+  /** Today Candidate 리스크 점검에서 넘어온 경우 */
+  riskReview?: boolean;
   riskFlags?: string[];
   nextChecks?: string[];
   doNotDo?: string[];

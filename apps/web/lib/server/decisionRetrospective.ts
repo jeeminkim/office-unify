@@ -211,6 +211,21 @@ export function buildDecisionRetroSeedFromTodayCandidate(candidate: TodayStockCa
   if (dq?.overall) {
     parts.push(`후보 데이터 품질: ${dq.overall}.`);
   }
+  const trace = candidate.decisionTrace;
+  if (trace?.riskFlags?.length) {
+    parts.push(`리스크 플래그: ${trace.riskFlags.map((r) => r.code).slice(0, 6).join(', ')}.`);
+  }
+  if (candidate.corporateActionRisk?.active) {
+    parts.push(
+      truncateText(
+        `기업 이벤트: ${candidate.corporateActionRisk.riskType} · ${candidate.corporateActionRisk.headline}`,
+        200,
+      ),
+    );
+  }
+  if (candidate.judgmentQuality?.level) {
+    parts.push(`판단 품질: ${candidate.judgmentQuality.level}.`);
+  }
   const summary = truncateText(parts.join(' '), SUMMARY_LINE_MAX);
   const detailJson: Record<string, unknown> = {
     seed: 'today_candidate',
@@ -219,6 +234,26 @@ export function buildDecisionRetroSeedFromTodayCandidate(candidate: TodayStockCa
     riskLevel: candidate.riskLevel,
     source: candidate.source,
     scoreFactorCodes: dm?.scoreExplanationDetail?.factors?.map((f) => f.code).slice(0, 12) ?? [],
+    ...(trace
+      ? {
+          decisionStatus: trace.decisionStatus,
+          selectedReasonCodes: trace.selectedReasons?.map((r) => r.code).slice(0, 12),
+          downgradedReasonCodes: trace.downgradeReasons?.map((r) => r.code).slice(0, 8),
+          riskFlagCodes: trace.riskFlags?.map((r) => r.code).slice(0, 12),
+          nextChecks: trace.nextChecks?.slice(0, 8),
+          doNotDo: trace.doNotDo?.slice(0, 6),
+        }
+      : {}),
+    ...(candidate.corporateActionRisk?.active
+      ? {
+          corporateActionRisk: {
+            riskType: candidate.corporateActionRisk.riskType,
+            headline: candidate.corporateActionRisk.headline,
+            sourceLabel: candidate.corporateActionRisk.sourceLabel,
+          },
+        }
+      : {}),
+    ...(candidate.judgmentQuality ? { judgmentQualityLevel: candidate.judgmentQuality.level } : {}),
   };
   return { title, summary, symbol: sym, detailJson };
 }

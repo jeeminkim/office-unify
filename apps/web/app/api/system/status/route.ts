@@ -5,6 +5,8 @@ import { ALLOWED_PERSONA_CHAT_EMAIL } from '@/lib/server/allowed-user';
 import { PORTFOLIO_READ_SECRET_ENV } from '@/lib/server/portfolio-read-guard';
 import { getSheetsAccessToken, getSpreadsheetSheets } from '@/lib/server/google-sheets-api';
 import { logOpsEvent } from '@/lib/server/opsEventLogger';
+import { getSqlReadinessSummaryForStatus } from '@/lib/server/sqlReadinessCheck';
+import type { SqlReadinessSummary } from '@office-unify/shared-types';
 
 type SectionStatus = 'ok' | 'warn' | 'error' | 'not_configured';
 
@@ -21,6 +23,7 @@ type SystemStatusResponse = {
   ok: boolean;
   generatedAt: string;
   sections: StatusSection[];
+  sqlReadinessSummary?: SqlReadinessSummary & { ok: boolean; actionHint?: string };
 };
 
 function envConfigured(name: string): boolean {
@@ -244,10 +247,14 @@ export async function GET() {
       detail: { errorSectionKeys: errKeys },
     });
   }
+  const supabase = getServiceSupabase();
+  const sqlReadinessSummary = await getSqlReadinessSummaryForStatus(supabase);
+
   const body: SystemStatusResponse = {
     ok: !hasError,
     generatedAt: new Date().toISOString(),
     sections,
+    sqlReadinessSummary,
   };
   return NextResponse.json(body);
 }

@@ -2,12 +2,13 @@
 
 ## 핵심 원칙
 
-- 자동 매매/자동 주문/원장 자동 반영 없음
+- **제품 정체성:** 종목을 맞히는 추천 시스템이 아니라, 후보 **관찰**·리스크 **확인**·판단 **복기**·반복 실수 **감소**를 위한 개인 투자 운영체제다.
+- 자동 매매/자동 주문/자동 리밸런싱/원장 자동 반영 없음
 - Supabase 원장이 기준(Source of Truth)
 - Google Sheets는 read-back/운영 보조 계층
 - LLM 결과는 판단 보조이며 확정 수익률을 보장하지 않음
 - `qualityMeta`(화면 상태)와 `web_ops_events`(운영 누적) 역할 분리
-- 운영 SQL 적용 순서·점검: `docs/sql/APPLY_ORDER.md` · 배포 전 API 스모크 `npm run pre-live-smoke --workspace=apps/web`(dry-run 기본)
+- 운영 SQL 적용 순서·점검: `docs/sql/APPLY_ORDER.md` · 앱 **`/ops/sql-readiness`**(`GET /api/system/sql-readiness`, read-only) · 배포 전 API 스모크 `npm run pre-live-smoke --workspace=apps/web`(dry-run 기본)
 
 ## 주요 화면
 
@@ -24,6 +25,8 @@
 ## 현재 핵심 기능
 
 - Today Candidates
+  - **리스크 점검 액션:** `riskReviewActions` + `policyKind` — UI는 계약만 렌더; write는 사용자 확인 클릭 후만(`hide_7d`/`mark_reviewed`는 API 후속·`disabled_todo`).
+  - **네비게이션:** Research(`riskReview=1` prefill) · Trade Journal 시드 · Portfolio 노출 · 판단 복기 — `todayCandidateNavigationLinks`.
   - `today-brief` optional `candidates`(`userContext`/`usMarketKr`) + **`primaryCandidateDeck`**(관심 top2 + Sector Radar 대표 ETF 1; ETF 없으면 관심 top3 fallback); **EVO-005** `concentrationRiskAssessment`(`exposureBasis`, `themeMappingConfidence`)·`qualityMeta.todayCandidates.concentrationRiskSummary`(동일 메타·건수 집계; 금액·`userNote` 원문 없음; KR/US는 시장 노출 휴리스틱; 집중도는 점검 질문이며 자동 주문·자동 리밸런싱 아님); **EVO-007** `themeConnection`·`themeConnectionSummary`·**크기 제한된** `themeConnectionMap`·`themeConnectionSummary.truncated`·`watchlistSourceAvailable`·`usKrEmptyThemeBridgeHint`; 상세 맵 전용 **`GET /api/dashboard/theme-connections`**. 초기 registry 휴리스틱, 후보 강제 생성 아님.
   - **투자자 프로필**(선택 SQL `web_investor_profiles`): 미설정 시 기존과 동일하게 동작; 설정 시 덱 후보에 **`suitabilityAssessment`**·`qualityMeta.todayCandidates.suitability` additive. 자동 실행 없음.
   - 사용자 표시: **`displayMetrics`**(관찰 점수/신뢰도 등 + **`scoreExplanationDetail`** 요인 설명 + 카드 기본 **`userReadableSummary`** + **`repeatExposure.source`**); **`qualityMeta.todayCandidates.scoreExplanationSummary`** 집계; 미국 신호→KR 후보 없을 때 **`usKrSignalDiagnostics`**; **`qualityMeta.todayCandidates.incompleteHoldingCount`**

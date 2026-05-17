@@ -123,7 +123,12 @@ export function buildTodayCandidateDisplayMetrics(
   const dataStatusUi = dataStatusUiFn(c, opts?.usMarketSummary);
   const br = c.scoreBreakdown;
   const neutralBand = observationScore >= 48 && observationScore <= 62;
-  const neutralObservationCopy = neutralBand ? '중립 관찰대 · 참고용 해석입니다.' : undefined;
+  const isRiskCard =
+    slot === 'risk_review' ||
+    c.briefDeckSlot === 'risk_review' ||
+    (c.corporateActionRisk?.active && c.candidateAction === 'review_required');
+  const neutralObservationCopy =
+    isRiskCard || !neutralBand ? undefined : '중립 관찰대 · 참고용 해석입니다.';
 
   const caveatOnce = '관찰·복기용이며 자동 주문이나 매수 권유가 아닙니다.';
   const scoreExplanation = normalizeCandidateReasons([

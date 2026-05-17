@@ -30,6 +30,10 @@ import {
   buildTodayBriefScoreExplanationSummary,
   enrichPrimaryCandidateDeckScoreExplanations,
 } from '@/lib/server/todayBriefScoreExplanation';
+import {
+  attachRiskReviewActionsToDeck,
+  buildRiskReviewContextBySymbol,
+} from '@/lib/server/todayCandidateRiskReviewActions';
 import { fetchTodayCandidateRepeatStats7d } from '@/lib/server/todayCandidateRepeatExposure';
 import { recordTodayCandidateDeckSnapshotIfNeeded } from '@/lib/server/todayCandidateDeckExposureOps';
 import { isHoldingCompleteForValuation } from '@/lib/server/portfolioHoldingValuation';
@@ -463,6 +467,13 @@ export async function GET() {
       }),
     }));
     const judgmentQualitySummary = summarizeJudgmentQualityDeck(primaryCandidateDeck);
+
+    const riskReviewCtx = await buildRiskReviewContextBySymbol({
+      deck: primaryCandidateDeck,
+      userKey: auth.userKey as string,
+      supabase,
+    });
+    primaryCandidateDeck = attachRiskReviewActionsToDeck(primaryCandidateDeck, riskReviewCtx);
 
     const usCandidateDiagnostics = buildUsCandidateDiagnostics({
       usMarketSummary: todayCandidates.usMarketSummary,

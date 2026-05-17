@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   parseResearchCenterTotalTimeoutMs,
   type ResearchCenterGenerateResponseBody,
@@ -50,6 +51,10 @@ const TAB_ORDER: Array<ResearchDeskId | "editor"> = [
 ];
 
 export function ResearchCenterClient() {
+  const searchParams = useSearchParams();
+  const riskReviewEntry = searchParams.get("riskReview") === "1";
+  const entrySource = searchParams.get("source") ?? "";
+
   const [market, setMarket] = useState<"KR" | "US">("KR");
   const [symbol, setSymbol] = useState("");
   const [name, setName] = useState("");
@@ -98,6 +103,20 @@ export function ResearchCenterClient() {
   const [followupRetroBusyId, setFollowupRetroBusyId] = useState<string | null>(null);
   const [followupRetroOk, setFollowupRetroOk] = useState<string | null>(null);
   const followupTrayDetailsRef = useRef<HTMLDetailsElement>(null);
+
+  useEffect(() => {
+    const qSymbol = searchParams.get("symbol")?.trim();
+    const qName = searchParams.get("name")?.trim();
+    const qMarket = searchParams.get("market")?.trim().toUpperCase();
+    if (qSymbol) setSymbol(qSymbol);
+    if (qName) setName(qName);
+    if (qMarket === "US" || qMarket === "KR") setMarket(qMarket);
+    const qRisk = searchParams.get("knownRisk")?.trim();
+    if (qRisk) setKnownRisk(qRisk);
+    else if (searchParams.get("riskType") === "rights_offering") {
+      setKnownRisk("유상증자·주주배정 등 기업 이벤트 — Today Candidate 리스크 점검에서 넘어옴");
+    }
+  }, [searchParams]);
 
   const fetchOpsTrace = useCallback(async (rid: string) => {
     const trimmed = rid.trim();
@@ -562,6 +581,15 @@ export function ResearchCenterClient() {
     <div className="mx-auto max-w-4xl px-4 py-8 text-slate-800">
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight">Research Center</h1>
+        {riskReviewEntry || entrySource === "today_candidate" ? (
+          <div className="mt-3 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-950">
+            <p className="font-semibold">Today Candidate 리스크 점검에서 넘어왔습니다.</p>
+            <p className="mt-1">
+              기존 리포트가 있으면 먼저 확인하고, 필요할 때만 「그래도 새로 생성」을 사용하세요. 자동 주문·매수 권유가
+              아닙니다.
+            </p>
+          </div>
+        ) : null}
         <p className="mt-2 text-sm text-slate-600">
           단일 종목 심층 분석 전용입니다. 포트폴리오 전체 판단은{" "}
           <Link href="/committee-discussion" className="text-slate-800 underline underline-offset-2">

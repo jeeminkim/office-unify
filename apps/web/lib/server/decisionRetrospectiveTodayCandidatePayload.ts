@@ -1,6 +1,9 @@
 import 'server-only';
 
 import type {
+  CandidateDecisionTrace,
+  CandidateJudgmentQuality,
+  CandidateTraceReason,
   ConcentrationRiskAssessment,
   ObservationScoreExplanation,
   ObservationScoreFactor,
@@ -10,6 +13,7 @@ import type {
 } from '@office-unify/shared-types';
 import { stripDecisionRetroControlChars } from '@/lib/server/decisionRetrospectiveSanitize';
 import type {
+  CorporateActionRiskSnapshot,
   TodayCandidateDataQuality,
   TodayCandidateRiskLevel,
   TodayCandidateSource,
@@ -94,6 +98,10 @@ export const TODAY_RETRO_CANDIDATE_TOP_LEVEL_KEYS = new Set([
   'sectorEtfThemeHint',
   'watchlistItemId',
   'alreadyInWatchlist',
+  'candidateAction',
+  'corporateActionRisk',
+  'decisionTrace',
+  'judgmentQuality',
 ]);
 
 export const TODAY_RETRO_ACTION_HINT_PAYLOAD =
@@ -379,6 +387,10 @@ export function parseTodayCandidateForDecisionRetro(body: unknown): TodayCandida
   const dm = parseDisplayMetrics(picked.displayMetrics);
   if (!dm.ok) return { ...dm, actionHint: TODAY_RETRO_ACTION_HINT_PAYLOAD };
 
+  const corporateActionRisk = parseCorporateActionRisk(picked.corporateActionRisk);
+  const decisionTrace = parseDecisionTraceShallow(picked.decisionTrace);
+  const judgmentQuality = parseJudgmentQualityShallow(picked.judgmentQuality);
+
   const candidate: TodayStockCandidate = {
     candidateId: idRes.value,
     name: nameRes.value,
@@ -403,7 +415,94 @@ export function parseTodayCandidateForDecisionRetro(body: unknown): TodayCandida
     ...(parseConcentration(picked.concentrationRiskAssessment)
       ? { concentrationRiskAssessment: parseConcentration(picked.concentrationRiskAssessment) }
       : {}),
+    ...(corporateActionRisk ? { corporateActionRisk } : {}),
+    ...(decisionTrace ? { decisionTrace } : {}),
+    ...(judgmentQuality ? { judgmentQuality } : {}),
+    ...(picked.candidateAction === 'observe_only' || picked.candidateAction === 'review_required'
+      ? { candidateAction: picked.candidateAction }
+      : {}),
   };
 
   return { ok: true, candidate };
+}
+
+function parseCorporateActionRisk(raw: unknown): CorporateActionRiskSnapshot | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const o = raw as Record<string, unknown>;
+  if (o.active !== true) return undefined;
+  const riskType = o.riskType;
+  if (typeof riskType !== 'string') return undefined;
+  const headline = typeof o.headline === 'string' ? stripDecisionRetroControlChars(o.headline).trim().slice(0, 200) : '';
+  const sourceLabel = typeof o.sourceLabel === 'string' ? o.sourceLabel.slice(0, 40) : 'manual_registry';
+  const effectiveFrom = typeof o.effectiveFrom === 'string' ? o.effectiveFrom.slice(0, 16) : '';
+  const expiresAt = o.expiresAt === null || typeof o.expiresAt === 'string' ? (o.expiresAt as string | null) : null;
+  return {
+    active: true,
+    riskType: riskType as CorporateActionRiskSnapshot['riskType'],
+    headline,
+    sourceLabel,
+    effectiveFrom,
+    expiresAt,
+  };
+}
+
+function parseDecisionTraceShallow(raw: unknown): CandidateDecisionTrace | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const o = raw as Record<string, unknown>;
+  const decisionStatus = o.decisionStatus;
+  if (typeof decisionStatus !== 'string') return undefined;
+  const sliceReasons = (arr: unknown) =>
+    Array.isArray(arr)
+      ? arr
+          .filter((x): x is Record<string, unknown> => Boolean(x && typeof x === 'object'))
+          .slice(0, 12)
+          .map((x) => ({
+            code: typeof x.code === 'string' ? x.code.slice(0, 48) : 'unknown',
+            labelKo: typeof x.labelKo === 'string' ? stripDecisionRetroControlChars(x.labelKo).slice(0, 120) : '—',
+          }))
+      : [];
+  const nextChecks = Array.isArray(o.nextChecks)
+    ? o.nextChecks
+        .filter((x): x is string => typeof x === 'string')
+        .map((x) => stripDecisionRetroControlChars(x).slice(0, 120))
+        .slice(0, 8)
+    : [];
+  const doNotDo = Array.isArray(o.doNotDo)
+    ? o.doNotDo
+        .filter((x): x is string => typeof x === 'string')
+        .map((x) => stripDecisionRetroControlChars(x).slice(0, 120))
+        .slice(0, 6)
+    : [];
+  return {
+    decisionStatus: decisionStatus as CandidateDecisionTrace['decisionStatus'],
+    candidateBucket: 'watchlist',
+    selectedReasons: sliceReasons(o.selectedReasons),
+    suppressedReasons: sliceReasons(o.suppressedReasons),
+    rejectedReasons: sliceReasons(o.rejectedReasons),
+    downgradeReasons: sliceReasons(o.downgradeReasons ?? o.downgradedReasons),
+    missingEvidence: sliceReasons(o.missingEvidence),
+    dataQualityFlags: sliceReasons(o.dataQualityFlags),
+    riskFlags: sliceReasons(o.riskFlags),
+    nextChecks,
+    doNotDo,
+  };
+}
+
+function parseJudgmentQualityShallow(raw: unknown): CandidateJudgmentQuality | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const o = raw as Record<string, unknown>;
+  const level = o.level;
+  if (level !== 'high' && level !== 'medium' && level !== 'low' && level !== 'unknown') return undefined;
+  const score = typeof o.score === 'number' && Number.isFinite(o.score) ? o.score : 0;
+  const reasons = Array.isArray(o.reasons)
+    ? o.reasons.filter((x): x is string => typeof x === 'string').slice(0, 8)
+    : [];
+  return {
+    score,
+    level,
+    reasons,
+    penalties: Array.isArray(o.penalties)
+      ? o.penalties.filter((x): x is string => typeof x === 'string').slice(0, 8)
+      : [],
+  };
 }

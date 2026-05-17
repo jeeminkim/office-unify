@@ -23,15 +23,31 @@ export default function SystemStatusPage() {
   const [sections, setSections] = useState<StatusSection[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [generatedAt, setGeneratedAt] = useState<string>("");
+  const [sqlSummary, setSqlSummary] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
       try {
         const res = await fetch("/api/system/status", { credentials: "same-origin" });
-        const data = (await res.json()) as { sections?: StatusSection[]; generatedAt?: string; error?: string };
+        const data = (await res.json()) as {
+          sections?: StatusSection[];
+          generatedAt?: string;
+          error?: string;
+          sqlReadinessSummary?: {
+            headline?: string;
+            ready?: number;
+            total?: number;
+            coreMissing?: number;
+          };
+        };
         if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
         setSections(data.sections ?? []);
         setGeneratedAt(String(data.generatedAt ?? ""));
+        const s = data.sqlReadinessSummary;
+        setSqlSummary(
+          s?.headline ??
+            (s?.total != null ? `SQL 준비: ${s.ready ?? 0}/${s.total} ready` : null),
+        );
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : "status fetch failed");
       }
@@ -44,12 +60,23 @@ export default function SystemStatusPage() {
         <h1 className="text-xl font-bold tracking-tight">시스템 상태 진단</h1>
         <div className="flex flex-wrap gap-2">
           <Link href="/" className="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs">← 투자 홈</Link>
+          <Link href="/ops/sql-readiness" className="rounded border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs text-violet-950">
+            SQL 준비 상태
+          </Link>
           <Link href="/ops-events" className="rounded border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-950">
             운영 로그 보기
           </Link>
         </div>
       </div>
       {generatedAt ? <p className="mb-3 text-xs text-slate-500">generatedAt: {generatedAt}</p> : null}
+      {sqlSummary ? (
+        <p className="mb-3 rounded border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-950">
+          {sqlSummary} ·{" "}
+          <Link href="/ops/sql-readiness" className="underline underline-offset-2">
+            상세 보기
+          </Link>
+        </p>
+      ) : null}
       {error ? <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div> : null}
       <div className="space-y-2">
         {sections.map((section) => (

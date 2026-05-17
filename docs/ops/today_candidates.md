@@ -23,6 +23,14 @@ DDL 적용 순서: `docs/sql/APPLY_ORDER.md`
 - **`judgmentQuality`**: 관찰 점수와 별개로 근거 데이터 성숙도를 요약(매수 가능성 점수 아님).
 - UI는 「후보 선정 근거」와 「다음 확인사항」을 분리하고, 리스크 점검 카드는 배지를 우선한다.
 
+### 리스크 점검 후보 — 사용자 액션 (additive)
+
+- **모듈:** `todayCandidateRiskReviewActions`(서버 생성) · `todayCandidateNavigationLinks`(href) · `todayCandidateActionPolicy`(`policyKind`: `local_expand` | `navigate` | `api_post_confirmed` | `disabled_todo`). UI(`TodayCandidateRiskReviewPanel`)는 렌더만.
+- **`riskReviewActions`**: `corporateActionRisk.active`·`risk_review` 슬롯 후보에만 내려오는 navigate/api_post 계약. 서버는 리포트 생성·복기 저장을 **자동 실행하지 않음**.
+- **Dashboard**: 「리스크 점검하기」패널 → 확인 체크리스트 · **리포트 확인**(Research Center query) · **복기로 남기기**(confirm 후 `POST …/from-today-candidate`) · **관찰 메모**(Trade Journal seed).
+- **Research Center**: `?symbol=&name=&market=&source=today_candidate&riskReview=1` prefill · 기존 리포트 우선·`forceRefresh`는 명시 버튼만.
+- **후속(TODO)**: `hide_7d` / `mark_reviewed` feedback API — UI에는 deferred 표시만.
+
 **연관:** 페르소나 채팅 스트림(`/api/persona-chat/message/stream`)의 최종 `done` 페이로드에도 동일 계약의 `personaStructuredOutput*`가 포함된다(중간 `delta`는 원문일 수 있으나 저장·`body.assistantMessage.content`는 sanitize 후 표시문). PB 주간 리포트는 별도 응답 가드 경로를 유지한다.
 
 ## 후보 축

@@ -31,7 +31,14 @@ import type {
   PbWeeklyReview,
 } from "@office-unify/shared-types";
 import type { TodayBriefWithCandidatesResponse, TodayStockCandidate } from "@/lib/todayCandidatesContract";
-import { scrubTodayCandidateUiCopy } from "@/lib/todayCandidateUiCopy";
+import {
+  isRiskReviewCandidateClient,
+  riskReviewCardHeadline,
+  riskReviewNextActionLine,
+  scrubRiskReviewDuplicateCopy,
+  scrubTodayCandidateUiCopy,
+} from "@/lib/todayCandidateUiCopy";
+import { TodayCandidateRiskReviewPanel } from "@/app/components/TodayCandidateRiskReviewPanel";
 import { filterCandidatesByConfidence } from "@/lib/todayCandidateDataQuality";
 import { readLastTickerResolverRequestId } from "@/lib/lastTickerResolverRequestId";
 
@@ -274,6 +281,7 @@ export function DashboardClient() {
   const [investorSaveMsg, setInvestorSaveMsg] = useState<string | null>(null);
   const [investorSaving, setInvestorSaving] = useState(false);
   const [openedScoreExplanationId, setOpenedScoreExplanationId] = useState<string | null>(null);
+  const [riskReviewPanelId, setRiskReviewPanelId] = useState<string | null>(null);
   const [weeklyPreview, setWeeklyPreview] = useState<PbWeeklyReview | null>(null);
   const [weeklyRecommendedIdempotencyKey, setWeeklyRecommendedIdempotencyKey] = useState<string | null>(null);
   const [weeklyPreviewLoading, setWeeklyPreviewLoading] = useState(false);
@@ -1142,16 +1150,33 @@ export function DashboardClient() {
                       <>{c.name} · {c.sector ?? "NO_DATA"}</>
                     )}
                   </p>
-                  {(c.decisionTrace?.decisionStatus === "risk_review" || c.briefDeckSlot === "risk_review") ? (
-                    <p className="mt-1 w-fit rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-950">
-                      리스크 점검
-                    </p>
-                  ) : null}
-                  {c.candidateAction === "review_required" ? (
-                    <p className="mt-1 text-[10px] text-amber-900">
-                      검토·리스크 점검이 필요한 카드입니다. 자동 주문 없음 · 확인 후 판단하세요.
-                    </p>
-                  ) : null}
+                  {isRiskReviewCandidateClient(c) ? (
+                    <>
+                      <p className="mt-1 w-fit rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-950">
+                        리스크 점검
+                      </p>
+                      <p className="mt-1 text-[11px] leading-snug text-rose-950">{riskReviewCardHeadline(c)}</p>
+                      <p className="mt-0.5 text-[10px] text-rose-900/90">{riskReviewNextActionLine()}</p>
+                      {c.corporateActionRisk?.active ? (
+                        <p className="mt-1 text-[10px] text-amber-950">
+                          {scrubTodayCandidateUiCopy(c.corporateActionRisk.headline)}
+                        </p>
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      {(c.decisionTrace?.decisionStatus === "risk_review" || c.briefDeckSlot === "risk_review") ? (
+                        <p className="mt-1 w-fit rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-950">
+                          리스크 점검
+                        </p>
+                      ) : null}
+                      {c.candidateAction === "review_required" ? (
+                        <p className="mt-1 text-[10px] text-amber-900">
+                          검토·리스크 점검이 필요한 카드입니다. 자동 주문 없음 · 확인 후 판단하세요.
+                        </p>
+                      ) : null}
+                    </>
+                  )}
                   <p className="mt-1 text-[11px] text-slate-800">
                     관찰 점수 {c.displayMetrics?.observationScore ?? c.score}/100 · 신뢰도 {c.displayMetrics?.confidenceLabel ?? "—"}
                     {c.judgmentQuality ? <> · 판단 품질: {judgmentQualityLevelLabel(c.judgmentQuality.level)}</> : null}
@@ -1163,25 +1188,41 @@ export function DashboardClient() {
                       {c.displayMetrics.repeatedExposure ? " · 반복 노출 감점 적용" : ""}
                     </p>
                   ) : null}
-                  {c.displayMetrics?.neutralObservationCopy ? (
+                  {!isRiskReviewCandidateClient(c) && c.displayMetrics?.neutralObservationCopy ? (
                     <p className="mt-0.5 text-[10px] text-slate-600">{c.displayMetrics.neutralObservationCopy}</p>
                   ) : null}
-                  {c.corporateActionRisk?.active ? (
+                  {!isRiskReviewCandidateClient(c) && c.corporateActionRisk?.active ? (
                     <div className="mt-1 rounded border border-amber-400 bg-amber-50 p-1.5 text-[10px] text-amber-950">
                       기업 이벤트 리스크 점검: {c.corporateActionRisk.headline}
                     </div>
                   ) : null}
-                  {(c.displayMetrics?.mainDeductionLabels ?? []).length > 0 ? (
+                  {!isRiskReviewCandidateClient(c) && (c.displayMetrics?.mainDeductionLabels ?? []).length > 0 ? (
                     <p className="mt-0.5 text-[10px] text-slate-600">
                       주요 감점 참고: {(c.displayMetrics?.mainDeductionLabels ?? []).join(" · ")}
                     </p>
                   ) : null}
-                  {c.displayMetrics?.scoreExplanationDetail?.userReadableSummary ? (
+                  {c.displayMetrics?.scoreExplanationDetail?.userReadableSummary && !isRiskReviewCandidateClient(c) ? (
                     <p className="mt-1 text-[10px] leading-snug text-slate-800">
                       {c.displayMetrics.scoreExplanationDetail.userReadableSummary}
                     </p>
                   ) : null}
-                  <p className="mt-1 text-[11px] text-slate-700">{scrubTodayCandidateUiCopy(c.reasonSummary)}</p>
+                  {isRiskReviewCandidateClient(c) ? (
+                    <p className="mt-1 text-[11px] text-slate-700">
+                      {scrubRiskReviewDuplicateCopy(c, [c.reasonSummary]).join(" · ") ||
+                        scrubTodayCandidateUiCopy(c.reasonSummary)}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-[11px] text-slate-700">{scrubTodayCandidateUiCopy(c.reasonSummary)}</p>
+                  )}
+                  {isRiskReviewCandidateClient(c) ? (
+                    <TodayCandidateRiskReviewPanel
+                      candidate={c}
+                      panelOpen={riskReviewPanelId === c.candidateId}
+                      onTogglePanel={() =>
+                        setRiskReviewPanelId((id) => (id === c.candidateId ? null : c.candidateId))
+                      }
+                    />
+                  ) : null}
                   {c.judgmentQuality ? (
                     <p className="mt-0.5 text-[10px] text-slate-600">
                       관찰 점수와 별개로, 판단에 사용된 근거 충분성을 나타냅니다.
@@ -2441,7 +2482,14 @@ export function DashboardClient() {
               <p className="mb-1 text-amber-950">
                 테이블이 없거나 스키마가 맞지 않으면 API가 안내 코드를 돌려줄 수 있습니다. 저장소의{" "}
                 <code className="rounded bg-amber-100/90 px-1 text-[10px] text-amber-950">docs/sql/APPLY_ORDER.md</code>{" "}
-                에 적힌 <strong>적용 순서</strong>를 확인하세요.
+                에 적힌 <strong>적용 순서</strong>를 확인하세요.{" "}
+                <Link
+                  href="/ops/sql-readiness"
+                  className="font-medium text-violet-900 underline underline-offset-2"
+                >
+                  SQL readiness 상세 점검
+                </Link>
+                (read-only, DB 변경 없음)
               </p>
               <ul className="mt-1 list-inside list-disc space-y-1 text-amber-950">
                 {weeklySqlReadiness?.investorProfileTableMissing ? (

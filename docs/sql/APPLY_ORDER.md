@@ -155,6 +155,12 @@ select table_name from information_schema.tables
 
 ---
 
+## 앱 SQL readiness 화면
+
+배포·운영 시 `GET /api/system/sql-readiness` 및 웹 **`/ops/sql-readiness`** 에서 위 순서의 적용 상태를 read-only로 점검할 수 있습니다. SQL은 자동 적용하지 않으며, 누락 항목은 Supabase SQL Editor에서 해당 파일을 수동 적용한 뒤 화면에서 「다시 점검」하세요.
+
+---
+
 ## 관련 문서
 
 - `docs/DATABASE_SCHEMA.md`

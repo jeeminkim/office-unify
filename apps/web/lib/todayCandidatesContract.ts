@@ -10,6 +10,7 @@ import type {
   TodayBriefConcentrationRiskSummary,
   TodayBriefDeckSlot,
   TodayCandidateDisplayMetrics,
+  TodayCandidateRiskReviewAction,
   TodayCandidateScoreBreakdown,
   TodayCandidatesDecisionTraceSummary,
   TodayCandidatesJudgmentQualitySummary,
@@ -151,6 +152,8 @@ export interface TodayStockCandidate {
   /** additive: Sector Radar DB 스냅샷 fallback 참조 */
   sectorSnapshotRunId?: string;
   sectorSnapshotStale?: boolean;
+  /** additive: 리스크 점검·review_required 후보의 사용자 액션 계약(자동 실행 없음) */
+  riskReviewActions?: TodayCandidateRiskReviewAction[];
 }
 
 export interface UsMarketMorningSummary {

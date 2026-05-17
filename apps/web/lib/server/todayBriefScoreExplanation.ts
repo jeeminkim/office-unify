@@ -382,11 +382,19 @@ function mandatoryNeutralObservationPhrase(args: {
 }
 
 function buildUserReadableSummary(args: {
+  candidate?: TodayStockCandidate;
   diagnostics: ObservationScoreDiagnostics;
   repeat?: ObservationScoreRepeatExposure;
   finalScore: number;
 }): string {
-  const { diagnostics, repeat, finalScore } = args;
+  const { candidate, diagnostics, repeat, finalScore } = args;
+  if (
+    candidate?.corporateActionRisk?.active ||
+    candidate?.briefDeckSlot === 'risk_review' ||
+    candidate?.decisionTrace?.decisionStatus === 'risk_review'
+  ) {
+    return '기업 이벤트 리스크가 있어 신규 판단 전 확인이 필요합니다. 다음 액션: 리포트 확인 · 판단 복기 · 관찰 메모.';
+  }
   const parts: string[] = [];
   const mandatory = mandatoryNeutralObservationPhrase({ diagnostics, repeat });
   if (mandatory) parts.push(mandatory);
@@ -492,7 +500,12 @@ export function buildObservationScoreExplanation(input: BuildObservationScoreExp
   if (diagnostics.needsSectorVerification) scoreDefaultReasons.push('needs_sector');
   if (repeatExposure.repeatedCandidate) scoreDefaultReasons.push('repeat_exposure');
 
-  const userReadableSummary = buildUserReadableSummary({ diagnostics, repeat: repeatExposure, finalScore });
+  const userReadableSummary = buildUserReadableSummary({
+    candidate: c,
+    diagnostics,
+    repeat: repeatExposure,
+    finalScore,
+  });
 
   const explanation: ObservationScoreExplanation = {
     baseScore,
