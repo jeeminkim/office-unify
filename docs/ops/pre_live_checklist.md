@@ -66,7 +66,8 @@ npm run pre-live-smoke --workspace=apps/web
 - [ ] `/watchlist` google_ticker/quote_symbol 필터·no_match Action Item.
 - [ ] `/ops/google-finance-setup` 1순위 탭 `portfolio_quotes` vs 보조 탭(US_Anchor·시세·Quotes) 구분 · 탭별 found/missing 표시.
 - [ ] `portfolio_quotes 샘플 표 복사` → Sheets A1 붙여넣기 · prefix 수식(NYSEARCA/NASDAQ) · Fallback only ≠ OK.
-- [ ] Repair Assistant: GET write 0 · apply는 confirm 후만 · service account Editor · 기존 셀 덮어쓰기 없음.
+- [ ] Repair UI 항상 표시 · GET write 0 · 「안전 보강 적용」 confirm 후만 · append_missing_anchor_rows.
+- [ ] parsed rows OK vs Sheets anchor OK 분리 표시 · mismatch 시 anchor 매칭 점검.
 - [ ] 행동 순서: 샘플 표 또는 Repair apply → price 확인 → 시세 새로고침 → 상태 확인 → Today Brief · API는 접기 영역.
 - [ ] 외부 보유 import·금융 로그인 UI **추가되지 않음**.
 

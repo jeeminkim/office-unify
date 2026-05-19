@@ -52,6 +52,11 @@ type SetupPayload = {
       fallbackOnly: number;
       missing: number;
       rangeOrPermissionError: number;
+      parsedRowsOk?: number;
+      sheetsAnchorMatched?: number;
+      nonAnchorRowsOk?: number;
+      missingAnchorSymbols?: string[];
+      anchorRowMatchMismatch?: boolean;
     };
     results: Array<{
       key: string;
@@ -102,6 +107,21 @@ type SetupPayload = {
     actionHint: string;
   };
   repairModeNote: string;
+};
+
+const EMPTY_REPAIR_PLAN: SetupPayload["repairPlan"] = {
+  status: "write_not_available",
+  writeAvailable: false,
+  requiresConfirmation: true,
+  credential: {
+    authMode: "none",
+    writeAvailable: false,
+    scopesNote: "https://www.googleapis.com/auth/spreadsheets",
+    actionHint: "GOOGLE_SERVICE_ACCOUNT_JSON and GOOGLE_SHEETS_SPREADSHEET_ID required.",
+  },
+  operations: [],
+  warnings: [],
+  actionHint: "Reload setup check to refresh repair plan.",
 };
 
 type ApplyResult = {
@@ -206,7 +226,8 @@ export function GoogleFinanceSetupClient() {
         : "border-red-300 bg-red-50";
 
   const summary = data?.usAnchor.summary;
-  const repair = data?.repairPlan;
+  const repair = data?.repairPlan ?? EMPTY_REPAIR_PLAN;
+  const repairOps = repair.operations.filter((o) => o.type !== "no_op");
 
   const runRepairApply = async () => {
     setApplyLoading(true);
@@ -296,16 +317,145 @@ export function GoogleFinanceSetupClient() {
               <p>
                 <span className="font-medium">Range/permission:</span> {summary.rangeOrPermissionError}
               </p>
+              {summary.parsedRowsOk != null ? (
+                <>
+                  <p>
+                    <span className="font-medium">Parsed rows OK:</span> {summary.parsedRowsOk}
+                  </p>
+                  <p>
+                    <span className="font-medium">Anchor matched:</span> {summary.sheetsAnchorMatched ?? 0}
+                  </p>
+                  <p>
+                    <span className="font-medium">Non-anchor rows OK:</span> {summary.nonAnchorRowsOk ?? 0}
+                  </p>
+                </>
+              ) : null}
+              {summary.anchorRowMatchMismatch ? (
+                <p className="col-span-full rounded bg-amber-100 p-2 text-amber-950">
+                  시트 행은 읽혔지만 anchor symbol 매칭에 실패했습니다. 아래 Sheets 자동 보강/복구를 확인하세요.
+                </p>
+              ) : null}
             </div>
           ) : null}
-          <p className="mt-2 text-[10px] text-slate-600">{data.usMarketGatingNote}</p>
+          {data ? (
+            <p className="mt-2 text-[10px] text-slate-600">
+              portfolio_quotes: tab {data.portfolioQuotesTab.tabFound ? "found" : "missing"} · rows{" "}
+              {data.portfolioQuotesTab.rowCount} · ok {data.portfolioQuotesTab.okRows}
+            </p>
+          ) : null}
+          <p className="mt-2 text-[10px] text-slate-600">{data?.usMarketGatingNote}</p>
         </section>
       ) : null}
+
+      <section
+        className={`mt-4 rounded-lg border p-3 text-xs ${repair.writeAvailable ? "border-violet-200 bg-violet-50/40" : "border-slate-300 bg-slate-50 opacity-90"}`}
+      >
+        <h2 className="font-semibold text-violet-950">Sheets 자동 보강/복구 (확인 후 1회 write)</h2>
+        <p className="mt-1 text-[10px]">{data?.repairModeNote ?? EMPTY_REPAIR_PLAN.actionHint}</p>
+        <p className="mt-2 text-[10px] text-violet-900">
+          시트 직접 편집이 어렵다면 「안전 보강 적용」을 누르세요. 기존 데이터는 덮어쓰지 않고, 누락된 탭/헤더/anchor
+          행만 추가합니다.
+        </p>
+        {!repair.writeAvailable ? (
+          <p className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-[10px] text-amber-950">
+            현재 credential은 Sheets write 권한이 없어 자동 보강을 할 수 없습니다. service account를 Google Sheet에
+            편집자로 공유하세요. 아래 「수동 샘플 복사」로 직접 붙여넣을 수 있습니다.
+          </p>
+        ) : null}
+        {repair.status === "unsafe" ? (
+          <p className="mt-2 rounded border border-red-200 bg-red-50 p-2 text-[10px] text-red-950">
+            기존 데이터가 있어 자동 덮어쓰기를 막았습니다. 기존 탭을 유지하면서 누락 anchor 행만 추가하는 보강을
+            사용하세요 (overwrite=false).
+          </p>
+        ) : null}
+        <p className="mt-2 text-[10px]">
+          <span className="font-medium">Write 가능:</span> {repair.writeAvailable ? "예" : "아니오"}
+          {repair.credential.serviceAccountEmailMasked
+            ? ` · 서비스 계정: ${repair.credential.serviceAccountEmailMasked}`
+            : ""}
+        </p>
+        <p className="mt-1 text-[10px]">
+          <span className="font-medium">repairPlan:</span> {repair.status}
+        </p>
+        <h3 className="mt-3 font-medium">수정 미리보기 (operations)</h3>
+        {repairOps.length === 0 ? (
+          <div className="text-[10px] text-slate-600">
+            <p>현재 자동 적용할 low-risk operation이 없습니다.</p>
+            <p className="mt-1">
+              탭은 존재하지만 anchor 판정이 0이면 anchor 매칭 진단(상단 Parsed rows OK / Anchor matched)을 확인하세요.
+            </p>
+          </div>
+        ) : (
+          <ul className="mt-1 space-y-1 text-[10px]">
+            {repairOps.map((op) => (
+              <li key={op.operationId} className="rounded border bg-white p-2">
+                {op.description} [{op.riskLevel}] {op.range ?? ""}
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="mt-2 text-[10px]">{repair.actionHint}</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button type="button" className="rounded border px-2 py-1" disabled={loading} onClick={() => void load()}>
+            수정 미리보기 새로고침
+          </button>
+          <button
+            type="button"
+            className="rounded border border-violet-600 bg-violet-700 px-3 py-1 text-white disabled:opacity-50"
+            disabled={!repair.writeAvailable || applyLoading || repairOps.length === 0}
+            onClick={() => setConfirmOpen(true)}
+          >
+            {applyLoading ? "적용 중…" : "안전 보강 적용"}
+          </button>
+          <button
+            type="button"
+            className="rounded border px-2 py-1"
+            disabled={!data}
+            onClick={() => data && void copyText(data.portfolioQuotesSampleTsv, "수동 샘플")}
+          >
+            수동 샘플 복사
+          </button>
+        </div>
+        {confirmOpen ? (
+          <div className="mt-3 rounded border border-amber-300 bg-amber-50 p-2 text-[10px]">
+            <p>
+              표시된 operation(탭 생성·헤더·샘플 수식·누락 anchor 행 append)만 1회 적용합니다. confirm 없이는 write하지
+              않으며, 기존 셀은 덮어쓰지 않습니다. 계속할까요?
+            </p>
+            <div className="mt-2 flex gap-2">
+              <button type="button" className="rounded bg-violet-700 px-2 py-1 text-white" onClick={() => void runRepairApply()}>
+                적용
+              </button>
+              <button type="button" className="rounded border px-2 py-1" onClick={() => setConfirmOpen(false)}>
+                취소
+              </button>
+            </div>
+          </div>
+        ) : null}
+        {applyResult ? (
+          <ol className="mt-3 list-decimal space-y-1 pl-5 text-[10px] leading-relaxed">
+            <li>Google Sheets에 수식/행이 반영되었습니다.</li>
+            <li>GOOGLEFINANCE 계산에는 시간이 걸릴 수 있습니다 (약 1분).</li>
+            <li>1분 후 상단 「시세 새로고침 요청」을 누르세요.</li>
+            <li>「상태 다시 확인」으로 Sheets anchor OK가 늘었는지 확인하세요.</li>
+            <li>
+              그래도 0이면: service account 편집 권한, Google Finance 수식 결과, tab/range, anchor matching 경고를
+              확인하세요.
+            </li>
+            {applyResult.postCheck ? (
+              <li className="text-violet-900">
+                적용 직후 점검: Sheets OK {applyResult.postCheck.sheetsOkCount} · missing{" "}
+                {applyResult.postCheck.missingCount} — {applyResult.postCheck.actionHint}
+              </li>
+            ) : null}
+          </ol>
+        ) : null}
+      </section>
 
       {data ? (
         <>
           <section className="mt-4 rounded-lg border border-slate-200 bg-white p-3 text-xs">
-            <h2 className="font-semibold">Google Sheets 탭 안내</h2>
+            <h2 className="font-semibold">Google Sheets tab guide</h2>
             <p className="mt-1 text-[10px] text-slate-600">
               <span className="font-medium">앱이 실제로 읽는 1순위 탭:</span> {data.tabGuide.primaryTab}
             </p>
@@ -345,135 +495,6 @@ export function GoogleFinanceSetupClient() {
             </table>
             <p className="mt-2 rounded bg-sky-50 p-2 text-[10px] text-sky-950">{data.tabGuide.tabActionHint}</p>
           </section>
-
-          {repair ? (
-            <section className="mt-4 rounded-lg border border-violet-200 bg-violet-50/40 p-3 text-xs">
-              <h2 className="font-semibold text-violet-950">Sheets Repair Assistant (confirmed write only)</h2>
-              <p className="mt-1 text-[10px] text-violet-900">{data.repairModeNote}</p>
-              <p className="mt-2 text-[10px] text-violet-900">
-                이 기능은 Google Sheets를 자동으로 계속 수정하지 않습니다. 이번에 표시된 operation만 사용자가 확인 후
-                1회 적용합니다. 기존 데이터는 기본적으로 덮어쓰지 않습니다.
-              </p>
-              <div className="mt-2 rounded border border-violet-100 bg-white/80 p-2">
-                <p>
-                  <span className="font-medium">Write 가능:</span>{" "}
-                  {repair.writeAvailable ? "예 (service account + spreadsheets scope)" : "아니오"}
-                </p>
-                <p className="mt-1">
-                  <span className="font-medium">인증:</span> {repair.credential.authMode}
-                  {repair.credential.serviceAccountEmailMasked
-                    ? ` · ${repair.credential.serviceAccountEmailMasked}`
-                    : null}
-                </p>
-                <p className="mt-1 text-[10px] text-slate-600">{repair.credential.actionHint}</p>
-                <p className="mt-1">
-                  <span className="font-medium">Plan 상태:</span> {repair.status}
-                </p>
-              </div>
-
-              <h3 className="mt-3 font-medium text-violet-950">수정 미리보기</h3>
-              <ul className="mt-1 space-y-2">
-                {repair.operations.map((op) => (
-                  <li key={op.operationId} className="rounded border border-violet-100 bg-white p-2 text-[10px]">
-                    <p className="font-medium">
-                      {op.description}{" "}
-                      <span
-                        className={
-                          op.riskLevel === "low"
-                            ? "text-emerald-700"
-                            : op.riskLevel === "high"
-                              ? "text-red-700"
-                              : "text-amber-800"
-                        }
-                      >
-                        [{op.riskLevel}]
-                      </span>
-                      {op.overwrite ? " · overwrite" : " · overwrite=false"}
-                    </p>
-                    <p className="text-slate-500">
-                      {op.type} · {op.tabName}
-                      {op.range ? ` · ${op.range}` : ""}
-                    </p>
-                    {op.blockedReason ? <p className="text-red-700">blocked: {op.blockedReason}</p> : null}
-                    {op.previewValues?.length ? (
-                      <pre className="mt-1 max-h-24 overflow-auto rounded bg-slate-50 p-1 font-mono text-[9px]">
-                        {op.previewValues
-                          .slice(0, 3)
-                          .map((row) => row.join("\t"))
-                          .join("\n")}
-                      </pre>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-2 text-[10px] text-violet-900">{repair.actionHint}</p>
-
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="rounded border border-violet-500 bg-violet-600 px-3 py-1.5 font-medium text-white disabled:opacity-50"
-                  disabled={!repair.writeAvailable || applyLoading || repair.status === "not_needed"}
-                  onClick={() => setConfirmOpen(true)}
-                >
-                  {applyLoading ? "적용 중…" : "적용 (confirm 필요)"}
-                </button>
-                <button
-                  type="button"
-                  className="rounded border px-2 py-1"
-                  onClick={() => void copyText(data.portfolioQuotesSampleTsv, "수동 샘플 표")}
-                >
-                  복사해서 수동 적용
-                </button>
-              </div>
-
-              {confirmOpen ? (
-                <div className="mt-3 rounded border border-amber-300 bg-amber-50 p-2 text-[10px]">
-                  <p className="font-medium text-amber-950">
-                    Google Sheets에 탭/헤더/수식을 작성합니다. 기존 데이터는 덮어쓰지 않습니다. 계속할까요?
-                  </p>
-                  <p className="mt-1 text-amber-900">
-                    GOOGLEFINANCE 계산에 1분 정도 걸릴 수 있습니다. marketcap/tradetime은 비어 있을 수 있습니다.
-                  </p>
-                  <div className="mt-2 flex gap-2">
-                    <button
-                      type="button"
-                      className="rounded bg-violet-700 px-2 py-1 text-white"
-                      disabled={applyLoading}
-                      onClick={() => void runRepairApply()}
-                    >
-                      예, 적용
-                    </button>
-                    <button type="button" className="rounded border px-2 py-1" onClick={() => setConfirmOpen(false)}>
-                      취소
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-
-              {applyResult ? (
-                <div className="mt-3 rounded border border-slate-200 bg-white p-2 text-[10px]">
-                  <p className="font-medium">적용 결과: {applyResult.status}</p>
-                  {applyResult.appliedOperations.length ? (
-                    <p className="mt-1">applied: {applyResult.appliedOperations.join(", ")}</p>
-                  ) : null}
-                  {applyResult.skippedOperations.length ? (
-                    <p className="mt-1 text-amber-800">
-                      skipped:{" "}
-                      {applyResult.skippedOperations.map((s) => `${s.operationId}(${s.reason})`).join(", ")}
-                    </p>
-                  ) : null}
-                  {applyResult.postCheck ? (
-                    <p className="mt-1">
-                      post-check Sheets OK: {applyResult.postCheck.sheetsOkCount} · missing:{" "}
-                      {applyResult.postCheck.missingCount}
-                      <br />
-                      {applyResult.postCheck.actionHint}
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
-            </section>
-          ) : null}
 
           <section className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 text-xs">
             <h2 className="font-semibold text-emerald-950">점검 순서 (이 순서대로)</h2>

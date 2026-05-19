@@ -14,11 +14,19 @@
 
 ## Repair Assistant (confirmed write only)
 
+- UI **「Sheets 자동 보강/복구」** 섹션은 항상 표시(write 불가 시 disabled).
 - `repairPlan`은 GET 응답에 포함되며 Sheets를 수정하지 않습니다.
 - `POST /api/system/google-finance-setup/repair/apply` — **`confirm: true`일 때만** write
 - 기본 `overwrite: false` — 값이 있는 셀은 건드리지 않음
 - 1차 대상 탭: `portfolio_quotes` (헤더 + 샘플 GOOGLEFINANCE 수식)
+- **`append_missing_anchor_rows`**: 기존 행은 유지하고 SPY/QQQ/TSLA 등 누락 anchor만 아래에 append
 - 제외: `research_*`, `holdings_dashboard`, log/cache 탭
+
+## Anchor read-back vs row OK
+
+- `portfolio_quotes` **parsed rows OK**와 **Sheets anchor OK**는 별도 지표입니다.
+- simplified layout(`symbol`, `google_ticker`, `price`, …)을 anchor source로 인정합니다.
+- rows OK > 0인데 anchor OK = 0이면 **anchor symbol 매칭 실패** — 정규화·누락 행 append를 확인하세요.
 
 ## 수동 fallback
 

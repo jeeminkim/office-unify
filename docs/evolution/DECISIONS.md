@@ -42,6 +42,13 @@
 - **대안:** GET 점검 시 자동 백필.
 - **링크:** Google Finance Setup Repair Assistant · `POST /api/system/google-finance-setup/repair/apply` · `docs/ops/google_finance_setup.md`
 
+### 2026-05-19 — portfolio_quotes simplified layout을 anchor read-back 소스로 인정한다
+
+- **결정:** 채택
+- **이유:** `portfolio_quotes` 행은 읽히는데 Sheets anchor OK가 0이면 Today Brief US gating이 잘못 실패한다. symbol/google_ticker 정규화와 price/status read-back을 anchor registry와 연결해야 한다.
+- **대안:** legacy G열 price만 anchor 판정에 사용.
+- **링크:** `portfolioQuotesAnchorMatch.ts`, `googleFinanceSetupCheck.ts`, `append_missing_anchor_rows` · `docs/ops/google_finance_setup.md`
+
 ### 2026-05-18 — Google Finance Setup은 Sheets read-back과 fallback을 구분한다
 
 - **결정:** 채택

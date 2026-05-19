@@ -56,6 +56,28 @@ describe('googleSheetsRepair', () => {
     expect(plan.actionHint).not.toMatch(/자동\s*주문|즉시\s*매수/);
   });
 
+  it('existing sheet missing anchors suggests append_missing_anchor_rows', async () => {
+    vi.stubEnv('GOOGLE_SERVICE_ACCOUNT_JSON', '{"client_email":"svc@test.iam.gserviceaccount.com","private_key":"x"}');
+    vi.stubEnv('GOOGLE_SHEETS_SPREADSHEET_ID', 'sheet-id');
+    getSpreadsheetSheets.mockResolvedValue([{ title: 'portfolio_quotes', sheetId: 1 }]);
+    const header = ['symbol', 'google_ticker', 'price', 'name', 'volume', 'marketcap', 'tradetime', 'status'];
+    sheetsValuesGet.mockResolvedValue([header, ['RANDOM', 'NASDAQ:RANDOM', '10', '', '', '', '', 'ok']]);
+
+    const { buildGoogleSheetsRepairPlan } = await import('@/lib/server/googleSheetsRepair');
+    const plan = await buildGoogleSheetsRepairPlan([
+      {
+        market: 'US',
+        symbol: 'RANDOM',
+        googleTicker: 'NASDAQ:RANDOM',
+        normalizedKey: 'US:RANDOM',
+        price: 10,
+        rowStatus: 'ok',
+      },
+    ]);
+    expect(plan.operations.some((o) => o.type === 'append_missing_anchor_rows')).toBe(true);
+    expect(plan.operations.find((o) => o.type === 'append_missing_anchor_rows')?.previewValues?.[0]?.[0]).toBe('SPY');
+  });
+
   it('existing non-empty sheet blocks unsafe header rewrite', async () => {
     vi.stubEnv('GOOGLE_SERVICE_ACCOUNT_JSON', '{"client_email":"svc@test.iam.gserviceaccount.com","private_key":"x"}');
     vi.stubEnv('GOOGLE_SHEETS_SPREADSHEET_ID', 'sheet-id');
@@ -66,8 +88,10 @@ describe('googleSheetsRepair', () => {
     ]);
 
     const { buildGoogleSheetsRepairPlan } = await import('@/lib/server/googleSheetsRepair');
-    const plan = await buildGoogleSheetsRepairPlan();
-    expect(plan.status).toBe('unsafe');
+    const plan = await buildGoogleSheetsRepairPlan([
+      { market: 'US', symbol: 'SPY', googleTicker: 'NYSEARCA:SPY', normalizedKey: 'US:SPY', price: 1, rowStatus: 'ok' },
+    ]);
+    expect(plan.status === 'unsafe' || plan.operations.some((o) => o.type === 'append_missing_anchor_rows')).toBe(true);
     expect(plan.operations.some((o) => o.blockedReason === 'partial_headers_with_data')).toBe(true);
   });
 

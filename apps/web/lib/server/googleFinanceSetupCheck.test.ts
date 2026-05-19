@@ -85,12 +85,51 @@ describe('runGoogleFinanceSetupCheck', () => {
     expect(out.portfolioQuotesSampleTsv).toContain('NYSEARCA:SPY');
   });
 
+  it('simplified rows with SPY/QQQ/TSLA yield sheetsAnchorOk > 0', async () => {
+    isConfigured.mockReturnValue(true);
+    readRows.mockResolvedValue({
+      tabFound: true,
+      rows: [
+        { market: 'US', symbol: 'SPY', googleTicker: 'NYSEARCA:SPY', normalizedKey: 'US:SPY', price: 500, rowStatus: 'ok' },
+        { market: 'US', symbol: 'QQQ', googleTicker: 'NASDAQ:QQQ', normalizedKey: 'US:QQQ', price: 400, rowStatus: 'ok' },
+        { market: 'US', symbol: 'TSLA', googleTicker: 'NASDAQ:TSLA', normalizedKey: 'US:TSLA', sheetStatus: 'ok', rawPrice: '200' },
+        { market: 'US', symbol: 'NVDA', googleTicker: 'NASDAQ:NVDA', normalizedKey: 'US:NVDA', price: 900, rowStatus: 'ok' },
+      ],
+    });
+    fetchYahoo.mockResolvedValue({ map: new Map(), fetchFailed: true });
+
+    const { runGoogleFinanceSetupCheck } = await import('@/lib/server/googleFinanceSetupCheck');
+    const out = await runGoogleFinanceSetupCheck();
+    expect(out.usAnchor.summary.sheetsAnchorOk).toBeGreaterThan(0);
+    expect(out.usAnchor.summary.parsedRowsOk).toBeGreaterThan(0);
+    expect(out.usAnchor.summary.sheetsAnchorMatched).toBeGreaterThan(0);
+  });
+
+  it('rows ok but anchor ok 0 sets anchorRowMatchMismatch warning', async () => {
+    isConfigured.mockReturnValue(true);
+    readRows.mockResolvedValue({
+      tabFound: true,
+      rows: [
+        { market: 'US', symbol: 'RANDOM', googleTicker: 'NASDAQ:RANDOM', normalizedKey: 'US:RANDOM', price: 10, rowStatus: 'ok' },
+      ],
+    });
+    fetchYahoo.mockResolvedValue({ map: new Map(), fetchFailed: true });
+
+    const { runGoogleFinanceSetupCheck } = await import('@/lib/server/googleFinanceSetupCheck');
+    const out = await runGoogleFinanceSetupCheck();
+    expect(out.usAnchor.summary.parsedRowsOk).toBeGreaterThan(0);
+    expect(out.usAnchor.summary.sheetsAnchorOk).toBe(0);
+    expect(out.usAnchor.summary.anchorRowMatchMismatch).toBe(true);
+    expect(out.actionHint).toMatch(/anchor symbol 매칭/);
+  });
+
   it('marks Sheets read-back ok with google_sheets_readback source', async () => {
     isConfigured.mockReturnValue(true);
     readRows.mockResolvedValue({
       tabFound: true,
       rows: [
         {
+          market: 'US',
           symbol: 'SPY',
           googleTicker: 'NYSEARCA:SPY',
           normalizedKey: 'US:SPY',

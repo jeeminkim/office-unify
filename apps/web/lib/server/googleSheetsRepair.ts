@@ -8,6 +8,12 @@ import {
   sheetsValuesUpdate,
 } from '@/lib/server/google-sheets-api';
 import { inspectGoogleSheetsCredentialMeta, type GoogleSheetsCredentialMeta } from '@/lib/server/googleSheetsRepairCredential';
+import type { GoogleFinanceQuoteRow } from '@/lib/server/googleFinanceSheetQuoteService';
+import { isSimplifiedPortfolioQuotesLayout } from '@/lib/server/googleFinanceSheetQuoteService';
+import {
+  missingRequiredAnchors,
+  PORTFOLIO_QUOTES_REQUIRED_ANCHORS,
+} from '@/lib/server/portfolioQuotesAnchorMatch';
 import { runGoogleFinanceSetupCheck } from '@/lib/server/googleFinanceSetupCheck';
 
 export type GoogleSheetsRepairPlanStatus =
@@ -22,6 +28,7 @@ export type GoogleSheetsRepairOperationType =
   | 'create_sheet'
   | 'write_headers'
   | 'write_sample_formulas'
+  | 'append_missing_anchor_rows'
   | 'resize_columns'
   | 'freeze_header'
   | 'no_op';
@@ -98,6 +105,22 @@ function statusFormula(rowNum: number): string {
   return `=IF(C${rowNum}="","missing","ok")`;
 }
 
+export function buildPortfolioQuotesRowValues(
+  rowNum: number,
+  row: { symbol: string; googleTicker: string },
+): string[] {
+  return [
+    row.symbol,
+    row.googleTicker,
+    formulaForRow(rowNum, 'price'),
+    formulaForRow(rowNum, 'name'),
+    formulaForRow(rowNum, 'volume'),
+    formulaForRow(rowNum, 'marketcap'),
+    formulaForRow(rowNum, 'tradetime'),
+    statusFormula(rowNum),
+  ];
+}
+
 export function buildPortfolioQuotesSampleGrid(): string[][] {
   const header = [...PORTFOLIO_QUOTES_REPAIR_HEADERS];
   const body = PORTFOLIO_QUOTES_REPAIR_SAMPLE_ROWS.map((row, idx) => {
@@ -144,8 +167,32 @@ function sheetHasMeaningfulData(values: unknown[][]): boolean {
   return false;
 }
 
+function buildAppendMissingAnchorOperation(
+  tab: string,
+  dataRows: unknown[][],
+  sheetRows: GoogleFinanceQuoteRow[],
+): GoogleSheetsRepairOperation | null {
+  const missing = missingRequiredAnchors(sheetRows);
+  if (missing.length === 0) return null;
+  const nextRow = dataRows.length + 2;
+  const preview = missing.map((row, idx) => buildPortfolioQuotesRowValues(nextRow + idx, row));
+  const endRow = nextRow + missing.length - 1;
+  return {
+    operationId: 'append_missing_anchor_rows',
+    type: 'append_missing_anchor_rows',
+    tabName: tab,
+    range: `A${nextRow}:H${endRow}`,
+    description: `누락 US anchor ${missing.length}행 append (기존 행 수정 없음)`,
+    previewValues: preview,
+    overwrite: false,
+    riskLevel: 'medium',
+  };
+}
+
 /** Read-only plan builder — no Sheets write. */
-export async function buildGoogleSheetsRepairPlan(): Promise<GoogleSheetsRepairPlan> {
+export async function buildGoogleSheetsRepairPlan(
+  sheetRows: GoogleFinanceQuoteRow[] = [],
+): Promise<GoogleSheetsRepairPlan> {
   const credential = await inspectGoogleSheetsCredentialMeta();
   const id = spreadsheetId();
   const tab = portfolioQuotesTabName();
@@ -206,16 +253,37 @@ export async function buildGoogleSheetsRepairPlan(): Promise<GoogleSheetsRepairP
   const headersOk = headersMatchExpected(headerRow);
   const headersPartial = headersPartiallyPresent(headerRow);
 
+  const simplifiedCompatible =
+    headersOk || isSimplifiedPortfolioQuotesLayout(headerRow) || (hasData && !headersPartial);
+
   if (headersPartial && hasData) {
+    warnings.push('repair_unsafe_partial_headers');
     operations.push({
       operationId: 'write_headers_blocked',
       type: 'no_op',
       tabName: tab,
-      description: '헤더가 일부만 있어 전체 rewrite는 차단됩니다. 수동으로 맞추거나 빈 탭에서 Repair를 실행하세요.',
+      description: '헤더가 일부만 있어 전체 rewrite는 차단됩니다.',
       overwrite: false,
       riskLevel: 'high',
       blockedReason: 'partial_headers_with_data',
     });
+  }
+
+  if (headersPartial && hasData && operations.every((o) => o.type === 'no_op' || o.type === 'append_missing_anchor_rows')) {
+    const hasAppend = operations.some((o) => o.type === 'append_missing_anchor_rows');
+    if (hasAppend) {
+      return {
+        status: 'needs_confirmation',
+        writeAvailable: true,
+        requiresConfirmation: true,
+        targetSpreadsheetId: id,
+        credential,
+        operations: operations.filter((o) => o.type !== 'no_op'),
+        warnings,
+        actionHint:
+          '기존 데이터는 덮어쓰지 않습니다. 누락 anchor 행만 append하는 보강을 사용하세요.',
+      };
+    }
     return {
       status: 'unsafe',
       writeAvailable: true,
@@ -223,7 +291,7 @@ export async function buildGoogleSheetsRepairPlan(): Promise<GoogleSheetsRepairP
       targetSpreadsheetId: id,
       credential,
       operations,
-      warnings: [...warnings, 'repair_unsafe_partial_headers'],
+      warnings,
       actionHint:
         '기존 헤더/데이터가 일부 있습니다. 덮어쓰지 않으며 전체 헤더 rewrite는 하지 않습니다. 수동 복사 또는 빈 탭을 권장합니다.',
     };
@@ -273,6 +341,16 @@ export async function buildGoogleSheetsRepairPlan(): Promise<GoogleSheetsRepairP
       overwrite: false,
       riskLevel: 'low',
     });
+  }
+
+  if (
+    tabExists &&
+    simplifiedCompatible &&
+    hasData &&
+    !operations.some((o) => o.operationId === 'append_missing_anchor_rows')
+  ) {
+    const appendOp = buildAppendMissingAnchorOperation(tab, dataRows, sheetRows);
+    if (appendOp) operations.push(appendOp);
   }
 
   if (operations.length === 0 || operations.every((o) => o.type === 'no_op')) {
@@ -459,8 +537,17 @@ export async function applyGoogleSheetsRepair(req: ApplyRequest): Promise<Google
     };
   }
 
-  const plan = await buildGoogleSheetsRepairPlan();
-  if (plan.status === 'unsafe' || plan.status === 'error') {
+  let sheetRows: GoogleFinanceQuoteRow[] = [];
+  try {
+    const { readGoogleFinanceQuoteSheetRows } = await import('@/lib/server/googleFinanceSheetQuoteService');
+    sheetRows = (await readGoogleFinanceQuoteSheetRows()).rows;
+  } catch {
+    sheetRows = [];
+  }
+
+  const plan = await buildGoogleSheetsRepairPlan(sheetRows);
+  const hasAppendOp = plan.operations.some((o) => o.type === 'append_missing_anchor_rows');
+  if (plan.status === 'error' || (plan.status === 'unsafe' && !hasAppendOp)) {
     return {
       ok: false,
       status: 'error',
@@ -478,7 +565,9 @@ export async function applyGoogleSheetsRepair(req: ApplyRequest): Promise<Google
   const filterOps = (op: GoogleSheetsRepairOperation) => {
     if (op.type === 'no_op') return false;
     if (op.blockedReason) return false;
-    if (requested.size === 0) return op.riskLevel === 'low';
+    if (requested.size === 0) {
+      return op.riskLevel === 'low' || op.type === 'append_missing_anchor_rows';
+    }
     return requested.has(op.operationId);
   };
 
@@ -561,6 +650,23 @@ export async function applyGoogleSheetsRepair(req: ApplyRequest): Promise<Google
             `A2:${sheetColumnLetter(PORTFOLIO_QUOTES_REPAIR_HEADERS.length)}${endRow}`,
           ),
           values: merged,
+          valueInputOption: 'USER_ENTERED',
+        });
+        applied.push(op.operationId);
+        continue;
+      }
+
+      if (op.type === 'append_missing_anchor_rows') {
+        const body = op.previewValues ?? [];
+        if (body.length === 0) {
+          skipped.push({ operationId: op.operationId, reason: 'no_missing_anchors' });
+          continue;
+        }
+        const range = op.range ?? `A2:H${1 + body.length}`;
+        await sheetsValuesUpdate({
+          spreadsheetId: id,
+          rangeA1: buildA1Range(tab, range),
+          values: body,
           valueInputOption: 'USER_ENTERED',
         });
         applied.push(op.operationId);

@@ -8,6 +8,11 @@ import {
   type GoogleFinanceQuoteRow,
 } from '@/lib/server/googleFinanceSheetQuoteService';
 import { buildGoogleSheetsRepairPlan, type GoogleSheetsRepairPlan } from '@/lib/server/googleSheetsRepair';
+import {
+  findSheetRowForAnchor,
+  isPortfolioQuoteRowReadbackOk,
+  sheetRowMatchesAnchor,
+} from '@/lib/server/portfolioQuotesAnchorMatch';
 
 export type GoogleFinanceQuoteSource =
   | 'google_sheets_readback'
@@ -89,6 +94,12 @@ export type GoogleFinanceSetupCheckResult = {
       fallbackOnly: number;
       missing: number;
       rangeOrPermissionError: number;
+      /** additive: row vs anchor 판정 분리 */
+      parsedRowsOk: number;
+      sheetsAnchorMatched: number;
+      nonAnchorRowsOk: number;
+      missingAnchorSymbols: string[];
+      anchorRowMatchMismatch: boolean;
     };
     results: GoogleFinanceAnchorResult[];
   };
@@ -176,19 +187,6 @@ const SQL_VS_SHEETS_NOTE =
 
 function expectedFormula(googleTicker: string): string {
   return `=GOOGLEFINANCE("${googleTicker}","price")`;
-}
-
-function findSheetRowForAnchor(rows: GoogleFinanceQuoteRow[], anchor: (typeof US_MARKET_SEED_ANCHORS)[number]) {
-  const want = new Set(
-    [anchor.googleTicker, anchor.quoteSymbol, anchor.key].map((s) => s.trim().toUpperCase()).filter(Boolean),
-  );
-  for (const row of rows) {
-    const gt = row.googleTicker?.trim().toUpperCase() ?? '';
-    const sym = row.symbol?.trim().toUpperCase() ?? '';
-    const key = row.normalizedKey?.toUpperCase() ?? '';
-    if (want.has(gt) || want.has(sym) || key.includes(anchor.quoteSymbol)) return row;
-  }
-  return null;
 }
 
 function mapRowToReadbackStatus(row: GoogleFinanceQuoteRow | null): GoogleFinanceAnchorReadbackStatus {
@@ -404,9 +402,13 @@ export async function runGoogleFinanceSetupCheck(): Promise<GoogleFinanceSetupCh
   }
 
   let sheetsAnchorOk = 0;
+  let sheetsAnchorMatched = 0;
   let fallbackOnly = 0;
   let missing = 0;
   let rangeOrPermissionError = 0;
+  const missingAnchorSymbols: string[] = [];
+  const parsedRowsOk = sheetRows.filter((r) => r.rowStatus === 'ok' || isPortfolioQuoteRowReadbackOk(r)).length;
+  const matchedAnchorKeys = new Set<string>();
 
   const results: GoogleFinanceAnchorResult[] = anchors.map((anchor) => {
     const row = readSucceeded ? findSheetRowForAnchor(sheetRows, anchor) : null;
@@ -415,7 +417,16 @@ export async function runGoogleFinanceSetupCheck(): Promise<GoogleFinanceSetupCh
     let readbackPrice: number | undefined = row?.price;
     let actionHint: string | undefined;
 
-    if (row && readbackStatus === 'ok' && readbackPrice != null && readbackPrice > 0) {
+    if (row) {
+      sheetsAnchorMatched += 1;
+      matchedAnchorKeys.add(anchor.quoteSymbol);
+    } else {
+      missingAnchorSymbols.push(anchor.quoteSymbol);
+    }
+
+    if (row && isPortfolioQuoteRowReadbackOk(row)) {
+      readbackStatus = 'ok';
+      readbackPrice = row.price ?? readbackPrice;
       source = 'google_sheets_readback';
       sheetsAnchorOk += 1;
     } else if (readbackStatus === 'parse_failed') {
@@ -467,6 +478,17 @@ export async function runGoogleFinanceSetupCheck(): Promise<GoogleFinanceSetupCh
   });
 
   const anchorRequested = anchors.length;
+  let nonAnchorRowsOk = 0;
+  for (const r of sheetRows) {
+    if (!(r.rowStatus === 'ok' || isPortfolioQuoteRowReadbackOk(r))) continue;
+    const isAnchorRow = anchors.some((a) => sheetRowMatchesAnchor(r, a));
+    if (!isAnchorRow) nonAnchorRowsOk += 1;
+  }
+  const anchorRowMatchMismatch = parsedRowsOk > 0 && sheetsAnchorOk === 0;
+  if (anchorRowMatchMismatch) {
+    warnings.push('anchor_row_match_mismatch');
+  }
+
   let overallQuoteSource: GoogleFinanceSetupCheckResult['overallQuoteSource'] = 'unknown';
   if (sheetsAnchorOk > 0 && fallbackOnly > 0) overallQuoteSource = 'mixed';
   else if (sheetsAnchorOk > 0) overallQuoteSource = 'google_sheets_readback';
@@ -502,7 +524,20 @@ export async function runGoogleFinanceSetupCheck(): Promise<GoogleFinanceSetupCh
     description: s.description ?? '',
   }));
 
-  const repairPlan = await buildGoogleSheetsRepairPlan();
+  const repairPlan = await buildGoogleSheetsRepairPlan(sheetRows);
+
+  let finalActionHint = buildActionHint({
+    status,
+    sheetsAnchorOk,
+    fallbackOnly,
+    tabActionHint: tabGuide.tabActionHint,
+    statusNarrative,
+  });
+  if (anchorRowMatchMismatch) {
+    finalActionHint =
+      '시트 행은 읽혔지만 anchor symbol 매칭에 실패했습니다. symbol/google_ticker 정규화 또는 anchor registry를 확인하세요. ' +
+      finalActionHint;
+  }
 
   return {
     readOnly: true,
@@ -534,6 +569,11 @@ export async function runGoogleFinanceSetupCheck(): Promise<GoogleFinanceSetupCh
         fallbackOnly,
         missing,
         rangeOrPermissionError,
+        parsedRowsOk,
+        sheetsAnchorMatched,
+        nonAnchorRowsOk,
+        missingAnchorSymbols,
+        anchorRowMatchMismatch,
       },
       results,
     },
@@ -557,13 +597,7 @@ export async function runGoogleFinanceSetupCheck(): Promise<GoogleFinanceSetupCh
     userSetupSteps: USER_SETUP_STEPS,
     setupChecklist,
     developerApis: DEVELOPER_APIS,
-    actionHint: buildActionHint({
-      status,
-      sheetsAnchorOk,
-      fallbackOnly,
-      tabActionHint: tabGuide.tabActionHint,
-      statusNarrative,
-    }),
+    actionHint: finalActionHint,
     warnings,
     repairPlan,
     repairModeNote: REPAIR_MODE_NOTE,

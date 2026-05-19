@@ -4,6 +4,12 @@
 
 > 문서 관리 메모: Unreleased 항목이 누적되어 길어졌습니다. 이력은 유지하고, 현재 운영 기준은 `docs/CURRENT_SYSTEM_BASELINE.md`를 우선 참조합니다.
 
+### 2026-05-19 Google Finance Repair Apply UI · Anchor Readback Fix
+
+- **Anchor matching:** symbol/google_ticker prefix 정규화 · simplified layout · status/price 기준 OK.
+- **Summary:** parsedRowsOk / sheetsAnchorMatched / missingAnchorSymbols / anchorRowMatchMismatch.
+- **Repair UI:** 항상 표시 · `append_missing_anchor_rows` · 안전 보강 적용 버튼.
+
 ### 2026-05-19 Google Sheets Repair Assistant · Confirmed Write Only
 
 - **Repair plan:** `GET /api/system/google-finance-setup`에 `repairPlan` additive (write 0).

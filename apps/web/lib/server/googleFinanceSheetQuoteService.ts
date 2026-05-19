@@ -37,6 +37,8 @@ export type GoogleFinanceQuoteRow = {
   datadelay?: number;
   rawDelay?: string;
   rowStatus?: 'ok' | 'formula_pending' | 'empty_price' | 'parse_failed' | 'ticker_mismatch' | 'missing_row';
+  /** simplified layout status 열 (H) */
+  sheetStatus?: string;
   message?: string;
   updatedAt?: string;
 };
@@ -226,22 +228,71 @@ function inferMarketFromGoogleTicker(googleTicker: string, symbol: string): stri
   return 'US';
 }
 
-function isSimplifiedPortfolioQuotesHeader(firstCell: unknown): boolean {
-  return String(firstCell ?? '')
-    .trim()
-    .toLowerCase() === 'symbol';
+type PortfolioQuotesColumnMap = Map<string, number>;
+
+function buildPortfolioQuotesColumnMap(headerRow: unknown[]): PortfolioQuotesColumnMap {
+  const map = new Map<string, number>();
+  headerRow.forEach((cell, idx) => {
+    const key = String(cell ?? '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, '_');
+    if (key) map.set(key, idx);
+  });
+  return map;
 }
 
-function parseSimplifiedPortfolioQuoteRows(values: unknown[][]): GoogleFinanceQuoteRow[] {
+function colIndex(map: PortfolioQuotesColumnMap, ...names: string[]): number | undefined {
+  for (const n of names) {
+    const i = map.get(n);
+    if (i != null) return i;
+  }
+  return undefined;
+}
+
+function cellAt(row: unknown[], idx: number | undefined): unknown {
+  if (idx == null || idx < 0) return undefined;
+  return row[idx];
+}
+
+export function isSimplifiedPortfolioQuotesLayout(headerRow: unknown[]): boolean {
+  const map = buildPortfolioQuotesColumnMap(headerRow);
+  if (map.has('symbol') && map.has('google_ticker')) return true;
+  const first = String(headerRow[0] ?? '')
+    .trim()
+    .toLowerCase();
+  return first === 'symbol';
+}
+
+function resolveSimplifiedRowStatus(
+  rawPrice: string,
+  price: number | undefined,
+  sheetStatus: string,
+): GoogleFinanceQuoteRow['rowStatus'] {
+  const st = sheetStatus.trim().toLowerCase();
+  if (st === 'ok') return 'ok';
+  if (price != null && price > 0) return 'ok';
+  return classifyRowStatus(rawPrice, price);
+}
+
+function parseSimplifiedPortfolioQuoteRows(values: unknown[][], headerRow: unknown[]): GoogleFinanceQuoteRow[] {
+  const map = buildPortfolioQuotesColumnMap(headerRow);
+  const symIdx = colIndex(map, 'symbol') ?? 0;
+  const gtIdx = colIndex(map, 'google_ticker') ?? 1;
+  const priceIdx = colIndex(map, 'price') ?? 2;
+  const timeIdx = colIndex(map, 'tradetime') ?? 6;
+  const statusIdx = colIndex(map, 'status') ?? 7;
+
   const rows: GoogleFinanceQuoteRow[] = [];
   for (const row of values) {
-    const symbol = googleSheetCellAsString(row[0]).toUpperCase();
-    const googleTicker = googleSheetCellAsString(row[1]).toUpperCase();
+    const symbol = googleSheetCellAsString(cellAt(row, symIdx)).toUpperCase();
+    const googleTicker = googleSheetCellAsString(cellAt(row, gtIdx)).toUpperCase();
     if (!symbol || symbol === 'SYMBOL') continue;
     const market = inferMarketFromGoogleTicker(googleTicker, symbol);
-    const rawPrice = googleSheetCellAsString(row[2]);
-    const price = parseGoogleFinanceSheetNumber(row[2]);
-    const rowStatus = classifyRowStatus(rawPrice, price);
+    const rawPrice = googleSheetCellAsString(cellAt(row, priceIdx));
+    const price = parseGoogleFinanceSheetNumber(cellAt(row, priceIdx));
+    const sheetStatus = googleSheetCellAsString(cellAt(row, statusIdx));
+    const rowStatus = resolveSimplifiedRowStatus(rawPrice, price, sheetStatus);
     rows.push({
       market,
       symbol,
@@ -249,8 +300,9 @@ function parseSimplifiedPortfolioQuoteRows(values: unknown[][]): GoogleFinanceQu
       googleTicker: googleTicker || toGoogleTickerLegacy(market, symbol),
       rawPrice,
       price,
-      tradetime: googleSheetCellAsString(row[6]) || undefined,
-      rawTradeTime: googleSheetCellAsString(row[6]) || undefined,
+      sheetStatus: sheetStatus || undefined,
+      tradetime: googleSheetCellAsString(cellAt(row, timeIdx)) || undefined,
+      rawTradeTime: googleSheetCellAsString(cellAt(row, timeIdx)) || undefined,
       rowStatus,
       message: messageForStatus(rowStatus),
     });
@@ -295,7 +347,7 @@ export async function readGoogleFinanceQuoteSheetRows(): Promise<{
     };
   }
 
-  const simplifiedLayout = isSimplifiedPortfolioQuotesHeader(headerRow[0]);
+  const simplifiedLayout = isSimplifiedPortfolioQuotesLayout(headerRow);
   let values: unknown[][];
   try {
     values = await sheetsValuesGet({
@@ -314,7 +366,7 @@ export async function readGoogleFinanceQuoteSheetRows(): Promise<{
   }
 
   if (simplifiedLayout) {
-    const rows = parseSimplifiedPortfolioQuoteRows(values);
+    const rows = parseSimplifiedPortfolioQuoteRows(values, headerRow);
     return {
       rows,
       fxRate: undefined,
@@ -342,6 +394,28 @@ export async function readGoogleFinanceQuoteSheetRows(): Promise<{
       writeConfigured: Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim()),
     };
   }
+  return parseLegacyPortfolioQuoteRows(values, {
+    fxOut: true,
+    tab,
+    id,
+  });
+}
+
+function parseLegacyPortfolioQuoteRows(
+  values: unknown[][],
+  ctx?: { fxOut: true; tab: string; id: string },
+): {
+  rows: GoogleFinanceQuoteRow[];
+  fxRate?: number;
+  fxRawPrice?: string;
+  fxRowDetail?: GoogleFinanceFxRowReadback;
+  fxStatus: FxReadbackStatus;
+  readBackSucceeded: boolean;
+  tabFound: boolean;
+  sheetName: string;
+  spreadsheetIdConfigured: boolean;
+  writeConfigured: boolean;
+} {
   const rows: GoogleFinanceQuoteRow[] = [];
   let fxRate: number | undefined;
   let fxRawPrice: string | undefined;
@@ -407,8 +481,8 @@ export async function readGoogleFinanceQuoteSheetRows(): Promise<{
     fxStatus: classifyFxReadbackStatus(fxRawPrice, fxRate),
     readBackSucceeded: rows.some((row) => row.price != null),
     tabFound: true,
-    sheetName: tab,
-    spreadsheetIdConfigured: Boolean(id),
+    sheetName: ctx?.tab ?? '',
+    spreadsheetIdConfigured: Boolean(ctx?.id),
     writeConfigured: Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim()),
   };
 }
