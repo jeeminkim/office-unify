@@ -4,6 +4,18 @@
 
 > 문서 관리 메모: Unreleased 항목이 누적되어 길어졌습니다. 이력은 유지하고, 현재 운영 기준은 `docs/CURRENT_SYSTEM_BASELINE.md`를 우선 참조합니다.
 
+### 2026-05-19 Google Sheets Repair Assistant · Confirmed Write Only
+
+- **Repair plan:** `GET /api/system/google-finance-setup`에 `repairPlan` additive (write 0).
+- **Apply:** `POST .../repair/apply` — `confirm: true`일 때만 portfolio_quotes 탭/헤더/수식 write.
+- **UI:** 수정 미리보기·confirm modal·수동 복사 fallback 유지.
+
+### 2026-05-18 Google Finance Setup UX Clarification
+
+- **탭 안내:** primary `portfolio_quotes` vs fallback(US_Anchor·시세·Quotes) · 탭별 found/missing/read_failed.
+- **샘플:** prefix GOOGLEFINANCE 수식 · portfolio_quotes 샘플 표 TSV 복사 · 행동 중심 7단계 점검 순서.
+- **Action Item:** `googleFinanceReadback.primaryTab` · `sampleTableIncluded` · SQL≠Sheets 안내.
+
 ### 2026-05-18 EVO-015-2 PB Daily Note Preview
 
 - **PB 초안:** `POST /api/daily-review/notes/generate-pb` (preview only, DB write 0) · deterministic note 기반 · LLM optional.

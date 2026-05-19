@@ -35,6 +35,13 @@
 - **대안:** PB LLM만 사용.
 - **링크:** `dailyReviewNotePreviewBuilder`, `pbDailyNotePreview`
 
+### 2026-05-19 — Google Sheets 자동 수정은 금지하고, confirmed repair만 허용한다
+
+- **결정:** 채택
+- **이유:** 탭/수식을 GET 점검 시 자동 백필하면 기존 사용자 데이터 손상 위험이 있다.
+- **대안:** GET 점검 시 자동 백필.
+- **링크:** Google Finance Setup Repair Assistant · `POST /api/system/google-finance-setup/repair/apply` · `docs/ops/google_finance_setup.md`
+
 ### 2026-05-18 — Google Finance Setup은 Sheets read-back과 fallback을 구분한다
 
 - **결정:** 채택

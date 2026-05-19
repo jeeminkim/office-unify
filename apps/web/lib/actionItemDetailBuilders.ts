@@ -168,6 +168,11 @@ export type GoogleFinanceSetupActionItemInput = {
   sampleFormulas: string[];
   overallQuoteSource: string;
   portfolioQuotesTab: { configuredName: string; readbackUnavailable: boolean };
+  tabGuide?: {
+    primaryTab: string;
+    fallbackTabs: string[];
+    tabActionHint?: string;
+  };
   usAnchor: {
     requested: number;
     summary: {
@@ -193,16 +198,22 @@ export function buildGoogleFinanceSetupActionItemDetail(
     notTradeInstruction: true,
     actionCategory: 'check_now',
     whyCreated: `Google Finance Sheets read-back ${s.sheetsAnchorOk}/${check.usAnchor.requested} · fallback only ${s.fallbackOnly}`,
-    confirmNow: ['portfolio_quotes tab', 'SPY/QQQ/TSLA 수식', 'Today Brief 재확인'],
+    confirmNow: [
+      `${check.tabGuide?.primaryTab ?? check.portfolioQuotesTab.configuredName} tab`,
+      '샘플 표 A1 붙여넣기',
+      'SPY/QQQ/TSLA price 확인',
+      'Today Brief 재확인',
+    ],
     checklist: [
-      { label: 'us_market_quotes / portfolio_quotes tab 존재 확인', source: 'google_finance_setup' },
-      { label: 'SPY/QQQ/TSLA 샘플 수식 직접 입력', source: 'google_finance_setup' },
-      { label: 'price 비면 ticker prefix 확인', source: 'google_finance_setup' },
-      { label: 'status 컬럼 ok 확인', source: 'google_finance_setup' },
-      { label: '시세 refresh 후 Today Brief 재확인', source: 'google_finance_setup' },
+      { label: 'portfolio_quotes 탭 존재 확인', source: 'google_finance_setup' },
+      { label: '샘플 표를 A1부터 붙여넣기', source: 'google_finance_setup' },
+      { label: 'SPY/QQQ/TSLA price 값 확인', source: 'google_finance_setup' },
+      { label: '앱에서 시세 새로고침 요청', source: 'google_finance_setup' },
+      { label: '상태 확인 후 Today Brief 재실행', source: 'google_finance_setup' },
     ],
     doNotDo: [
-      'Sheets read-back이 0개인 상태에서 미국 종목을 일반 후보로 판단하지 않기',
+      'Sheets OK가 0인 상태에서 미국 종목을 일반 관찰 후보로 판단하지 않기',
+      'SQL 문제로 단정하지 않기',
       'Yahoo fallback만으로 Google Finance 설정 완료로 보지 않기',
       '즉시 매수·매도·자동 주문 금지',
     ],
@@ -232,8 +243,15 @@ export function buildGoogleFinanceSetupActionItemDetail(
       missing: s.missing,
       rangeOrPermissionError: s.rangeOrPermissionError,
       expectedTabs: check.expectedTabs,
-      sampleFormulas: check.sampleFormulas.slice(0, 6),
+      sampleFormulas: check.sampleFormulas.slice(0, 8),
       failedTickers,
+      primaryTab: check.tabGuide?.primaryTab ?? check.portfolioQuotesTab.configuredName,
+      fallbackTabs: check.tabGuide?.fallbackTabs ?? [],
+      sampleTableIncluded: true,
+      recommendedNextStep:
+        s.sheetsAnchorOk === 0
+          ? 'portfolio_quotes 샘플 표 붙여넣기 → price 확인 → 시세 새로고침 → Today Brief'
+          : 'anchor OK 증가 여부 확인 후 Today Brief',
     },
   });
 }

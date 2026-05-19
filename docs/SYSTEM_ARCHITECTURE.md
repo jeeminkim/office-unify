@@ -88,6 +88,10 @@
 - `/api/system/sql-readiness` · UI `/ops/sql-readiness`
   - `docs/sql/APPLY_ORDER.md` registry 기반 **read-only** 테이블/컬럼/RPC 점검(PostgREST probe; 인덱스는 checkSqlPreview 수동)
   - SQL 자동 적용 없음 · missing은 degraded(장애 단정 아님)
+- `/api/system/google-finance-setup` · UI `/ops/google-finance-setup`
+  - GET: anchor·탭·`repairPlan` (**write 0**)
+  - `POST .../repair/apply`: `confirm: true`일 때만 `portfolio_quotes` 탭/헤더/수식 write (`overwrite` 기본 false)
+  - service account + `spreadsheets` scope · Editor 공유 필요 · secret 미노출
 - `/api/dashboard/overview`
   - 홈 대시보드 집계
   - NO_DATA / fallback 상태를 명시

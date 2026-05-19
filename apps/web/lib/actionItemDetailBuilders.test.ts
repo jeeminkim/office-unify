@@ -70,7 +70,9 @@ describe('actionItemDetailBuilders', () => {
     });
     expect(d.googleFinanceReadback?.sheetsAnchorOk).toBe(0);
     expect(d.googleFinanceReadback?.fallbackOnly).toBe(3);
-    expect(d.doNotDo?.some((x) => x.includes('read-back'))).toBe(true);
+    expect(d.googleFinanceReadback?.primaryTab).toBe('portfolio_quotes');
+    expect(d.googleFinanceReadback?.sampleTableIncluded).toBe(true);
+    expect(d.doNotDo?.some((x) => x.includes('SQL'))).toBe(true);
     expect(d.whyCreated).not.toMatch(/지금\s*매수|매수\s*추천/);
     expect(d.doNotDo?.some((x) => x.includes('자동 주문 금지'))).toBe(true);
   });

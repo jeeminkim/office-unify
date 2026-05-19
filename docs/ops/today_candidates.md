@@ -48,7 +48,7 @@ DDL 적용 순서: `docs/sql/APPLY_ORDER.md`
 - **`ensureUsMarketCheckInDeck` 슬롯 치환 제거:** 이전에는 `usDirectCandidates[0]`가 국내 `interest_stock` 슬롯을 밀어냈음 — 현재는 국내 3슬롯 우선.
 - US 보유·명시 관심은 「미국 데이터 점검」카드로만 표시 가능(매수 권유 문구 없음). `usCandidateDiagnostics.selectedUsCandidateCount`는 점검 카드 제외.
 - Google Finance read-back: US market anchor·개별 quote **검증**용. sector/theme 직접 제공은 불안정 → registry·수동 검토 병행.
-- **`/ops/google-finance-setup`**: Sheets read-back(`google_sheets_readback`)과 Yahoo **fallback only**를 구분 표시. fallback만 확인된 anchor는 **ok로 취급하지 않음** · 전체 `status: degraded` 가능.
+- **`/ops/google-finance-setup`**: Sheets read-back(`google_sheets_readback`)과 Yahoo **fallback only** 구분 · **1순위 탭 `portfolio_quotes`** vs 보조(US_Anchor·시세·Quotes) · 샘플 표 TSV·prefix 수식·행동 중심 점검 순서. fallback만 OK로 보지 않음.
 
 ### 미국 anchor 0/18 · Google Sheets 설정 점검 (additive)
 

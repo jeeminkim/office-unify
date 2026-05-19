@@ -31,6 +31,11 @@ export type GoogleFinanceReadbackSummary = {
   expectedTabs: string[];
   sampleFormulas: string[];
   failedTickers: string[];
+  /** additive: UX clarification */
+  primaryTab?: string;
+  fallbackTabs?: string[];
+  sampleTableIncluded?: boolean;
+  recommendedNextStep?: string;
 };
 
 export type ActionItemDetailJson = {

@@ -219,6 +219,45 @@ export async function syncGoogleFinanceQuoteSheetRows(holdings: HoldingInput[]):
   });
 }
 
+function inferMarketFromGoogleTicker(googleTicker: string, symbol: string): string {
+  const gt = googleTicker.trim().toUpperCase();
+  if (gt.startsWith('KRX:') || gt.startsWith('KOSDAQ:') || gt.startsWith('KOSPI:')) return 'KR';
+  if (/^\d{6}$/.test(symbol.trim())) return 'KR';
+  return 'US';
+}
+
+function isSimplifiedPortfolioQuotesHeader(firstCell: unknown): boolean {
+  return String(firstCell ?? '')
+    .trim()
+    .toLowerCase() === 'symbol';
+}
+
+function parseSimplifiedPortfolioQuoteRows(values: unknown[][]): GoogleFinanceQuoteRow[] {
+  const rows: GoogleFinanceQuoteRow[] = [];
+  for (const row of values) {
+    const symbol = googleSheetCellAsString(row[0]).toUpperCase();
+    const googleTicker = googleSheetCellAsString(row[1]).toUpperCase();
+    if (!symbol || symbol === 'SYMBOL') continue;
+    const market = inferMarketFromGoogleTicker(googleTicker, symbol);
+    const rawPrice = googleSheetCellAsString(row[2]);
+    const price = parseGoogleFinanceSheetNumber(row[2]);
+    const rowStatus = classifyRowStatus(rawPrice, price);
+    rows.push({
+      market,
+      symbol,
+      normalizedKey: normalizeQuoteKey(market, symbol),
+      googleTicker: googleTicker || toGoogleTickerLegacy(market, symbol),
+      rawPrice,
+      price,
+      tradetime: googleSheetCellAsString(row[6]) || undefined,
+      rawTradeTime: googleSheetCellAsString(row[6]) || undefined,
+      rowStatus,
+      message: messageForStatus(rowStatus),
+    });
+  }
+  return rows;
+}
+
 export async function readGoogleFinanceQuoteSheetRows(): Promise<{
   rows: GoogleFinanceQuoteRow[];
   fxRate?: number;
@@ -234,23 +273,15 @@ export async function readGoogleFinanceQuoteSheetRows(): Promise<{
   const id = spreadsheetId();
   if (!id) throw new Error('GOOGLE_SHEETS_SPREADSHEET_ID is not set');
   const tab = tabName();
-  let values: unknown[][];
+  let headerRow: unknown[] = [];
   try {
-    values = await sheetsValuesGet({
+    const headerPeek = await sheetsValuesGet({
       spreadsheetId: id,
-      rangeA1: buildA1Range(tab, 'A2:O500'),
-      valueRenderOption: 'UNFORMATTED_VALUE',
-      dateTimeRenderOption: 'FORMATTED_STRING',
-    });
-  } catch {
-    values = await sheetsValuesGet({
-      spreadsheetId: id,
-      rangeA1: buildA1Range(tab, 'A2:O500'),
+      rangeA1: buildA1Range(tab, 'A1:H1'),
       valueRenderOption: 'FORMATTED_VALUE',
-      dateTimeRenderOption: 'FORMATTED_STRING',
     });
-  }
-  if (values.length === 0) {
+    headerRow = headerPeek[0] ?? [];
+  } catch {
     return {
       rows: [],
       fxRate: undefined,
@@ -258,6 +289,54 @@ export async function readGoogleFinanceQuoteSheetRows(): Promise<{
       fxStatus: 'missing',
       readBackSucceeded: false,
       tabFound: false,
+      sheetName: tab,
+      spreadsheetIdConfigured: Boolean(id),
+      writeConfigured: Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim()),
+    };
+  }
+
+  const simplifiedLayout = isSimplifiedPortfolioQuotesHeader(headerRow[0]);
+  let values: unknown[][];
+  try {
+    values = await sheetsValuesGet({
+      spreadsheetId: id,
+      rangeA1: buildA1Range(tab, simplifiedLayout ? 'A2:H500' : 'A2:O500'),
+      valueRenderOption: 'UNFORMATTED_VALUE',
+      dateTimeRenderOption: 'FORMATTED_STRING',
+    });
+  } catch {
+    values = await sheetsValuesGet({
+      spreadsheetId: id,
+      rangeA1: buildA1Range(tab, simplifiedLayout ? 'A2:H500' : 'A2:O500'),
+      valueRenderOption: 'FORMATTED_VALUE',
+      dateTimeRenderOption: 'FORMATTED_STRING',
+    });
+  }
+
+  if (simplifiedLayout) {
+    const rows = parseSimplifiedPortfolioQuoteRows(values);
+    return {
+      rows,
+      fxRate: undefined,
+      fxRawPrice: undefined,
+      fxRowDetail: undefined,
+      fxStatus: 'missing',
+      readBackSucceeded: rows.some((row) => row.price != null && row.price > 0),
+      tabFound: true,
+      sheetName: tab,
+      spreadsheetIdConfigured: Boolean(id),
+      writeConfigured: Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim()),
+    };
+  }
+
+  if (values.length === 0) {
+    return {
+      rows: [],
+      fxRate: undefined,
+      fxRawPrice: undefined,
+      fxStatus: 'missing',
+      readBackSucceeded: false,
+      tabFound: true,
       sheetName: tab,
       spreadsheetIdConfigured: Boolean(id),
       writeConfigured: Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim()),

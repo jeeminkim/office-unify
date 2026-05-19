@@ -64,8 +64,10 @@ npm run pre-live-smoke --workspace=apps/web
 - [ ] `/portfolio` 「보유 현황」·`/portfolio-ledger` 「보유/거래 원장」 역할 설명 배너.
 - [ ] `/watchlist` 섹터 미리보기(DB write 0)·ready_to_apply 적용(confirm)·already_matched 기본 적용 제외.
 - [ ] `/watchlist` google_ticker/quote_symbol 필터·no_match Action Item.
-- [ ] `/ops/google-finance-setup` Sheets read-back OK vs Fallback only 구분 · anchor 0 시 gating 문구.
-- [ ] `/ops/google-finance-setup` sample formula 복사(SPY/QQQ/TSLA 등) · Action Item에 readback summary · `GET /api/system/google-finance-setup` read-only.
+- [ ] `/ops/google-finance-setup` 1순위 탭 `portfolio_quotes` vs 보조 탭(US_Anchor·시세·Quotes) 구분 · 탭별 found/missing 표시.
+- [ ] `portfolio_quotes 샘플 표 복사` → Sheets A1 붙여넣기 · prefix 수식(NYSEARCA/NASDAQ) · Fallback only ≠ OK.
+- [ ] Repair Assistant: GET write 0 · apply는 confirm 후만 · service account Editor · 기존 셀 덮어쓰기 없음.
+- [ ] 행동 순서: 샘플 표 또는 Repair apply → price 확인 → 시세 새로고침 → 상태 확인 → Today Brief · API는 접기 영역.
 - [ ] 외부 보유 import·금융 로그인 UI **추가되지 않음**.
 
 ## 3b. US data setup · Action Step Runner · Long response fallback
