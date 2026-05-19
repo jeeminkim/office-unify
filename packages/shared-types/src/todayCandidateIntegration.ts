@@ -37,6 +37,10 @@ export type UsCandidateDiagnostics = {
   }>;
   /** additive: Google Sheets / GOOGLEFINANCE 설정 점검 가이드 */
   setupDiagnosis?: UsCandidateSetupDiagnosis;
+  /** additive: Setup read-back vs Today Brief gating */
+  googleFinanceAnchorSummary?: import('./googleFinanceSetup').GoogleFinanceAnchorSummaryForGating;
+  /** additive: US degraded 원인 구분 */
+  gatingReason?: import('./googleFinanceSetup').UsCandidateGoogleFinanceGatingReason;
 };
 
 export type UsCandidateSetupRootCause =

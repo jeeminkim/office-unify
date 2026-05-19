@@ -17,6 +17,18 @@ export const PORTFOLIO_QUOTES_REQUIRED_ANCHORS: Array<{ symbol: string; googleTi
   { symbol: 'NFLX', googleTicker: 'NASDAQ:NFLX' },
 ];
 
+/** US registry + 필수 단일주 — append_missing_anchor_rows 대상 (symbol 기준 dedupe). */
+export function buildRepairAppendAnchors(): Array<{ symbol: string; googleTicker: string }> {
+  const bySymbol = new Map<string, { symbol: string; googleTicker: string }>();
+  for (const a of US_MARKET_SEED_ANCHORS) {
+    bySymbol.set(a.quoteSymbol, { symbol: a.quoteSymbol, googleTicker: a.googleTicker });
+  }
+  for (const a of PORTFOLIO_QUOTES_REQUIRED_ANCHORS) {
+    if (!bySymbol.has(a.symbol)) bySymbol.set(a.symbol, a);
+  }
+  return [...bySymbol.values()];
+}
+
 const EXTRA_ANCHOR_TICKER_ALIASES: Record<string, string[]> = {
   SMH: ['NYSEARCA:SMH'],
   SOXX: ['NYSEARCA:SOXX'],
@@ -108,16 +120,19 @@ export function existingSheetSymbolsFromRows(rows: GoogleFinanceQuoteRow[]): Set
   return out;
 }
 
+function toSeed(anchor: { symbol: string; googleTicker: string }): PortfolioQuotesAnchorSeed {
+  return {
+    key: anchor.symbol,
+    quoteSymbol: anchor.symbol,
+    googleTicker: anchor.googleTicker,
+    label: anchor.symbol,
+  } as PortfolioQuotesAnchorSeed;
+}
+
 export function missingRequiredAnchors(rows: GoogleFinanceQuoteRow[]): Array<{ symbol: string; googleTicker: string }> {
   const missing: Array<{ symbol: string; googleTicker: string }> = [];
-  for (const anchor of PORTFOLIO_QUOTES_REQUIRED_ANCHORS) {
-    const seed = {
-      key: anchor.symbol,
-      quoteSymbol: anchor.symbol,
-      googleTicker: anchor.googleTicker,
-      label: anchor.symbol,
-    } as PortfolioQuotesAnchorSeed;
-    if (!findSheetRowForAnchor(rows, seed)) missing.push(anchor);
+  for (const anchor of buildRepairAppendAnchors()) {
+    if (!findSheetRowForAnchor(rows, toSeed(anchor))) missing.push(anchor);
   }
   return missing;
 }

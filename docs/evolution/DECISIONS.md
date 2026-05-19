@@ -42,6 +42,13 @@
 - **대안:** GET 점검 시 자동 백필.
 - **링크:** Google Finance Setup Repair Assistant · `POST /api/system/google-finance-setup/repair/apply` · `docs/ops/google_finance_setup.md`
 
+### 2026-05-19 — Google Finance Setup은 Anchor Recovery Flow로 복구 단계를 노출한다
+
+- **결정:** 채택
+- **이유:** failed만 보이면 사용자가 다음 행동(보강·대기·refresh·Brief)을 알기 어렵다. anchorMatched vs anchorOk를 분리해 GOOGLEFINANCE 대기와 gating 문제를 구분해야 한다.
+- **대안:** 단일 failed 상태와 수동 시트 편집 안내만 유지.
+- **링크:** `anchorRecovery` · `GoogleFinanceSetupClient` · `docs/ops/google_finance_setup.md`
+
 ### 2026-05-19 — portfolio_quotes simplified layout을 anchor read-back 소스로 인정한다
 
 - **결정:** 채택

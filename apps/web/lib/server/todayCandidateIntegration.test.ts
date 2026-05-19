@@ -78,6 +78,25 @@ describe('US candidate diagnostics', () => {
     expect(diag.poolUsDirectCount).toBeGreaterThan(0);
     expect(diag.topRejectReasons).toContain('quote_missing');
     expect(diag.topSuppressReasons).toContain('us_slot_limited');
+  });
+
+  it('anchorOk > 0 does not report sheets_anchor_zero gating', () => {
+    const diag = buildUsCandidateDiagnostics({
+      usMarketSummary: { ...emptyUsSummary, available: true, signals: [] } as never,
+      userUsWatchlistCount: 2,
+      userUsHoldingCount: 0,
+      pool: [],
+      usDirectCandidates: [],
+      usKrMappedCandidates: [],
+      selectedDeck: [],
+      googleFinanceAnchorSummary: {
+        sheetsAnchorOk: 3,
+        anchorMatched: 4,
+        quoteSource: 'google_sheets_readback',
+      },
+    });
+    expect(diag.gatingReason).not.toBe('sheets_anchor_zero');
+    expect(diag.googleFinanceAnchorSummary?.sheetsAnchorOk).toBe(3);
     expect(diag.actionHint).toBeTruthy();
   });
 

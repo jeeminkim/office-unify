@@ -16,7 +16,16 @@ vi.mock('@/lib/server/google-sheets-api', () => ({
 
 vi.mock('@/lib/server/googleFinanceSetupCheck', () => ({
   runGoogleFinanceSetupCheck: vi.fn(async () => ({
-    usAnchor: { summary: { sheetsAnchorOk: 2, missing: 16 } },
+    usAnchor: {
+      summary: {
+        sheetsAnchorOk: 2,
+        missing: 16,
+        parsedRowsOk: 5,
+        sheetsAnchorMatched: 3,
+        missingAnchorSymbols: ['SPY'],
+      },
+    },
+    anchorRecovery: { nextStep: 'wait and refresh' },
     actionHint: 'post-check hint',
   })),
 }));

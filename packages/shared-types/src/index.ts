@@ -349,6 +349,16 @@ export type {
   WatchlistRecommendationCandidateSourceRef,
 } from './todayCandidateIntegration';
 export type {
+  GoogleFinanceAnchorIssue,
+  GoogleFinanceAnchorRecovery,
+  GoogleFinanceAnchorRecoveryStatus,
+  GoogleFinanceAnchorRecoveryStepKey,
+  GoogleFinanceAnchorRecoveryStepStatus,
+  GoogleFinanceAnchorSummaryForGating,
+  GoogleFinanceRepairPostCheck,
+  UsCandidateGoogleFinanceGatingReason,
+} from './googleFinanceSetup';
+export type {
   PersonaPortfolioContextStructured,
   PersonaRole,
   PersonaScoreAdjustmentSuggestion,

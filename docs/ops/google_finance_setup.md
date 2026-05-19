@@ -33,8 +33,22 @@
 - 화면의 「portfolio_quotes 샘플 표 복사」로 A1 붙여넣기 가능
 - Repair write 불가·unsafe plan일 때 수동 적용 권장
 
+## Anchor Recovery Flow
+
+- GET 응답 `anchorRecovery`: 복구 상태·진단·다음 행동·단계(repair → 대기 → refresh → 재확인 → Today Brief).
+- **anchorMatched**: 시트 행이 registry anchor와 매칭된 수. **anchorOk**: price/status read-back이 OK인 수.
+- apply 후 `postCheck`: parsedRowsOk / anchorMatched / anchorOk / recommendedNextAction.
+- UI: 버튼 클릭 즉시 피드백·중복 클릭 방지·적용 후 60초 권장 대기(자동 refresh 없음).
+
+## Today Brief gating
+
+- Sheets anchor OK와 Today Candidate US 노출은 별도입니다.
+- `usCandidateDiagnostics.googleFinanceAnchorSummary`·`gatingReason`으로 degraded 사유 구분.
+- read-back OK인데 Brief가 `sheets_anchor_zero`이면 refresh 후 Brief 재실행.
+
 ## 점검 순서
 
-1. `portfolio_quotes` 탭·헤더·price 확인  
-2. 시세 새로고침 → 상태 확인 → Today Brief  
-3. anchor 0/18이면 Action Item으로 설정 점검 저장  
+1. 안전 보강 적용(confirm) → 1분 대기  
+2. 시세 새로고침 → 상태 다시 확인  
+3. Sheets anchor OK 증가 확인 → Today Brief 재실행  
+4. anchor 0/18이면 Action Item으로 설정 점검 저장  

@@ -1,6 +1,10 @@
 import 'server-only';
 
-import type { UsCandidateDiagnostics } from '@office-unify/shared-types';
+import type {
+  GoogleFinanceAnchorSummaryForGating,
+  UsCandidateDiagnostics,
+  UsCandidateGoogleFinanceGatingReason,
+} from '@office-unify/shared-types';
 import type { TodayStockCandidate, UsMarketMorningSummary } from '@/lib/todayCandidatesContract';
 import { buildUsSetupDiagnosis } from '@/lib/server/usSetupDiagnosis';
 import type { CandidateDecisionTrace } from '@office-unify/shared-types';
@@ -36,6 +40,40 @@ function isUsDataCheckCard(c: TodayStockCandidate): boolean {
   );
 }
 
+export function deriveUsCandidateGatingReason(input: {
+  sheetsAnchorOk: number;
+  usMarketSummaryStatus: UsCandidateDiagnostics['usMarketSummaryStatus'];
+  usMarketAvailable: boolean;
+  usSignalCount: number;
+  selectedUsCount: number;
+  poolUsCount: number;
+  quoteMissingCount: number;
+  fetchFailed: boolean;
+}): UsCandidateGoogleFinanceGatingReason | undefined {
+  const { sheetsAnchorOk, usMarketSummaryStatus, usMarketAvailable, usSignalCount, selectedUsCount, poolUsCount, quoteMissingCount, fetchFailed } =
+    input;
+
+  if (sheetsAnchorOk === 0) {
+    if (fetchFailed || usMarketSummaryStatus === 'failed') return 'quote_provider_failed';
+    return 'sheets_anchor_zero';
+  }
+
+  if (sheetsAnchorOk > 0 && selectedUsCount === 0 && poolUsCount === 0) {
+    if (!usMarketAvailable || usSignalCount === 0) return 'sheets_anchor_ok_but_us_signal_empty';
+    return 'gating_not_connected';
+  }
+
+  if (sheetsAnchorOk > 0 && quoteMissingCount > 0 && selectedUsCount === 0) {
+    return 'us_signal_mapping_empty';
+  }
+
+  if (sheetsAnchorOk > 0 && usMarketSummaryStatus === 'degraded' && selectedUsCount === 0) {
+    return 'gating_not_connected';
+  }
+
+  return undefined;
+}
+
 export function buildUsCandidateDiagnostics(input: {
   usMarketSummary: UsMarketMorningSummary;
   userUsWatchlistCount: number;
@@ -47,6 +85,8 @@ export function buildUsCandidateDiagnostics(input: {
   suppressedTraces?: CandidateDecisionTrace[];
   rejectedTraces?: CandidateDecisionTrace[];
   seedSymbolCount?: number;
+  /** additive: latest Google Finance setup read-back snapshot */
+  googleFinanceAnchorSummary?: GoogleFinanceAnchorSummaryForGating;
 }): UsCandidateDiagnostics {
   const diag = input.usMarketSummary.diagnostics;
   const quoteOk = input.pool.filter((c) => c.dataQuality?.quoteReady !== false).length;
@@ -133,6 +173,28 @@ export function buildUsCandidateDiagnostics(input: {
     },
   ];
 
+  const sheetsAnchorOk =
+    input.googleFinanceAnchorSummary?.sheetsAnchorOk ??
+    (diag?.yahooQuoteResultCount && !diag.fetchFailed ? diag.yahooQuoteResultCount : 0);
+
+  const gatingReason = deriveUsCandidateGatingReason({
+    sheetsAnchorOk,
+    usMarketSummaryStatus,
+    usMarketAvailable: input.usMarketSummary.available,
+    usSignalCount: input.usMarketSummary.signals?.length ?? 0,
+    selectedUsCount: selectedUs.length,
+    poolUsCount: poolUs.length,
+    quoteMissingCount: quoteMissing,
+    fetchFailed: Boolean(diag?.fetchFailed),
+  });
+
+  const effectiveGatingReason =
+    input.googleFinanceAnchorSummary &&
+    input.googleFinanceAnchorSummary.sheetsAnchorOk > 0 &&
+    gatingReason === 'sheets_anchor_zero'
+      ? 'gating_not_connected'
+      : gatingReason;
+
   const base: UsCandidateDiagnostics = {
     status,
     remediationSteps,
@@ -159,7 +221,27 @@ export function buildUsCandidateDiagnostics(input: {
       maxUsCandidateTarget: 1,
     },
     actionHint,
+    googleFinanceAnchorSummary: input.googleFinanceAnchorSummary
+      ? { ...input.googleFinanceAnchorSummary, gatingReason: effectiveGatingReason }
+      : effectiveGatingReason
+        ? {
+            sheetsAnchorOk,
+            anchorMatched: sheetsAnchorOk,
+            quoteSource: sheetsAnchorOk > 0 ? 'google_sheets_readback' : 'yahoo_fallback',
+            gatingReason: effectiveGatingReason,
+          }
+        : undefined,
+    gatingReason: effectiveGatingReason,
   };
+
+  if (
+    input.googleFinanceAnchorSummary &&
+    input.googleFinanceAnchorSummary.sheetsAnchorOk > 0 &&
+    effectiveGatingReason === 'gating_not_connected'
+  ) {
+    base.actionHint =
+      'Google Finance read-back은 확인됐지만 Today Candidate gating이 최신 상태를 사용하지 못하고 있을 수 있습니다. 시세 refresh 후 Today Brief를 다시 실행하세요.';
+  }
 
   if (status !== 'ok' || anchorOk < anchorRequested) {
     base.setupDiagnosis = buildUsSetupDiagnosis({

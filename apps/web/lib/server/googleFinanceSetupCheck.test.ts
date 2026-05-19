@@ -43,6 +43,8 @@ describe('runGoogleFinanceSetupCheck', () => {
     expect(out.repairPlan).toBeDefined();
     expect(out.repairPlan.requiresConfirmation).toBe(true);
     expect(out.repairModeNote).toMatch(/confirmed|read-only/i);
+    expect(out.anchorRecovery).toBeDefined();
+    expect(out.recoveryHeadline).toBeTruthy();
   });
 
   it('returns prefix sample formulas and readOnly when not configured', async () => {

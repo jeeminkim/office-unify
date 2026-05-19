@@ -2,11 +2,14 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import type { GoogleFinanceAnchorRecovery, GoogleFinanceRepairPostCheck } from "@office-unify/shared-types";
+import { ActionStatusBanner } from "@/components/ActionStatusBanner";
 import { SaveToActionInboxButton } from "@/components/SaveToActionInboxButton";
 import {
   buildGoogleFinanceSetupActionItemDetail,
   type GoogleFinanceSetupActionItemInput,
 } from "@/lib/actionItemDetailBuilders";
+import { useGoogleFinanceSetupActions, usePostApplyWaitTimer } from "./useGoogleFinanceSetupActions";
 
 type TabProbe = {
   name: string;
@@ -69,8 +72,17 @@ type SetupPayload = {
       source: string;
       actionHint?: string;
       ok: boolean;
+      rowNumber?: number;
+      priceValue?: number;
+      statusCell?: string;
+      issue?: string;
+      formulaPresent?: boolean;
+      formulaLooksValid?: boolean;
+      formulaNote?: string;
     }>;
   };
+  anchorRecovery?: GoogleFinanceAnchorRecovery;
+  recoveryHeadline?: string;
   usMarketGatingNote: string;
   sampleFormulas: string[];
   sampleFormulasUnprefixed: string[];
@@ -128,8 +140,9 @@ type ApplyResult = {
   ok: boolean;
   status: string;
   appliedOperations: string[];
+  appendedAnchorSymbols?: string[];
   skippedOperations: Array<{ operationId: string; reason: string }>;
-  postCheck?: { sheetsOkCount: number; missingCount: number; actionHint: string };
+  postCheck?: GoogleFinanceRepairPostCheck;
 };
 
 function ymdSeoul(): string {
@@ -183,12 +196,13 @@ export function GoogleFinanceSetupClient() {
   const [data, setData] = useState<SetupPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [copyHint, setCopyHint] = useState<string | null>(null);
   const [devOpen, setDevOpen] = useState(false);
   const [unprefixedOpen, setUnprefixedOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [applyLoading, setApplyLoading] = useState(false);
   const [applyResult, setApplyResult] = useState<ApplyResult | null>(null);
+  const { statusMessage, duplicateMessage, actionLogs, runAction, isRunning, setStatusMessage } =
+    useGoogleFinanceSetupActions();
+  const { secondsLeft, ready: waitTimerReady } = usePostApplyWaitTimer(Boolean(applyResult?.ok));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -200,6 +214,7 @@ export function GoogleFinanceSetupClient() {
       setData(json);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "조회 실패");
+      throw e;
     } finally {
       setLoading(false);
     }
@@ -209,14 +224,17 @@ export function GoogleFinanceSetupClient() {
     void load();
   }, [load]);
 
-  const copyText = async (text: string, label: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopyHint(`${label} 복사됨`);
-    } catch {
-      setCopyHint("복사 실패");
-    }
-  };
+  const copyText = useCallback(
+    async (text: string, label: string) => {
+      await runAction(
+        { key: `copy:${label}`, label: `${label} 복사` },
+        async () => {
+          await navigator.clipboard.writeText(text);
+        },
+      );
+    },
+    [runAction],
+  );
 
   const statusColor =
     data?.status === "ok"
@@ -226,35 +244,57 @@ export function GoogleFinanceSetupClient() {
         : "border-red-300 bg-red-50";
 
   const summary = data?.usAnchor.summary;
+  const recovery = data?.anchorRecovery;
   const repair = data?.repairPlan ?? EMPTY_REPAIR_PLAN;
   const repairOps = repair.operations.filter((o) => o.type !== "no_op");
+  const applyRunning = isRunning("repair_apply");
 
-  const runRepairApply = async () => {
-    setApplyLoading(true);
-    setApplyResult(null);
-    try {
-      const res = await fetch("/api/system/google-finance-setup/repair/apply", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          confirm: true,
-          idempotencyKey: `repair:${ymdSeoul()}`,
-        }),
-      });
-      const json = (await res.json()) as ApplyResult & { error?: string };
-      if (!res.ok && json.status !== "write_not_available") {
-        throw new Error(json.error ?? `HTTP ${res.status}`);
-      }
-      setApplyResult(json);
-      setConfirmOpen(false);
-      if (json.ok) void load();
-    } catch (e: unknown) {
-      setCopyHint(e instanceof Error ? e.message : "Repair 적용 실패");
-    } finally {
-      setApplyLoading(false);
-    }
-  };
+  const runLoad = () =>
+    runAction(
+      { key: "setup_recheck", label: "상태 다시 확인", nextHint: "Sheets anchor OK·recovery 단계를 확인하세요." },
+      () => load(),
+    );
+
+  const runQuoteRefresh = () =>
+    runAction(
+      {
+        key: "quote_refresh",
+        label: "시세 새로고침 요청",
+        nextHint: "약 1분 후 상태 다시 확인을 누르세요.",
+      },
+      async () => {
+        const res = await fetch("/api/portfolio/quotes/refresh", { method: "POST", credentials: "same-origin" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      },
+    );
+
+  const runRepairApply = () =>
+    runAction(
+      {
+        key: "repair_apply",
+        label: "안전 보강 적용",
+        nextHint: "GOOGLEFINANCE 계산 대기 후 시세 새로고침 → 상태 확인 순서로 진행하세요.",
+      },
+      async () => {
+        setApplyResult(null);
+        const res = await fetch("/api/system/google-finance-setup/repair/apply", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            confirm: true,
+            idempotencyKey: `repair:${ymdSeoul()}`,
+          }),
+        });
+        const json = (await res.json()) as ApplyResult & { error?: string };
+        if (!res.ok && json.status !== "write_not_available") {
+          throw new Error(json.error ?? `HTTP ${res.status}`);
+        }
+        setApplyResult(json);
+        setConfirmOpen(false);
+        if (json.ok) await load();
+      },
+    );
 
   return (
     <div className="mx-auto max-w-3xl p-4 pb-20 md:p-6">
@@ -266,19 +306,21 @@ export function GoogleFinanceSetupClient() {
       </p>
 
       <div className="mt-3 flex flex-wrap gap-2">
-        <button type="button" className="rounded border px-2 py-1 text-xs" disabled={loading} onClick={() => void load()}>
-          {loading ? "확인 중…" : "상태 다시 확인 (read-only)"}
+        <button
+          type="button"
+          className={`rounded border px-2 py-1 text-xs ${waitTimerReady ? "border-violet-500 ring-2 ring-violet-300" : ""}`}
+          disabled={loading || isRunning("setup_recheck")}
+          onClick={() => void runLoad()}
+        >
+          {loading || isRunning("setup_recheck") ? "확인 중…" : "상태 다시 확인"}
         </button>
         <button
           type="button"
           className="rounded border border-blue-400 bg-blue-50 px-2 py-1 text-xs text-blue-950"
-          onClick={() => {
-            void fetch("/api/portfolio/quotes/refresh", { method: "POST", credentials: "same-origin" }).then(() =>
-              setCopyHint("시세 새로고침 요청을 보냈습니다. 1분 후 「시세 상태 확인」을 눌러주세요."),
-            );
-          }}
+          disabled={isRunning("quote_refresh")}
+          onClick={() => void runQuoteRefresh()}
         >
-          시세 새로고침 요청
+          {isRunning("quote_refresh") ? "요청 중…" : "시세 새로고침 요청"}
         </button>
         <a
           href="/api/portfolio/quotes/status"
@@ -288,17 +330,29 @@ export function GoogleFinanceSetupClient() {
         >
           시세 상태 확인
         </a>
-        <Link href="/" className="rounded border px-2 py-1 text-xs">
-          Today Brief
+        <Link
+          href="/"
+          className="rounded border px-2 py-1 text-xs"
+          onClick={() => setStatusMessage("Today Brief 페이지로 이동합니다.")}
+        >
+          Today Brief 다시 실행
         </Link>
       </div>
 
+      <ActionStatusBanner statusMessage={statusMessage} duplicateMessage={duplicateMessage} logs={actionLogs} />
+
       {error ? <p className="mt-2 text-xs text-red-700">{error}</p> : null}
-      {copyHint ? <p className="mt-1 text-[10px] text-slate-600">{copyHint}</p> : null}
 
       {data ? (
         <section className={`mt-4 rounded-lg border p-3 text-xs ${statusColor}`}>
-          <p className="font-semibold">현재 상태: {data.status}</p>
+          <p className="font-semibold">{data.recoveryHeadline ?? `현재 상태: ${data.status}`}</p>
+          {recovery ? (
+            <div className="mt-2 rounded border border-violet-200 bg-violet-50/60 p-2 text-[11px] text-violet-950">
+              <p className="font-medium">{recovery.recoveryLabel}</p>
+              <p className="mt-1">{recovery.diagnosis}</p>
+              <p className="mt-1 font-medium">다음 행동: {recovery.nextStep}</p>
+            </div>
+          ) : null}
           <p className="mt-2 rounded bg-white/70 p-2 text-[11px] leading-relaxed">{data.sqlVsSheetsNote}</p>
           <p className="mt-2 font-medium text-slate-800">{data.statusNarrative}</p>
           <p className="mt-1 text-slate-700">{data.actionHint}</p>
@@ -344,6 +398,31 @@ export function GoogleFinanceSetupClient() {
             </p>
           ) : null}
           <p className="mt-2 text-[10px] text-slate-600">{data?.usMarketGatingNote}</p>
+        </section>
+      ) : null}
+
+      {recovery ? (
+        <section className="mt-4 rounded-lg border border-indigo-200 bg-indigo-50/40 p-3 text-xs">
+          <h2 className="font-semibold text-indigo-950">Anchor Recovery 단계</h2>
+          <ol className="mt-2 space-y-1.5">
+            {recovery.steps.map((s) => (
+              <li
+                key={s.stepKey}
+                className={`rounded border px-2 py-1 ${
+                  s.status === "done"
+                    ? "border-emerald-200 bg-emerald-50"
+                    : s.status === "todo"
+                      ? "border-amber-200 bg-amber-50"
+                      : s.status === "blocked"
+                        ? "border-slate-300 bg-slate-100 opacity-70"
+                        : "border-slate-200 bg-white"
+                }`}
+              >
+                <span className="font-medium">{s.label}</span>
+                <span className="ml-2 text-[10px] text-slate-600">({s.status})</span>
+              </li>
+            ))}
+          </ol>
         </section>
       ) : null}
 
@@ -396,16 +475,26 @@ export function GoogleFinanceSetupClient() {
         )}
         <p className="mt-2 text-[10px]">{repair.actionHint}</p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <button type="button" className="rounded border px-2 py-1" disabled={loading} onClick={() => void load()}>
-            수정 미리보기 새로고침
+          <button
+            type="button"
+            className="rounded border px-2 py-1 disabled:opacity-50"
+            disabled={loading || isRunning("repair_preview")}
+            onClick={() =>
+              void runAction({ key: "repair_preview", label: "수정 미리보기 새로고침" }, () => load())
+            }
+          >
+            {isRunning("repair_preview") ? "새로고침 중…" : "수정 미리보기 새로고침"}
           </button>
           <button
             type="button"
             className="rounded border border-violet-600 bg-violet-700 px-3 py-1 text-white disabled:opacity-50"
-            disabled={!repair.writeAvailable || applyLoading || repairOps.length === 0}
-            onClick={() => setConfirmOpen(true)}
+            disabled={!repair.writeAvailable || applyRunning}
+            onClick={() => {
+              setStatusMessage("「안전 보강 적용」 버튼이 눌렸습니다. 확인 후 적용하세요.");
+              setConfirmOpen(true);
+            }}
           >
-            {applyLoading ? "적용 중…" : "안전 보강 적용"}
+            {applyRunning ? "적용 중…" : "안전 보강 적용"}
           </button>
           <button
             type="button"
@@ -418,12 +507,14 @@ export function GoogleFinanceSetupClient() {
         </div>
         {confirmOpen ? (
           <div className="mt-3 rounded border border-amber-300 bg-amber-50 p-2 text-[10px]">
-            <p>
-              표시된 operation(탭 생성·헤더·샘플 수식·누락 anchor 행 append)만 1회 적용합니다. confirm 없이는 write하지
-              않으며, 기존 셀은 덮어쓰지 않습니다. 계속할까요?
-            </p>
+            <p>Google Sheets에 누락된 탭/헤더/anchor 행을 보강합니다. 기존 값은 덮어쓰지 않습니다. 계속할까요?</p>
             <div className="mt-2 flex gap-2">
-              <button type="button" className="rounded bg-violet-700 px-2 py-1 text-white" onClick={() => void runRepairApply()}>
+              <button
+                type="button"
+                className="rounded bg-violet-700 px-2 py-1 text-white disabled:opacity-50"
+                disabled={applyRunning}
+                onClick={() => void runRepairApply()}
+              >
                 적용
               </button>
               <button type="button" className="rounded border px-2 py-1" onClick={() => setConfirmOpen(false)}>
@@ -433,22 +524,48 @@ export function GoogleFinanceSetupClient() {
           </div>
         ) : null}
         {applyResult ? (
-          <ol className="mt-3 list-decimal space-y-1 pl-5 text-[10px] leading-relaxed">
-            <li>Google Sheets에 수식/행이 반영되었습니다.</li>
-            <li>GOOGLEFINANCE 계산에는 시간이 걸릴 수 있습니다 (약 1분).</li>
-            <li>1분 후 상단 「시세 새로고침 요청」을 누르세요.</li>
-            <li>「상태 다시 확인」으로 Sheets anchor OK가 늘었는지 확인하세요.</li>
-            <li>
-              그래도 0이면: service account 편집 권한, Google Finance 수식 결과, tab/range, anchor matching 경고를
-              확인하세요.
-            </li>
-            {applyResult.postCheck ? (
-              <li className="text-violet-900">
-                적용 직후 점검: Sheets OK {applyResult.postCheck.sheetsOkCount} · missing{" "}
-                {applyResult.postCheck.missingCount} — {applyResult.postCheck.actionHint}
-              </li>
+          <div className="mt-3 rounded-lg border border-emerald-300 bg-emerald-50/80 p-3 text-[10px] leading-relaxed">
+            <p className="font-semibold text-emerald-950">적용 결과 (post-check)</p>
+            <p className="mt-1">적용 operation: {applyResult.appliedOperations.join(", ") || "(없음)"}</p>
+            {applyResult.appendedAnchorSymbols?.length ? (
+              <p className="mt-1">append된 anchor: {applyResult.appendedAnchorSymbols.join(", ")}</p>
             ) : null}
-          </ol>
+            {applyResult.skippedOperations.length > 0 ? (
+              <p className="mt-1 text-amber-900">
+                skip: {applyResult.skippedOperations.map((s) => `${s.operationId}(${s.reason})`).join("; ")}
+              </p>
+            ) : null}
+            {applyResult.postCheck ? (
+              <div className="mt-2 rounded bg-white/80 p-2">
+                <p>
+                  parsedRowsOk {applyResult.postCheck.parsedRowsOk} · anchorMatched {applyResult.postCheck.anchorMatched}{" "}
+                  · anchorOk {applyResult.postCheck.anchorOk}
+                </p>
+                <p className="mt-1">{applyResult.postCheck.recommendedNextAction}</p>
+              </div>
+            ) : null}
+            <p className="mt-2">GOOGLEFINANCE 계산에는 시간이 걸릴 수 있습니다.</p>
+            {secondsLeft > 0 ? (
+              <p className="mt-1 font-medium text-violet-900">권장 대기: {secondsLeft}초</p>
+            ) : (
+              <p className="mt-1 font-medium text-violet-900">권장 대기 완료 — 「상태 다시 확인」을 눌러주세요.</p>
+            )}
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button type="button" className="rounded border px-2 py-1" onClick={() => void runQuoteRefresh()}>
+                시세 새로고침 요청
+              </button>
+              <button
+                type="button"
+                className={`rounded border px-2 py-1 ${waitTimerReady ? "border-violet-600 bg-violet-100 font-medium" : ""}`}
+                onClick={() => void runLoad()}
+              >
+                상태 다시 확인
+              </button>
+              <Link href="/" className="rounded border px-2 py-1">
+                Today Brief 다시 실행
+              </Link>
+            </div>
+          </div>
         ) : null}
       </section>
 
@@ -587,6 +704,11 @@ export function GoogleFinanceSetupClient() {
                     <p className="font-medium">
                       {r.label} ({r.googleTicker}) — {sourceBadge(r)}
                     </p>
+                    <p className="mt-0.5 text-[10px] text-slate-600">
+                      row {r.rowNumber ?? "—"} · price {r.priceValue ?? "—"} · status {r.statusCell ?? "—"} · issue{" "}
+                      {r.issue ?? "—"}
+                    </p>
+                    {r.formulaNote ? <p className="text-[10px] text-slate-500">{r.formulaNote}</p> : null}
                     <p className="mt-0.5 font-mono text-[10px] text-slate-600">{r.expectedFormula}</p>
                     {r.actionHint ? <p className="mt-0.5 text-[10px] text-slate-600">{r.actionHint}</p> : null}
                   </li>

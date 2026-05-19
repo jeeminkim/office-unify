@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { GoogleFinanceAnchorIssue, GoogleFinanceAnchorRecovery } from '@office-unify/shared-types';
 import { getSpreadsheetSheets } from '@/lib/server/google-sheets-api';
 import { US_MARKET_SEED_ANCHORS, fetchUsMarketYahooQuoteMap } from '@/lib/server/usMarketMorningSummary';
 import {
@@ -8,6 +9,11 @@ import {
   type GoogleFinanceQuoteRow,
 } from '@/lib/server/googleFinanceSheetQuoteService';
 import { buildGoogleSheetsRepairPlan, type GoogleSheetsRepairPlan } from '@/lib/server/googleSheetsRepair';
+import { classifyAnchorIssue } from '@/lib/server/googleFinanceAnchorIssue';
+import {
+  buildGoogleFinanceAnchorRecovery,
+  recoveryStatusHeadline,
+} from '@/lib/server/googleFinanceAnchorRecovery';
 import {
   findSheetRowForAnchor,
   isPortfolioQuoteRowReadbackOk,
@@ -60,6 +66,14 @@ export type GoogleFinanceAnchorResult = {
   actionHint?: string;
   /** @deprecated use readbackStatus + source — Sheets read-back OK only */
   ok: boolean;
+  /** additive: Sheets row (simplified layout) */
+  rowNumber?: number;
+  priceValue?: number;
+  statusCell?: string;
+  issue?: GoogleFinanceAnchorIssue;
+  formulaPresent?: boolean;
+  formulaLooksValid?: boolean;
+  formulaNote?: string;
 };
 
 export type GoogleFinanceSetupCheckResult = {
@@ -121,6 +135,10 @@ export type GoogleFinanceSetupCheckResult = {
   /** Confirmed write only — plan 생성은 read-only, apply는 별도 POST */
   repairPlan: GoogleSheetsRepairPlan;
   repairModeNote: string;
+  /** additive: anchor 복구 관점 상태·단계 */
+  anchorRecovery: GoogleFinanceAnchorRecovery;
+  /** additive: failed 대신 recovery 중심 헤드라인 */
+  recoveryHeadline: string;
 };
 
 const FALLBACK_TABS = ['US_Anchor', '시세', 'Quotes'] as const;
@@ -461,6 +479,7 @@ export async function runGoogleFinanceSetupCheck(): Promise<GoogleFinanceSetupCh
     }
 
     const ok = readbackStatus === 'ok' && source === 'google_sheets_readback';
+    const issueDetail = classifyAnchorIssue(row);
 
     return {
       key: anchor.key,
@@ -474,6 +493,13 @@ export async function runGoogleFinanceSetupCheck(): Promise<GoogleFinanceSetupCh
       lastCheckedAt: generatedAt,
       actionHint: actionHint ? `${sourceLabel(source, readbackStatus)} — ${actionHint}` : sourceLabel(source, readbackStatus),
       ok,
+      rowNumber: row?.sheetRowNumber,
+      priceValue: readbackPrice,
+      statusCell: row?.sheetStatus,
+      issue: issueDetail.issue,
+      formulaPresent: issueDetail.formulaPresent,
+      formulaLooksValid: issueDetail.formulaLooksValid,
+      formulaNote: issueDetail.formulaNote,
     };
   });
 
@@ -526,6 +552,20 @@ export async function runGoogleFinanceSetupCheck(): Promise<GoogleFinanceSetupCh
 
   const repairPlan = await buildGoogleSheetsRepairPlan(sheetRows);
 
+  const anchorRecovery = buildGoogleFinanceAnchorRecovery({
+    parsedRowsOk,
+    anchorMatched: sheetsAnchorMatched,
+    anchorOk: sheetsAnchorOk,
+    missingAnchors: missingAnchorSymbols,
+    fallbackOnly,
+    rangePermissionError: rangeOrPermissionError,
+    tabFound,
+    readSucceeded,
+    repairPlan,
+  });
+
+  const recoveryHeadline = recoveryStatusHeadline(anchorRecovery.status, status);
+
   let finalActionHint = buildActionHint({
     status,
     sheetsAnchorOk,
@@ -537,6 +577,9 @@ export async function runGoogleFinanceSetupCheck(): Promise<GoogleFinanceSetupCh
     finalActionHint =
       '시트 행은 읽혔지만 anchor symbol 매칭에 실패했습니다. symbol/google_ticker 정규화 또는 anchor registry를 확인하세요. ' +
       finalActionHint;
+  }
+  if (anchorRecovery.status !== 'readback_ok' && anchorRecovery.status !== 'not_needed') {
+    finalActionHint = `${anchorRecovery.nextStep} ${finalActionHint}`.trim();
   }
 
   return {
@@ -601,5 +644,7 @@ export async function runGoogleFinanceSetupCheck(): Promise<GoogleFinanceSetupCh
     warnings,
     repairPlan,
     repairModeNote: REPAIR_MODE_NOTE,
+    anchorRecovery,
+    recoveryHeadline,
   };
 }

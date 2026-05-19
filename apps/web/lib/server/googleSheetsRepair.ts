@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { GoogleFinanceRepairPostCheck } from '@office-unify/shared-types';
 import {
   buildA1Range,
   getSpreadsheetSheets,
@@ -426,18 +427,32 @@ export type GoogleSheetsRepairApplyResult = {
     | 'confirmation_required'
     | 'error';
   appliedOperations: string[];
+  /** additive: append_missing_anchor_rows로 추가된 symbol */
+  appendedAnchorSymbols?: string[];
   skippedOperations: Array<{ operationId: string; reason: string }>;
-  postCheck?: {
-    sheetsOkCount: number;
-    missingCount: number;
-    actionHint: string;
-  };
+  postCheck?: GoogleFinanceRepairPostCheck;
   qualityMeta: {
     writeAction: true;
     confirmed: boolean;
     idempotent: boolean;
   };
 };
+
+function buildRepairPostCheck(
+  post: Awaited<ReturnType<typeof runGoogleFinanceSetupCheck>>,
+): GoogleFinanceRepairPostCheck {
+  const s = post.usAnchor.summary;
+  return {
+    sheetsOkCount: s.sheetsAnchorOk,
+    missingCount: s.missing,
+    actionHint: post.anchorRecovery.nextStep,
+    parsedRowsOk: s.parsedRowsOk,
+    anchorMatched: s.sheetsAnchorMatched,
+    anchorOk: s.sheetsAnchorOk,
+    missingAnchors: s.missingAnchorSymbols,
+    recommendedNextAction: post.anchorRecovery.nextStep,
+  };
+}
 
 const applyIdempotencyCache = new Map<string, { appliedAt: string; operationIds: string[] }>();
 
@@ -581,16 +596,13 @@ export async function applyGoogleSheetsRepair(req: ApplyRequest): Promise<Google
       status: 'already_applied',
       appliedOperations: cached.operationIds,
       skippedOperations: [],
-      postCheck: {
-        sheetsOkCount: post.usAnchor.summary.sheetsAnchorOk,
-        missingCount: post.usAnchor.summary.missing,
-        actionHint: post.actionHint,
-      },
+      postCheck: buildRepairPostCheck(post),
       qualityMeta: { writeAction: true, confirmed: true, idempotent: true },
     };
   }
 
   const applied: string[] = [];
+  const appendedAnchorSymbols: string[] = [];
   const skipped: Array<{ operationId: string; reason: string }> = [];
   const tab = portfolioQuotesTabName();
   const previewGrid = buildPortfolioQuotesSampleGrid();
@@ -669,6 +681,10 @@ export async function applyGoogleSheetsRepair(req: ApplyRequest): Promise<Google
           values: body,
           valueInputOption: 'USER_ENTERED',
         });
+        for (const row of body) {
+          const sym = String(row[0] ?? '').trim().toUpperCase();
+          if (sym) appendedAnchorSymbols.push(sym);
+        }
         applied.push(op.operationId);
         continue;
       }
@@ -740,17 +756,16 @@ export async function applyGoogleSheetsRepair(req: ApplyRequest): Promise<Google
         ? 'partial'
         : 'error';
 
+  const postCheck = buildRepairPostCheck(post);
+  postCheck.actionHint = `${postCheck.recommendedNextAction} GOOGLEFINANCE 계산에 1분 정도 걸릴 수 있습니다.`.trim();
+
   return {
     ok: applied.length > 0,
     status,
     appliedOperations: applied,
+    appendedAnchorSymbols: appendedAnchorSymbols.length > 0 ? appendedAnchorSymbols : undefined,
     skippedOperations: skipped,
-    postCheck: {
-      sheetsOkCount: post.usAnchor.summary.sheetsAnchorOk,
-      missingCount: post.usAnchor.summary.missing,
-      actionHint:
-        `${post.actionHint} GOOGLEFINANCE 계산에 1분 정도 걸릴 수 있습니다.`.trim(),
-    },
+    postCheck,
     qualityMeta: { writeAction: true, confirmed: true, idempotent: false },
   };
 }

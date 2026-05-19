@@ -4,6 +4,12 @@
 
 > 문서 관리 메모: Unreleased 항목이 누적되어 길어졌습니다. 이력은 유지하고, 현재 운영 기준은 `docs/CURRENT_SYSTEM_BASELINE.md`를 우선 참조합니다.
 
+### 2026-05-19 Google Finance Anchor Recovery Flow · Button Feedback
+
+- **anchorRecovery:** GET setup에 복구 상태·단계·recoveryHeadline additive.
+- **UI:** 버튼 clicked/running/success/error · submit lock · 최근 액션 3건 · apply 후 60초 대기 안내.
+- **postCheck:** anchorMatched/anchorOk · appendedAnchorSymbols · Today Brief `googleFinanceAnchorSummary`·`gatingReason`.
+
 ### 2026-05-19 Google Finance Repair Apply UI · Anchor Readback Fix
 
 - **Anchor matching:** symbol/google_ticker prefix 정규화 · simplified layout · status/price 기준 OK.

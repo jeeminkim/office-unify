@@ -52,6 +52,8 @@ import {
 import { applyRepeatExposurePenaltiesToDeck } from '@/lib/server/todayCandidateScoring';
 import { enrichDeckWithDecisionTraces } from '@/lib/server/todayCandidateDecisionTrace';
 import { buildUsCandidateDiagnostics } from '@/lib/server/todayCandidateUsDiagnostics';
+import { isGoogleFinanceQuoteConfigured } from '@/lib/server/googleFinanceSheetQuoteService';
+import { runGoogleFinanceSetupCheck } from '@/lib/server/googleFinanceSetupCheck';
 import { buildUsMarketAnchorCoverageLabel } from '@/lib/server/todayCandidateUsGating';
 import { emitUsCandidateDiagnosticsOps } from '@/lib/server/todayCandidateUsDiagnosticsOps';
 import {
@@ -512,8 +514,31 @@ export async function GET() {
 
     const usMarketAnchorCoverageLabel = buildUsMarketAnchorCoverageLabel(todayCandidates.usMarketSummary);
 
+    let googleFinanceAnchorSummary:
+      | {
+          sheetsAnchorOk: number;
+          anchorMatched: number;
+          quoteSource: string;
+          lastSetupCheckedAt?: string;
+        }
+      | undefined;
+    if (isGoogleFinanceQuoteConfigured()) {
+      try {
+        const gfCheck = await runGoogleFinanceSetupCheck();
+        googleFinanceAnchorSummary = {
+          sheetsAnchorOk: gfCheck.usAnchor.summary.sheetsAnchorOk,
+          anchorMatched: gfCheck.usAnchor.summary.sheetsAnchorMatched,
+          quoteSource: gfCheck.overallQuoteSource,
+          lastSetupCheckedAt: gfCheck.generatedAt,
+        };
+      } catch {
+        /* optional snapshot */
+      }
+    }
+
     const usCandidateDiagnostics = buildUsCandidateDiagnostics({
       usMarketSummary: todayCandidates.usMarketSummary,
+      googleFinanceAnchorSummary,
       userUsWatchlistCount: todayCandidates.userUsWatchlistCount,
       userUsHoldingCount: todayCandidates.userUsHoldingCount,
       pool: [

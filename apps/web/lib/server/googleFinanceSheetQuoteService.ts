@@ -18,6 +18,8 @@ type HoldingInput = {
 };
 
 export type GoogleFinanceQuoteRow = {
+  /** 1-based Sheets row number (header = 1). */
+  sheetRowNumber?: number;
   market: string;
   symbol: string;
   normalizedKey: string;
@@ -284,7 +286,9 @@ function parseSimplifiedPortfolioQuoteRows(values: unknown[][], headerRow: unkno
   const statusIdx = colIndex(map, 'status') ?? 7;
 
   const rows: GoogleFinanceQuoteRow[] = [];
-  for (const row of values) {
+  for (let i = 0; i < values.length; i++) {
+    const row = values[i]!;
+    const sheetRowNumber = i + 2;
     const symbol = googleSheetCellAsString(cellAt(row, symIdx)).toUpperCase();
     const googleTicker = googleSheetCellAsString(cellAt(row, gtIdx)).toUpperCase();
     if (!symbol || symbol === 'SYMBOL') continue;
@@ -294,6 +298,7 @@ function parseSimplifiedPortfolioQuoteRows(values: unknown[][], headerRow: unkno
     const sheetStatus = googleSheetCellAsString(cellAt(row, statusIdx));
     const rowStatus = resolveSimplifiedRowStatus(rawPrice, price, sheetStatus);
     rows.push({
+      sheetRowNumber,
       market,
       symbol,
       normalizedKey: normalizeQuoteKey(market, symbol),
