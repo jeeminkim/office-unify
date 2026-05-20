@@ -69,6 +69,7 @@ import {
   computeCandidateJudgmentQuality,
   summarizeJudgmentQualityDeck,
 } from '@/lib/server/todayCandidateJudgmentQuality';
+import { parseTodayBriefRouteRequest } from '@/lib/server/todayBriefRouteRequest';
 import { upsertOpsEventByFingerprint } from '@/lib/server/upsertOpsEventByFingerprint';
 import {
   appendQualityMetaOpsEventTrace,
@@ -102,16 +103,8 @@ function toNum(v: number | string | null | undefined): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function ymdKst(): string {
-  return new Intl.DateTimeFormat('sv-SE', {
-    timeZone: 'Asia/Seoul',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date()).replaceAll('-', '');
-}
-
-export async function GET() {
+export async function GET(req?: Request) {
+  const routeRequest = parseTodayBriefRouteRequest(req);
   const auth = await requirePersonaChatAuth();
   if (!auth.ok) return auth.response;
   const supabase = getServiceSupabase();
@@ -593,7 +586,7 @@ export async function GET() {
       sourceMix: {},
     };
 
-    const ymd = ymdKst();
+    const ymd = routeRequest.ymdKst;
 
     void saveTodayCandidateImpressions({
       supabase,

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requirePersonaChatAuth } from '@/lib/server/persona-chat-auth';
-import { applyGoogleSheetsRepair } from '@/lib/server/googleSheetsRepair';
+import { runGoogleSheetsRepairCore } from '@/lib/server/googleSheetsRepair';
 
 /** POST /api/system/google-finance-setup/repair/apply — confirm=true일 때만 Sheets write */
 export async function POST(req: Request) {
@@ -35,7 +35,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const result = await applyGoogleSheetsRepair({
+  const result = await runGoogleSheetsRepairCore({
     confirm: true,
     operationIds: body.operationIds,
     overwrite: body.overwrite,

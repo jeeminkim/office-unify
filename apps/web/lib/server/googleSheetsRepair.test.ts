@@ -7,7 +7,7 @@ const getSheetsAccessToken = vi.fn();
 
 vi.mock('@/lib/server/google-sheets-api', () => ({
   buildA1Range: (tab: string, range: string) => `'${tab}'!${range}`,
-  sheetColumnLetter: (n: number) => (n <= 8 ? 'H' : 'O'),
+  sheetColumnLetter: (n: number) => (n <= 10 ? 'J' : 'O'),
   getSpreadsheetSheets: (...args: unknown[]) => getSpreadsheetSheets(...args),
   sheetsValuesGet: (...args: unknown[]) => sheetsValuesGet(...args),
   sheetsValuesUpdate: (...args: unknown[]) => sheetsValuesUpdate(...args),
@@ -46,7 +46,11 @@ describe('googleSheetsRepair', () => {
     const flat = grid.flat().join('\t');
     expect(flat).toContain('NYSEARCA:SPY');
     expect(flat).toContain('NASDAQ:QQQ');
+    expect(flat).toContain('NYSEARCA:IWM');
+    expect(flat).toContain('NYSEARCA:XLK');
     expect(flat).toContain('NASDAQ:TSLA');
+    expect(flat).toContain('checked_at');
+    expect(flat).toContain('direct_repair');
     expect(grid[0]?.[0]).toBe('symbol');
   });
 
@@ -85,6 +89,31 @@ describe('googleSheetsRepair', () => {
     ]);
     expect(plan.operations.some((o) => o.type === 'append_missing_anchor_rows')).toBe(true);
     expect(plan.operations.find((o) => o.type === 'append_missing_anchor_rows')?.previewValues?.[0]?.[0]).toBe('SPY');
+  });
+
+  it('existing anchor row with blank ticker or formulas suggests safe fill operation', async () => {
+    vi.stubEnv('GOOGLE_SERVICE_ACCOUNT_JSON', '{"client_email":"svc@test.iam.gserviceaccount.com","private_key":"x"}');
+    vi.stubEnv('GOOGLE_SHEETS_SPREADSHEET_ID', 'sheet-id');
+    getSpreadsheetSheets.mockResolvedValue([{ title: 'portfolio_quotes', sheetId: 1 }]);
+    sheetsValuesGet.mockResolvedValue([
+      ['symbol', 'google_ticker', 'price', 'name', 'volume', 'marketcap', 'tradetime', 'status', 'checked_at', 'source'],
+      ['SPY', '', '', '', '', '', '', '', '', ''],
+    ]);
+
+    const { buildGoogleSheetsRepairPlan } = await import('@/lib/server/googleSheetsRepair');
+    const plan = await buildGoogleSheetsRepairPlan([
+      {
+        market: 'US',
+        symbol: 'SPY',
+        googleTicker: '',
+        normalizedKey: 'US:SPY',
+        rowStatus: 'formula_pending',
+      },
+    ]);
+    const fill = plan.operations.find((o) => o.type === 'fill_missing_anchor_formulas');
+    expect(fill?.operationId).toBe('fill_anchor_formula_spy');
+    expect(fill?.previewValues?.[0]?.[1]).toBe('NYSEARCA:SPY');
+    expect(fill?.previewValues?.[0]?.[2]).toContain('GOOGLEFINANCE');
   });
 
   it('existing non-empty sheet blocks unsafe header rewrite', async () => {
@@ -135,7 +164,24 @@ describe('googleSheetsRepair', () => {
     expect(out.qualityMeta.confirmed).toBe(true);
     expect(out.qualityMeta.writeAction).toBe(true);
     expect(out.postCheck?.sheetsOkCount).toBe(2);
+    expect(out.formulaPendingCount).toBe(1);
+    expect(out.recommendedNextAction).toMatch(/Today Brief|다시 실행/);
     expect(sheetsValuesUpdate.mock.calls.length).toBeGreaterThan(0);
+  });
+
+  it('repair core dry-run builds plan without write calls', async () => {
+    vi.stubEnv('GOOGLE_SERVICE_ACCOUNT_JSON', '{"client_email":"svc@test.iam.gserviceaccount.com","private_key":"x"}');
+    vi.stubEnv('GOOGLE_SHEETS_SPREADSHEET_ID', 'sheet-id');
+    getSpreadsheetSheets.mockResolvedValue([{ title: 'portfolio_quotes', sheetId: 1 }]);
+    sheetsValuesGet.mockResolvedValue([
+      ['symbol', 'google_ticker', 'price', 'name', 'volume', 'marketcap', 'tradetime', 'status'],
+      ['SPY', 'NYSEARCA:SPY', '', '', '', '', '', 'pending'],
+    ]);
+    const { runGoogleSheetsRepairCore } = await import('@/lib/server/googleSheetsRepair');
+    const out = await runGoogleSheetsRepairCore({ confirm: false, dryRun: true });
+    expect(out.dryRun).toBe(true);
+    expect(out.repairPlan).toBeTruthy();
+    expect(sheetsValuesUpdate).not.toHaveBeenCalled();
   });
 
   it('write unavailable when credential missing', async () => {

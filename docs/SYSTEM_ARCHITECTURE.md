@@ -102,6 +102,8 @@
   - 홈 대시보드 집계
   - NO_DATA / fallback 상태를 명시
 - `/api/dashboard/today-brief`
+  - **Thin route prep:** route-level request parsing is isolated in `todayBriefRouteRequest` (pure; no DB/write). `todayBriefResponseService` is a planned extraction point for `buildTodayBriefResponse`, but the route still owns response assembly in this round.
+  - Contract safety net covers top-level fields, candidate deck, `qualityMeta.todayCandidates`, personalization, US diagnostics, feedback, concentration, theme connection, and guardrail wording.
   - 오늘의 3줄 브리핑(리스크/성과/행동) 생성
   - 사실 데이터와 제안 문장을 분리하고 confidence/경고를 함께 반환
   - optional `candidates` 블록(`userContext`/`usMarketKr`) 지원
@@ -291,3 +293,10 @@
 - aggregate 이벤트 `detail`은 `schemaVersion`·`kind`·집계 필드·`reasonCodes` 등 **고정 스키마**(`apps/web/lib/server/opsAggregateWarnings.ts`)로 생성한다.
 - 명시적 refresh 경로에서는 상대적으로 상세 기록을 허용할 수 있으나, **요청당 write budget은 모든 경로에서 최우선**이다. (기존 구현에서 `isExplicitRefresh` 분기는 read-only 억제 해제 등에 쓰인다.)
 - 선택 필드: `qualityMeta.*.opsLogging.eventTrace`에 최근 write 판정 요약을 붙일 수 있다(additive).
+## Google Finance Direct Repair
+
+- `/ops/google-finance-setup` uses a read-only GET for status and repair planning.
+- `POST /api/system/google-finance-setup/repair/apply` and `apps/web/scripts/google-finance-repair-live.ts` share the same repair core.
+- The core only writes with `confirm:true` or CLI `--confirm`, only targets `portfolio_quotes`, and defaults to `overwrite=false`.
+- The simplified layout is `symbol`, `google_ticker`, `price`, `name`, `volume`, `marketcap`, `tradetime`, `status`, `checked_at`, `source`.
+- Post-check separates `anchorMatched`, `anchorOk`, and `formulaPendingCount`; Today Brief diagnostics separate `sheets_anchor_zero`, `sheets_anchor_ok_but_us_signal_empty`, and `gating_not_connected`.

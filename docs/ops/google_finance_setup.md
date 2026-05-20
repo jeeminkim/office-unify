@@ -52,3 +52,19 @@
 2. 시세 새로고침 → 상태 다시 확인  
 3. Sheets anchor OK 증가 확인 → Today Brief 재실행  
 4. anchor 0/18이면 Action Item으로 설정 점검 저장  
+## Direct repair CLI
+
+The app can repair the private Google Sheet through the configured service account. API keys alone cannot write to a private Sheet; `GOOGLE_SERVICE_ACCOUNT_JSON` and `GOOGLE_SHEETS_SPREADSHEET_ID` or `GOOGLE_SPREADSHEET_ID` must point to a service account that has Editor access to the spreadsheet.
+
+```bash
+npm run google-finance-repair --workspace=apps/web -- --dry-run
+npm run google-finance-repair --workspace=apps/web -- --confirm
+npm run google-finance-repair --workspace=apps/web -- --confirm --wait
+```
+
+- Dry-run is the default and performs no write.
+- Confirmed write is limited to the `portfolio_quotes` tab and uses `overwrite=false` by default.
+- Existing non-empty cells are preserved; missing headers, anchor rows, and blank GOOGLEFINANCE formula cells are the repair target.
+- The minimum US anchor universe includes SPY, QQQ, DIA, IWM, SMH, SOXX, XLK, XLF, XLE, XLI, XLY, AAPL, MSFT, NVDA, TSLA, and NFLX.
+- After repair, check `/ops/google-finance-setup`, refresh quotes, rerun Today Brief, and inspect `qualityMeta.todayCandidates.usCandidateDiagnostics.gatingReason`.
+- This flow is unrelated to automatic trading, automatic orders, or automatic rebalancing.

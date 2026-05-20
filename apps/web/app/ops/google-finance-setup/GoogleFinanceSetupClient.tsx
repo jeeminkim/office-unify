@@ -143,6 +143,8 @@ type ApplyResult = {
   appendedAnchorSymbols?: string[];
   skippedOperations: Array<{ operationId: string; reason: string }>;
   postCheck?: GoogleFinanceRepairPostCheck;
+  formulaPendingCount?: number;
+  recommendedNextAction?: string;
 };
 
 function ymdSeoul(): string {
@@ -248,6 +250,16 @@ export function GoogleFinanceSetupClient() {
   const repair = data?.repairPlan ?? EMPTY_REPAIR_PLAN;
   const repairOps = repair.operations.filter((o) => o.type !== "no_op");
   const applyRunning = isRunning("repair_apply");
+  const cliRepairCommand = "npm run google-finance-repair --workspace=apps/web -- --confirm --wait";
+  const repairDisabledReason = !repair.writeAvailable
+    ? !repair.credential.serviceAccountEmailMasked
+      ? "service account write credential missing or spreadsheet not configured"
+      : "editor permission missing or write credential unavailable"
+    : repair.status === "unsafe"
+      ? "unsafe operation only"
+      : repairOps.length === 0
+        ? "no operations needed"
+        : null;
 
   const runLoad = () =>
     runAction(
@@ -456,6 +468,11 @@ export function GoogleFinanceSetupClient() {
         <p className="mt-1 text-[10px]">
           <span className="font-medium">repairPlan:</span> {repair.status}
         </p>
+        {repairDisabledReason ? (
+          <p className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-[10px] text-amber-950">
+            Repair disabled: {repairDisabledReason}
+          </p>
+        ) : null}
         <h3 className="mt-3 font-medium">수정 미리보기 (operations)</h3>
         {repairOps.length === 0 ? (
           <div className="text-[10px] text-slate-600">
@@ -488,9 +505,9 @@ export function GoogleFinanceSetupClient() {
           <button
             type="button"
             className="rounded border border-violet-600 bg-violet-700 px-3 py-1 text-white disabled:opacity-50"
-            disabled={!repair.writeAvailable || applyRunning}
+            disabled={Boolean(repairDisabledReason) || applyRunning}
             onClick={() => {
-              setStatusMessage("「안전 보강 적용」 버튼이 눌렸습니다. 확인 후 적용하세요.");
+              setStatusMessage("요청을 받았습니다. 확인 후 Sheets에 안전 보강을 적용합니다.");
               setConfirmOpen(true);
             }}
           >
@@ -503,6 +520,13 @@ export function GoogleFinanceSetupClient() {
             onClick={() => data && void copyText(data.portfolioQuotesSampleTsv, "수동 샘플")}
           >
             수동 샘플 복사
+          </button>
+          <button
+            type="button"
+            className="rounded border px-2 py-1"
+            onClick={() => void copyText(cliRepairCommand, "Direct repair CLI")}
+          >
+            CLI 명령 복사
           </button>
         </div>
         {confirmOpen ? (
@@ -541,7 +565,23 @@ export function GoogleFinanceSetupClient() {
                   parsedRowsOk {applyResult.postCheck.parsedRowsOk} · anchorMatched {applyResult.postCheck.anchorMatched}{" "}
                   · anchorOk {applyResult.postCheck.anchorOk}
                 </p>
-                <p className="mt-1">{applyResult.postCheck.recommendedNextAction}</p>
+                <p className="mt-1">formulaPendingCount {applyResult.formulaPendingCount ?? 0}</p>
+                <p className="mt-1">{applyResult.recommendedNextAction ?? applyResult.postCheck.recommendedNextAction}</p>
+                {applyResult.postCheck.anchorMatched > 0 && applyResult.postCheck.anchorOk === 0 ? (
+                  <p className="mt-1 rounded bg-amber-50 p-1 text-amber-950">
+                    수식은 들어갔지만 계산 대기 중입니다.
+                  </p>
+                ) : null}
+                {applyResult.postCheck.anchorMatched === 0 ? (
+                  <p className="mt-1 rounded bg-red-50 p-1 text-red-950">
+                    시트 행과 anchor registry 매칭 실패입니다. Direct repair를 다시 실행하세요.
+                  </p>
+                ) : null}
+                {applyResult.postCheck.anchorOk > 0 ? (
+                  <p className="mt-1 rounded bg-emerald-50 p-1 text-emerald-950">
+                    Today Brief를 다시 실행하세요.
+                  </p>
+                ) : null}
               </div>
             ) : null}
             <p className="mt-2">GOOGLEFINANCE 계산에는 시간이 걸릴 수 있습니다.</p>

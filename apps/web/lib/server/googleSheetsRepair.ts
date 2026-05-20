@@ -11,7 +11,7 @@ import {
 import { inspectGoogleSheetsCredentialMeta, type GoogleSheetsCredentialMeta } from '@/lib/server/googleSheetsRepairCredential';
 import type { GoogleFinanceQuoteRow } from '@/lib/server/googleFinanceSheetQuoteService';
 import { isSimplifiedPortfolioQuotesLayout } from '@/lib/server/googleFinanceSheetQuoteService';
-import { missingRequiredAnchors } from '@/lib/server/portfolioQuotesAnchorMatch';
+import { buildRepairAppendAnchors, missingRequiredAnchors } from '@/lib/server/portfolioQuotesAnchorMatch';
 import { runGoogleFinanceSetupCheck } from '@/lib/server/googleFinanceSetupCheck';
 
 export type GoogleSheetsRepairPlanStatus =
@@ -27,6 +27,7 @@ export type GoogleSheetsRepairOperationType =
   | 'write_headers'
   | 'write_sample_formulas'
   | 'append_missing_anchor_rows'
+  | 'fill_missing_anchor_formulas'
   | 'resize_columns'
   | 'freeze_header'
   | 'no_op';
@@ -65,16 +66,26 @@ export const PORTFOLIO_QUOTES_REPAIR_HEADERS = [
   'marketcap',
   'tradetime',
   'status',
+  'checked_at',
+  'source',
 ] as const;
 
 export const PORTFOLIO_QUOTES_REPAIR_SAMPLE_ROWS: Array<{ symbol: string; googleTicker: string }> = [
   { symbol: 'SPY', googleTicker: 'NYSEARCA:SPY' },
   { symbol: 'QQQ', googleTicker: 'NASDAQ:QQQ' },
   { symbol: 'DIA', googleTicker: 'NYSEARCA:DIA' },
-  { symbol: 'TSLA', googleTicker: 'NASDAQ:TSLA' },
-  { symbol: 'NVDA', googleTicker: 'NASDAQ:NVDA' },
+  { symbol: 'IWM', googleTicker: 'NYSEARCA:IWM' },
+  { symbol: 'SMH', googleTicker: 'NASDAQ:SMH' },
+  { symbol: 'SOXX', googleTicker: 'NASDAQ:SOXX' },
+  { symbol: 'XLK', googleTicker: 'NYSEARCA:XLK' },
+  { symbol: 'XLF', googleTicker: 'NYSEARCA:XLF' },
+  { symbol: 'XLE', googleTicker: 'NYSEARCA:XLE' },
+  { symbol: 'XLI', googleTicker: 'NYSEARCA:XLI' },
+  { symbol: 'XLY', googleTicker: 'NYSEARCA:XLY' },
   { symbol: 'AAPL', googleTicker: 'NASDAQ:AAPL' },
   { symbol: 'MSFT', googleTicker: 'NASDAQ:MSFT' },
+  { symbol: 'NVDA', googleTicker: 'NASDAQ:NVDA' },
+  { symbol: 'TSLA', googleTicker: 'NASDAQ:TSLA' },
   { symbol: 'NFLX', googleTicker: 'NASDAQ:NFLX' },
   { symbol: '005930', googleTicker: 'KRX:005930' },
   { symbol: '000660', googleTicker: 'KRX:000660' },
@@ -87,7 +98,11 @@ function portfolioQuotesTabName(): string {
 }
 
 function spreadsheetId(): string | null {
-  return process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim() || null;
+  return (
+    process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim() ||
+    process.env.GOOGLE_SPREADSHEET_ID?.trim() ||
+    null
+  );
 }
 
 function cellEmpty(v: unknown): boolean {
@@ -100,7 +115,11 @@ function formulaForRow(rowNum: number, field: 'price' | 'name' | 'volume' | 'mar
 }
 
 function statusFormula(rowNum: number): string {
-  return `=IF(C${rowNum}="","missing","ok")`;
+  return `=IF(ISNUMBER(C${rowNum}),"ok",IF(C${rowNum}="","pending","empty"))`;
+}
+
+function checkedAtFormula(rowNum: number): string {
+  return `=IF(ISNUMBER(C${rowNum}),NOW(),"")`;
 }
 
 export function buildPortfolioQuotesRowValues(
@@ -116,6 +135,8 @@ export function buildPortfolioQuotesRowValues(
     formulaForRow(rowNum, 'marketcap'),
     formulaForRow(rowNum, 'tradetime'),
     statusFormula(rowNum),
+    checkedAtFormula(rowNum),
+    'direct_repair',
   ];
 }
 
@@ -132,6 +153,8 @@ export function buildPortfolioQuotesSampleGrid(): string[][] {
       formulaForRow(r, 'marketcap'),
       formulaForRow(r, 'tradetime'),
       statusFormula(r),
+      checkedAtFormula(r),
+      'direct_repair',
     ];
   });
   return [header, ...body];
@@ -145,13 +168,14 @@ function isRepairExcludedTab(title: string): boolean {
 function headersMatchExpected(row: unknown[] | undefined): boolean {
   if (!row?.length) return false;
   const got = row.map((c) => String(c ?? '').trim().toLowerCase());
-  const want = PORTFOLIO_QUOTES_REPAIR_HEADERS.map((h) => h.toLowerCase());
+  const want = ['symbol', 'google_ticker', 'price', 'status'];
   if (got.length < want.length) return false;
-  return want.every((h, i) => got[i] === h);
+  return want.every((h) => got.includes(h));
 }
 
 function headersPartiallyPresent(row: unknown[] | undefined): boolean {
   if (!row?.length) return false;
+  if (headersMatchExpected(row)) return false;
   const got = new Set(row.map((c) => String(c ?? '').trim().toLowerCase()));
   const matched = PORTFOLIO_QUOTES_REPAIR_HEADERS.filter((h) => got.has(h)).length;
   return matched > 0 && matched < PORTFOLIO_QUOTES_REPAIR_HEADERS.length;
@@ -175,11 +199,12 @@ function buildAppendMissingAnchorOperation(
   const nextRow = dataRows.length + 2;
   const preview = missing.map((row, idx) => buildPortfolioQuotesRowValues(nextRow + idx, row));
   const endRow = nextRow + missing.length - 1;
+  const lastCol = sheetColumnLetter(PORTFOLIO_QUOTES_REPAIR_HEADERS.length);
   return {
     operationId: 'append_missing_anchor_rows',
     type: 'append_missing_anchor_rows',
     tabName: tab,
-    range: `A${nextRow}:H${endRow}`,
+    range: `A${nextRow}:${lastCol}${endRow}`,
     description: `누락 US anchor ${missing.length}행 append (기존 행 수정 없음)`,
     previewValues: preview,
     overwrite: false,
@@ -237,7 +262,7 @@ export async function buildGoogleSheetsRepairPlan(
     try {
       const top = await sheetsValuesGet({
         spreadsheetId: id,
-        rangeA1: buildA1Range(tab, 'A1:H30'),
+        rangeA1: buildA1Range(tab, `A1:${sheetColumnLetter(PORTFOLIO_QUOTES_REPAIR_HEADERS.length)}30`),
         valueRenderOption: 'FORMULA',
       });
       headerRow = top[0] ?? [];
@@ -347,6 +372,7 @@ export async function buildGoogleSheetsRepairPlan(
     hasData &&
     !operations.some((o) => o.operationId === 'append_missing_anchor_rows')
   ) {
+    operations.push(...buildFillMissingAnchorFormulaOperations(tab, dataRows));
     const appendOp = buildAppendMissingAnchorOperation(tab, dataRows, sheetRows);
     if (appendOp) operations.push(appendOp);
   }
@@ -414,6 +440,14 @@ type ApplyRequest = {
   idempotencyKey?: string;
 };
 
+type RepairCoreRequest = ApplyRequest & {
+  dryRun?: boolean;
+  wait?: boolean;
+  waitAttempts?: number;
+  waitIntervalMs?: number;
+  sleep?: (ms: number) => Promise<void>;
+};
+
 export type GoogleSheetsRepairApplyResult = {
   ok: boolean;
   status:
@@ -428,6 +462,11 @@ export type GoogleSheetsRepairApplyResult = {
   appendedAnchorSymbols?: string[];
   skippedOperations: Array<{ operationId: string; reason: string }>;
   postCheck?: GoogleFinanceRepairPostCheck;
+  postCheckAttempts?: GoogleFinanceRepairPostCheck[];
+  repairPlan?: GoogleSheetsRepairPlan;
+  formulaPendingCount?: number;
+  recommendedNextAction?: string;
+  dryRun?: boolean;
   qualityMeta: {
     writeAction: true;
     confirmed: boolean;
@@ -446,9 +485,71 @@ function buildRepairPostCheck(
     parsedRowsOk: s.parsedRowsOk,
     anchorMatched: s.sheetsAnchorMatched,
     anchorOk: s.sheetsAnchorOk,
+    formulaPendingCount: Math.max(0, s.sheetsAnchorMatched - s.sheetsAnchorOk),
     missingAnchors: s.missingAnchorSymbols,
     recommendedNextAction: post.anchorRecovery.nextStep,
   };
+}
+
+function normalizeAnchorToken(raw: unknown): string {
+  return String(raw ?? '').trim().toUpperCase();
+}
+
+function anchorMatchesSheetRow(anchor: { symbol: string; googleTicker: string }, row: unknown[]): boolean {
+  const symbol = normalizeAnchorToken(row[0]);
+  const googleTicker = normalizeAnchorToken(row[1]);
+  const anchorSymbol = anchor.symbol.toUpperCase();
+  const anchorTicker = anchor.googleTicker.toUpperCase();
+  const tickerTail = anchorTicker.split(':').pop() ?? anchorTicker;
+  return symbol === anchorSymbol || symbol === tickerTail || googleTicker === anchorTicker || googleTicker === anchorSymbol;
+}
+
+function buildFillMissingAnchorFormulaOperations(tab: string, dataRows: unknown[][]): GoogleSheetsRepairOperation[] {
+  const operations: GoogleSheetsRepairOperation[] = [];
+  const anchors = buildRepairAppendAnchors();
+  for (let idx = 0; idx < dataRows.length; idx++) {
+    const row = dataRows[idx] ?? [];
+    const anchor = anchors.find((a) => anchorMatchesSheetRow(a, row));
+    if (!anchor) continue;
+    const rowNum = idx + 2;
+    const needsFill =
+      cellEmpty(row[1]) ||
+      cellEmpty(row[2]) ||
+      cellEmpty(row[7]) ||
+      cellEmpty(row[8]) ||
+      cellEmpty(row[9]);
+    if (!needsFill) continue;
+    operations.push({
+      operationId: `fill_anchor_formula_${anchor.symbol.toLowerCase()}`,
+      type: 'fill_missing_anchor_formulas',
+      tabName: tab,
+      range: `A${rowNum}:${sheetColumnLetter(PORTFOLIO_QUOTES_REPAIR_HEADERS.length)}${rowNum}`,
+      description: `Fill blank google_ticker/GOOGLEFINANCE cells for ${anchor.symbol} (overwrite=false)`,
+      previewValues: [buildPortfolioQuotesRowValues(rowNum, anchor)],
+      overwrite: false,
+      riskLevel: 'low',
+    });
+  }
+  return operations;
+}
+
+function countFormulaPending(postCheck: GoogleFinanceRepairPostCheck | undefined): number {
+  if (!postCheck) return 0;
+  return Math.max(0, postCheck.anchorMatched - postCheck.anchorOk);
+}
+
+function recommendNextAction(postCheck: GoogleFinanceRepairPostCheck | undefined): string {
+  if (!postCheck) return 'Google Finance 설정 상태를 다시 확인하세요.';
+  if (postCheck.anchorMatched > 0 && postCheck.anchorOk === 0) {
+    return '수식은 들어갔지만 계산 대기 중입니다. 잠시 후 상태 확인과 시세 새로고침을 실행하세요.';
+  }
+  if (postCheck.anchorMatched === 0) {
+    return '시트 행과 anchor registry 매칭 실패입니다. Direct repair를 다시 실행하세요.';
+  }
+  if (postCheck.anchorOk > 0) {
+    return 'Google Finance anchor가 확인됐습니다. Today Brief를 다시 실행하세요.';
+  }
+  return postCheck.recommendedNextAction;
 }
 
 const applyIdempotencyCache = new Map<string, { appliedAt: string; operationIds: string[] }>();
@@ -587,15 +688,21 @@ export async function applyGoogleSheetsRepair(req: ApplyRequest): Promise<Google
   const cacheKey = `${id}:${req.idempotencyKey ?? ymdSeoul()}:${ops.map((o) => o.operationId).sort().join(',')}`;
   const cached = applyIdempotencyCache.get(cacheKey);
   if (cached) {
-    const post = await runGoogleFinanceSetupCheck();
-    return {
-      ok: true,
-      status: 'already_applied',
-      appliedOperations: cached.operationIds,
-      skippedOperations: [],
-      postCheck: buildRepairPostCheck(post),
-      qualityMeta: { writeAction: true, confirmed: true, idempotent: true },
-    };
+      const post = await runGoogleFinanceSetupCheck();
+      const postCheck = buildRepairPostCheck(post);
+      const recommendedNextAction = recommendNextAction(postCheck);
+      postCheck.recommendedNextAction = recommendedNextAction;
+      return {
+        ok: true,
+        status: 'already_applied',
+        appliedOperations: cached.operationIds,
+        skippedOperations: [],
+        postCheck,
+        repairPlan: plan,
+        formulaPendingCount: countFormulaPending(postCheck),
+        recommendedNextAction,
+        qualityMeta: { writeAction: true, confirmed: true, idempotent: true },
+      };
   }
 
   const applied: string[] = [];
@@ -626,7 +733,7 @@ export async function applyGoogleSheetsRepair(req: ApplyRequest): Promise<Google
       if (op.type === 'write_headers') {
         const existing = await sheetsValuesGet({
           spreadsheetId: id,
-          rangeA1: buildA1Range(tab, 'A1:H1'),
+          rangeA1: buildA1Range(tab, `A1:${sheetColumnLetter(PORTFOLIO_QUOTES_REPAIR_HEADERS.length)}1`),
         }).catch(() => []);
         const row = existing[0] ?? [];
         if (!overwrite && row.some((c) => !cellEmpty(c))) {
@@ -671,7 +778,7 @@ export async function applyGoogleSheetsRepair(req: ApplyRequest): Promise<Google
           skipped.push({ operationId: op.operationId, reason: 'no_missing_anchors' });
           continue;
         }
-        const range = op.range ?? `A2:H${1 + body.length}`;
+        const range = op.range ?? `A2:${sheetColumnLetter(PORTFOLIO_QUOTES_REPAIR_HEADERS.length)}${1 + body.length}`;
         await sheetsValuesUpdate({
           spreadsheetId: id,
           rangeA1: buildA1Range(tab, range),
@@ -682,6 +789,25 @@ export async function applyGoogleSheetsRepair(req: ApplyRequest): Promise<Google
           const sym = String(row[0] ?? '').trim().toUpperCase();
           if (sym) appendedAnchorSymbols.push(sym);
         }
+        applied.push(op.operationId);
+        continue;
+      }
+
+      if (op.type === 'fill_missing_anchor_formulas') {
+        const body = op.previewValues ?? [];
+        const range = op.range;
+        if (!range || body.length === 0) {
+          skipped.push({ operationId: op.operationId, reason: 'no_blank_anchor_formula_cells' });
+          continue;
+        }
+        const startRow = Number(range.match(/^A(\d+):/)?.[1] ?? 2);
+        const merged = await mergeEmptyCellsOnly(id, tab, startRow, body, overwrite);
+        await sheetsValuesUpdate({
+          spreadsheetId: id,
+          rangeA1: buildA1Range(tab, range),
+          values: merged,
+          valueInputOption: 'USER_ENTERED',
+        });
         applied.push(op.operationId);
         continue;
       }
@@ -754,6 +880,8 @@ export async function applyGoogleSheetsRepair(req: ApplyRequest): Promise<Google
         : 'error';
 
   const postCheck = buildRepairPostCheck(post);
+  const recommendedNextAction = recommendNextAction(postCheck);
+  postCheck.recommendedNextAction = recommendedNextAction;
   postCheck.actionHint = `${postCheck.recommendedNextAction} GOOGLEFINANCE 계산에 1분 정도 걸릴 수 있습니다.`.trim();
 
   return {
@@ -763,8 +891,79 @@ export async function applyGoogleSheetsRepair(req: ApplyRequest): Promise<Google
     appendedAnchorSymbols: appendedAnchorSymbols.length > 0 ? appendedAnchorSymbols : undefined,
     skippedOperations: skipped,
     postCheck,
+    repairPlan: plan,
+    formulaPendingCount: countFormulaPending(postCheck),
+    recommendedNextAction,
     qualityMeta: { writeAction: true, confirmed: true, idempotent: false },
   };
+}
+
+export async function runGoogleSheetsRepairCore(req: RepairCoreRequest): Promise<GoogleSheetsRepairApplyResult> {
+  let sheetRows: GoogleFinanceQuoteRow[] = [];
+  try {
+    const { readGoogleFinanceQuoteSheetRows } = await import('@/lib/server/googleFinanceSheetQuoteService');
+    sheetRows = (await readGoogleFinanceQuoteSheetRows()).rows;
+  } catch {
+    sheetRows = [];
+  }
+  const repairPlan = await buildGoogleSheetsRepairPlan(sheetRows);
+
+  if (req.confirm !== true || req.dryRun === true) {
+    let postCheck: GoogleFinanceRepairPostCheck | undefined;
+    try {
+      postCheck = buildRepairPostCheck(await runGoogleFinanceSetupCheck());
+      postCheck.recommendedNextAction = recommendNextAction(postCheck);
+      postCheck.actionHint = postCheck.recommendedNextAction;
+    } catch {
+      postCheck = undefined;
+    }
+    return {
+      ok: true,
+      status: 'confirmation_required',
+      appliedOperations: [],
+      skippedOperations: repairPlan.operations
+        .filter((op) => op.type !== 'no_op')
+        .map((op) => ({ operationId: op.operationId, reason: 'dry_run_only' })),
+      postCheck,
+      repairPlan,
+      formulaPendingCount: countFormulaPending(postCheck),
+      recommendedNextAction: recommendNextAction(postCheck),
+      dryRun: true,
+      qualityMeta: { writeAction: true, confirmed: false, idempotent: false },
+    };
+  }
+
+  const result = await applyGoogleSheetsRepair(req);
+  result.repairPlan = result.repairPlan ?? repairPlan;
+
+  if (req.wait) {
+    const attempts: GoogleFinanceRepairPostCheck[] = [];
+    const maxAttempts = Math.max(1, req.waitAttempts ?? 3);
+    const intervalMs = Math.max(0, req.waitIntervalMs ?? 30000);
+    const sleep = req.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+    for (let i = 0; i < maxAttempts; i++) {
+      if (i > 0 && intervalMs > 0) await sleep(intervalMs);
+      try {
+        const postCheck = buildRepairPostCheck(await runGoogleFinanceSetupCheck());
+        postCheck.recommendedNextAction = recommendNextAction(postCheck);
+        postCheck.actionHint = postCheck.recommendedNextAction;
+        attempts.push(postCheck);
+        if (postCheck.anchorOk > 0) break;
+      } catch {
+        break;
+      }
+    }
+    if (attempts.length > 0) {
+      result.postCheckAttempts = attempts;
+      result.postCheck = attempts[attempts.length - 1];
+      result.formulaPendingCount = countFormulaPending(result.postCheck);
+      result.recommendedNextAction = recommendNextAction(result.postCheck);
+    }
+  }
+
+  result.formulaPendingCount = result.formulaPendingCount ?? countFormulaPending(result.postCheck);
+  result.recommendedNextAction = result.recommendedNextAction ?? recommendNextAction(result.postCheck);
+  return result;
 }
 
 export function isRepairExcludedTabName(title: string): boolean {

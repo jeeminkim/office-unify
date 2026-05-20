@@ -60,7 +60,11 @@ export type GoogleFinanceFxRowReadback = {
 };
 
 function spreadsheetId(): string | null {
-  return process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim() || null;
+  return (
+    process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim() ||
+    process.env.GOOGLE_SPREADSHEET_ID?.trim() ||
+    null
+  );
 }
 
 function tabName(): string {
@@ -273,6 +277,8 @@ function resolveSimplifiedRowStatus(
 ): GoogleFinanceQuoteRow['rowStatus'] {
   const st = sheetStatus.trim().toLowerCase();
   if (st === 'ok') return 'ok';
+  if (st === 'pending' || st === 'missing') return 'formula_pending';
+  if (st === 'empty') return 'empty_price';
   if (price != null && price > 0) return 'ok';
   return classifyRowStatus(rawPrice, price);
 }
@@ -334,7 +340,7 @@ export async function readGoogleFinanceQuoteSheetRows(): Promise<{
   try {
     const headerPeek = await sheetsValuesGet({
       spreadsheetId: id,
-      rangeA1: buildA1Range(tab, 'A1:H1'),
+      rangeA1: buildA1Range(tab, 'A1:J1'),
       valueRenderOption: 'FORMATTED_VALUE',
     });
     headerRow = headerPeek[0] ?? [];
@@ -357,14 +363,14 @@ export async function readGoogleFinanceQuoteSheetRows(): Promise<{
   try {
     values = await sheetsValuesGet({
       spreadsheetId: id,
-      rangeA1: buildA1Range(tab, simplifiedLayout ? 'A2:H500' : 'A2:O500'),
+      rangeA1: buildA1Range(tab, simplifiedLayout ? 'A2:J500' : 'A2:O500'),
       valueRenderOption: 'UNFORMATTED_VALUE',
       dateTimeRenderOption: 'FORMATTED_STRING',
     });
   } catch {
     values = await sheetsValuesGet({
       spreadsheetId: id,
-      rangeA1: buildA1Range(tab, simplifiedLayout ? 'A2:H500' : 'A2:O500'),
+      rangeA1: buildA1Range(tab, simplifiedLayout ? 'A2:J500' : 'A2:O500'),
       valueRenderOption: 'FORMATTED_VALUE',
       dateTimeRenderOption: 'FORMATTED_STRING',
     });
@@ -404,6 +410,59 @@ export async function readGoogleFinanceQuoteSheetRows(): Promise<{
     tab,
     id,
   });
+}
+
+export async function readGoogleFinanceQuoteSheetFormulaRows(): Promise<{
+  rows: Array<{
+    sheetRowNumber: number;
+    symbol: string;
+    googleTicker: string;
+    priceFormula?: string;
+    statusFormula?: string;
+  }>;
+  tabFound: boolean;
+  sheetName: string;
+}> {
+  const id = spreadsheetId();
+  if (!id) throw new Error('GOOGLE_SHEETS_SPREADSHEET_ID is not set');
+  const tab = tabName();
+  let headerRow: unknown[] = [];
+  try {
+    const headerPeek = await sheetsValuesGet({
+      spreadsheetId: id,
+      rangeA1: buildA1Range(tab, 'A1:J1'),
+      valueRenderOption: 'FORMULA',
+    });
+    headerRow = headerPeek[0] ?? [];
+  } catch {
+    return { rows: [], tabFound: false, sheetName: tab };
+  }
+  if (!isSimplifiedPortfolioQuotesLayout(headerRow)) return { rows: [], tabFound: true, sheetName: tab };
+
+  const values = await sheetsValuesGet({
+    spreadsheetId: id,
+    rangeA1: buildA1Range(tab, 'A2:J500'),
+    valueRenderOption: 'FORMULA',
+    dateTimeRenderOption: 'FORMATTED_STRING',
+  });
+  const map = buildPortfolioQuotesColumnMap(headerRow);
+  const symIdx = colIndex(map, 'symbol') ?? 0;
+  const gtIdx = colIndex(map, 'google_ticker') ?? 1;
+  const priceIdx = colIndex(map, 'price') ?? 2;
+  const statusIdx = colIndex(map, 'status') ?? 7;
+  return {
+    tabFound: true,
+    sheetName: tab,
+    rows: values
+      .map((row, idx) => ({
+        sheetRowNumber: idx + 2,
+        symbol: googleSheetCellAsString(cellAt(row, symIdx)).toUpperCase(),
+        googleTicker: googleSheetCellAsString(cellAt(row, gtIdx)).toUpperCase(),
+        priceFormula: googleSheetCellAsString(cellAt(row, priceIdx)) || undefined,
+        statusFormula: googleSheetCellAsString(cellAt(row, statusIdx)) || undefined,
+      }))
+      .filter((row) => row.symbol.length > 0 && row.symbol !== 'SYMBOL'),
+  };
 }
 
 function parseLegacyPortfolioQuoteRows(

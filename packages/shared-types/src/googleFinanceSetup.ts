@@ -67,6 +67,8 @@ export type GoogleFinanceRepairPostCheck = {
   parsedRowsOk: number;
   anchorMatched: number;
   anchorOk: number;
+  /** additive: anchor rows present but GOOGLEFINANCE has not produced numeric read-back yet */
+  formulaPendingCount?: number;
   missingAnchors: string[];
   recommendedNextAction: string;
 };

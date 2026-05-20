@@ -162,13 +162,14 @@ const SAMPLE_FORMULAS_UNPREFIXED = [
   '=GOOGLEFINANCE("TSLA","price")',
 ];
 
-export const PORTFOLIO_QUOTES_SAMPLE_TSV = `symbol\tgoogle_ticker\tprice\tname\tvolume\tmarketcap\ttradetime\tstatus
-SPY\tNYSEARCA:SPY\t=IFERROR(GOOGLEFINANCE(B2,"price"),"")\t=IFERROR(GOOGLEFINANCE(B2,"name"),"")\t=IFERROR(GOOGLEFINANCE(B2,"volume"),"")\t=IFERROR(GOOGLEFINANCE(B2,"marketcap"),"")\t=IFERROR(GOOGLEFINANCE(B2,"tradetime"),"")\t=IF(C2="","missing","ok")
-QQQ\tNASDAQ:QQQ\t=IFERROR(GOOGLEFINANCE(B3,"price"),"")\t=IFERROR(GOOGLEFINANCE(B3,"name"),"")\t=IFERROR(GOOGLEFINANCE(B3,"volume"),"")\t=IFERROR(GOOGLEFINANCE(B3,"marketcap"),"")\t=IFERROR(GOOGLEFINANCE(B3,"tradetime"),"")\t=IF(C3="","missing","ok")
-TSLA\tNASDAQ:TSLA\t=IFERROR(GOOGLEFINANCE(B4,"price"),"")\t=IFERROR(GOOGLEFINANCE(B4,"name"),"")\t=IFERROR(GOOGLEFINANCE(B4,"volume"),"")\t=IFERROR(GOOGLEFINANCE(B4,"marketcap"),"")\t=IFERROR(GOOGLEFINANCE(B4,"tradetime"),"")\t=IF(C4="","missing","ok")
-NVDA\tNASDAQ:NVDA\t=IFERROR(GOOGLEFINANCE(B5,"price"),"")\t=IFERROR(GOOGLEFINANCE(B5,"name"),"")\t=IFERROR(GOOGLEFINANCE(B5,"volume"),"")\t=IFERROR(GOOGLEFINANCE(B5,"marketcap"),"")\t=IFERROR(GOOGLEFINANCE(B5,"tradetime"),"")\t=IF(C5="","missing","ok")
-AAPL\tNASDAQ:AAPL\t=IFERROR(GOOGLEFINANCE(B6,"price"),"")\t=IFERROR(GOOGLEFINANCE(B6,"name"),"")\t=IFERROR(GOOGLEFINANCE(B6,"volume"),"")\t=IFERROR(GOOGLEFINANCE(B6,"marketcap"),"")\t=IFERROR(GOOGLEFINANCE(B6,"tradetime"),"")\t=IF(C6="","missing","ok")
-MSFT\tNASDAQ:MSFT\t=IFERROR(GOOGLEFINANCE(B7,"price"),"")\t=IFERROR(GOOGLEFINANCE(B7,"name"),"")\t=IFERROR(GOOGLEFINANCE(B7,"volume"),"")\t=IFERROR(GOOGLEFINANCE(B7,"marketcap"),"")\t=IFERROR(GOOGLEFINANCE(B7,"tradetime"),"")\t=IF(C7="","missing","ok")`;
+export const PORTFOLIO_QUOTES_SAMPLE_TSV = `symbol\tgoogle_ticker\tprice\tname\tvolume\tmarketcap\ttradetime\tstatus\tchecked_at\tsource
+SPY\tNYSEARCA:SPY\t=IFERROR(GOOGLEFINANCE(B2,"price"),"")\t=IFERROR(GOOGLEFINANCE(B2,"name"),"")\t=IFERROR(GOOGLEFINANCE(B2,"volume"),"")\t=IFERROR(GOOGLEFINANCE(B2,"marketcap"),"")\t=IFERROR(GOOGLEFINANCE(B2,"tradetime"),"")\t=IF(ISNUMBER(C2),"ok",IF(C2="","pending","empty"))\t=IF(ISNUMBER(C2),NOW(),"")\tdirect_repair
+QQQ\tNASDAQ:QQQ\t=IFERROR(GOOGLEFINANCE(B3,"price"),"")\t=IFERROR(GOOGLEFINANCE(B3,"name"),"")\t=IFERROR(GOOGLEFINANCE(B3,"volume"),"")\t=IFERROR(GOOGLEFINANCE(B3,"marketcap"),"")\t=IFERROR(GOOGLEFINANCE(B3,"tradetime"),"")\t=IF(ISNUMBER(C3),"ok",IF(C3="","pending","empty"))\t=IF(ISNUMBER(C3),NOW(),"")\tdirect_repair
+IWM\tNYSEARCA:IWM\t=IFERROR(GOOGLEFINANCE(B4,"price"),"")\t=IFERROR(GOOGLEFINANCE(B4,"name"),"")\t=IFERROR(GOOGLEFINANCE(B4,"volume"),"")\t=IFERROR(GOOGLEFINANCE(B4,"marketcap"),"")\t=IFERROR(GOOGLEFINANCE(B4,"tradetime"),"")\t=IF(ISNUMBER(C4),"ok",IF(C4="","pending","empty"))\t=IF(ISNUMBER(C4),NOW(),"")\tdirect_repair
+TSLA\tNASDAQ:TSLA\t=IFERROR(GOOGLEFINANCE(B5,"price"),"")\t=IFERROR(GOOGLEFINANCE(B5,"name"),"")\t=IFERROR(GOOGLEFINANCE(B5,"volume"),"")\t=IFERROR(GOOGLEFINANCE(B5,"marketcap"),"")\t=IFERROR(GOOGLEFINANCE(B5,"tradetime"),"")\t=IF(ISNUMBER(C5),"ok",IF(C5="","pending","empty"))\t=IF(ISNUMBER(C5),NOW(),"")\tdirect_repair
+NVDA\tNASDAQ:NVDA\t=IFERROR(GOOGLEFINANCE(B6,"price"),"")\t=IFERROR(GOOGLEFINANCE(B6,"name"),"")\t=IFERROR(GOOGLEFINANCE(B6,"volume"),"")\t=IFERROR(GOOGLEFINANCE(B6,"marketcap"),"")\t=IFERROR(GOOGLEFINANCE(B6,"tradetime"),"")\t=IF(ISNUMBER(C6),"ok",IF(C6="","pending","empty"))\t=IF(ISNUMBER(C6),NOW(),"")\tdirect_repair
+AAPL\tNASDAQ:AAPL\t=IFERROR(GOOGLEFINANCE(B7,"price"),"")\t=IFERROR(GOOGLEFINANCE(B7,"name"),"")\t=IFERROR(GOOGLEFINANCE(B7,"volume"),"")\t=IFERROR(GOOGLEFINANCE(B7,"marketcap"),"")\t=IFERROR(GOOGLEFINANCE(B7,"tradetime"),"")\t=IF(ISNUMBER(C7),"ok",IF(C7="","pending","empty"))\t=IF(ISNUMBER(C7),NOW(),"")\tdirect_repair
+MSFT\tNASDAQ:MSFT\t=IFERROR(GOOGLEFINANCE(B8,"price"),"")\t=IFERROR(GOOGLEFINANCE(B8,"name"),"")\t=IFERROR(GOOGLEFINANCE(B8,"volume"),"")\t=IFERROR(GOOGLEFINANCE(B8,"marketcap"),"")\t=IFERROR(GOOGLEFINANCE(B8,"tradetime"),"")\t=IF(ISNUMBER(C8),"ok",IF(C8="","pending","empty"))\t=IF(ISNUMBER(C8),NOW(),"")\tdirect_repair`;
 
 const USER_SETUP_STEPS: GoogleFinanceSetupCheckResult['userSetupSteps'] = [
   { step: 1, label: 'Google Sheets에서 portfolio_quotes 탭을 확인합니다.' },

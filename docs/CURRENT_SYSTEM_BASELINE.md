@@ -13,6 +13,7 @@
 - **긴 응답 UX(EVO-026):** `buildLongResponseFallback` — Research/PB/Trend·기존 Persona/Committee. 요약·복사·후속 seed(sessionStorage). 자동 저장 없음.
 - **Action Item hub(EVO-028 1차):** 모든 inbox 저장 경로는 `sourceSummary`·`checklist`·`doNotDo`·`sourceRefs`/`recommendedNextLinks`·`actionSteps` 목표. `source_type=manual`이어도 `detail_json.sourceLabel`로 PB/Trend 등 구분. `POST`만 write; GET·링크는 read-only. 상세: `docs/ops/action_items.md`.
 - **Dashboard Command Center(EVO-027 1차):** `/` 상단은 data blocker 1개와 오늘 확인할 운영 작업 최대 3개를 보여준다. `DashboardClient.tsx`는 `CommandCenterSection`, `TodayBriefSection`, `TodayCandidatesSection`, `DataReadinessSection`, `ActionItemsSummarySection`, `JudgmentReviewSummarySection`, `WatchlistRecommendationSection`으로 1차 렌더 분리했다.
+- **Today Brief thin-route prep:** `GET /api/dashboard/today-brief`는 아직 넓은 계약을 가진 route이므로 전체 service 추출 전 contract regression을 강화했다. `todayBriefRouteRequest`는 request/query parsing만 담당하고 DB 접근·ops write를 하지 않는다. `buildTodayBriefResponse`는 다음 라운드 추출 후보 skeleton만 있다.
 
 ## 주요 화면
 
@@ -110,3 +111,9 @@
 3. Google Sheets status (`/api/portfolio/quotes/status`, ticker/sector status)
 4. Sector Radar status (`/api/sector-radar/status`)
 5. Today Candidates ops summary (`/api/dashboard/today-candidates/ops-summary`, `range=24h|7d`·EVO-006 **미국 신호 empty 사유 히스토그램**, read-only)
+## Google Finance Direct Repair Baseline
+
+- `GET /api/system/google-finance-setup` remains read-only and only returns setup status plus repair plan.
+- Confirmed UI apply and `npm run google-finance-repair --workspace=apps/web -- --confirm --wait` share the same repair core.
+- Dry-run is the CLI default. Confirmed writes are limited to `portfolio_quotes`, use `overwrite=false`, preserve non-empty cells, and add missing simplified headers, US anchor rows, and blank GOOGLEFINANCE formulas.
+- This is a data readiness repair for Today Brief US gating only. It does not trade, order, rebalance, or mutate the Supabase ledger.

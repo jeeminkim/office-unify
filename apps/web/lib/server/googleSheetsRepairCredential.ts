@@ -40,7 +40,10 @@ function parseServiceAccountEmail(): string | null {
 
 /** Read-only: token fetch only, no spreadsheet mutation. */
 export async function inspectGoogleSheetsCredentialMeta(): Promise<GoogleSheetsCredentialMeta> {
-  const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim() || '';
+  const spreadsheetId =
+    process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim() ||
+    process.env.GOOGLE_SPREADSHEET_ID?.trim() ||
+    '';
   const email = parseServiceAccountEmail();
   const spreadsheetIdConfigured = Boolean(spreadsheetId);
 

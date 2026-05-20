@@ -8,7 +8,7 @@ vi.mock('@/lib/server/persona-chat-auth', () => ({
 }));
 
 vi.mock('@/lib/server/googleSheetsRepair', () => ({
-  applyGoogleSheetsRepair: (...args: unknown[]) => applyRepair(...args),
+  runGoogleSheetsRepairCore: (...args: unknown[]) => applyRepair(...args),
 }));
 
 describe('POST /api/system/google-finance-setup/repair/apply', () => {

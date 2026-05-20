@@ -100,6 +100,62 @@ describe('US candidate diagnostics', () => {
     expect(diag.actionHint).toBeTruthy();
   });
 
+  it('reports sheets_anchor_zero when Google Finance anchors are zero', () => {
+    const diag = buildUsCandidateDiagnostics({
+      usMarketSummary: { ...emptyUsSummary, available: true, signals: [] } as never,
+      userUsWatchlistCount: 1,
+      userUsHoldingCount: 0,
+      pool: [],
+      usDirectCandidates: [],
+      usKrMappedCandidates: [],
+      selectedDeck: [],
+      googleFinanceAnchorSummary: {
+        sheetsAnchorOk: 0,
+        anchorMatched: 0,
+        quoteSource: 'google_sheets_readback',
+      },
+    });
+    expect(diag.gatingReason).toBe('sheets_anchor_zero');
+  });
+
+  it('separates anchor OK but empty US signal from gating not connected', () => {
+    const emptySignalDiag = buildUsCandidateDiagnostics({
+      usMarketSummary: { ...emptyUsSummary, available: true, signals: [] } as never,
+      userUsWatchlistCount: 1,
+      userUsHoldingCount: 0,
+      pool: [],
+      usDirectCandidates: [],
+      usKrMappedCandidates: [],
+      selectedDeck: [],
+      googleFinanceAnchorSummary: {
+        sheetsAnchorOk: 3,
+        anchorMatched: 3,
+        quoteSource: 'google_sheets_readback',
+      },
+    });
+    expect(emptySignalDiag.gatingReason).toBe('sheets_anchor_ok_but_us_signal_empty');
+
+    const gatingDiag = buildUsCandidateDiagnostics({
+      usMarketSummary: {
+        available: true,
+        signals: [{ signalKey: 'x', label: 'x', direction: 'positive', confidence: 'low', evidence: [] }],
+        diagnostics: { anchorSymbolsRequested: 16, fetchFailed: false, coverageStatus: 'ok' },
+      } as never,
+      userUsWatchlistCount: 1,
+      userUsHoldingCount: 0,
+      pool: [],
+      usDirectCandidates: [],
+      usKrMappedCandidates: [],
+      selectedDeck: [],
+      googleFinanceAnchorSummary: {
+        sheetsAnchorOk: 3,
+        anchorMatched: 3,
+        quoteSource: 'google_sheets_readback',
+      },
+    });
+    expect(gatingDiag.gatingReason).toBe('gating_not_connected');
+  });
+
   it('aggregates quote_missing when quoteReady is false', () => {
     const pool = [
       baseCand({

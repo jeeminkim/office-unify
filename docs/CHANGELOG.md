@@ -4,6 +4,22 @@
 
 > 문서 관리 메모: Unreleased 항목이 누적되어 길어졌습니다. 이력은 유지하고, 현재 운영 기준은 `docs/CURRENT_SYSTEM_BASELINE.md`를 우선 참조합니다.
 
+### 2026-05-20 Google Finance Direct Sheet Repair - US Anchor E2E Fix
+
+- **Direct repair CLI:** added `npm run google-finance-repair --workspace=apps/web -- --dry-run|--confirm|--confirm --wait` for service-account based `portfolio_quotes` repair. Dry-run is the default and performs no write.
+- **Repair core:** the HTTP apply route and CLI now share the same repair core. Writes still require `confirm:true` or `--confirm`, default to `overwrite=false`, and are limited to `portfolio_quotes`.
+- **Anchor/formula repair:** expanded simplified headers with `checked_at`/`source`, widened read/write ranges to A:J, ensured the required US anchor universe, and added formula-render readback support.
+- **Setup UI:** repair disabled reasons, CLI copy, appended anchors, `anchorMatched`/`anchorOk`, formula pending count, and next-action guidance are visible after apply.
+- **US gating diagnostics:** regression coverage now separates `sheets_anchor_zero`, `sheets_anchor_ok_but_us_signal_empty`, and `gating_not_connected`.
+- **Guardrails:** no SQL, no Supabase ledger mutation, no automatic trading/order/rebalancing, and no secret/private key logging.
+
+### 2026-05-20 Thin Route Refactor - Today Brief Response Service Prep
+
+- **Today Brief contract safety:** added regression coverage for top-level response fields, `candidates`, `primaryCandidateDeck`, `qualityMeta.todayCandidates`, personalization, US diagnostics, score breakdown, decision trace, judgment quality, feedback, concentration, and theme connection shapes.
+- **Route boundary:** added pure `todayBriefRouteRequest` parsing helper for route-level request id, exposure window, diagnostics flag, force refresh flag, and KST date defaults.
+- **Service prep:** added `todayBriefResponseService` skeleton as the next extraction point. The route still owns broad response assembly in this round.
+- **Guardrails:** no SQL, no API field removal, no automatic trading/order/rebalancing behavior, and no behavior change to Today Brief writes. Existing bounded impression/snapshot write policy is unchanged.
+
 ### 2026-05-20 Structure Hygiene - Route Helper Refactor
 
 - **Persona chat routes:** `/api/persona-chat/message` and `/api/persona-chat/message/stream` now share request parsing, idempotency preparation, persona resolution, and provider key checks through `personaChatRouteRequest`.

@@ -76,6 +76,9 @@ npm run pre-live-smoke --workspace=apps/web
 
 ## 3. Today Brief / Today Candidates
 
+- [ ] `todayBriefRouteRequest` helper는 request/query parsing만 수행하고 DB 접근·ops write를 하지 않는다.
+- [ ] `todayBriefResponseService`는 아직 skeleton이며, `buildTodayBriefResponse` 전체 연결은 다음 라운드 전 contract 테스트 통과 후 진행한다.
+- [ ] Today Brief contract regression: top-level fields, `candidates`, `primaryCandidateDeck`, `qualityMeta.todayCandidates.personalization`, US diagnostics, feedback, concentration, theme connection key가 유지된다.
 - [ ] `docs/sql/APPLY_ORDER.md` §8(17–20) 적용 후 impression·sector snapshot·research history·recommendation 테이블 존재 확인.
 - [ ] Dashboard 「미국 후보 진단」「7일 노출 진단」「관심종목 등록 후보」접이식 섹션 동작(승인 전 watchlist 미등록).
 - [ ] Sector Radar 「최근 스냅샷」read-only 조회(run/items).
@@ -103,6 +106,13 @@ npm run pre-live-smoke --workspace=apps/web
 - [ ] parsed rows OK vs Sheets anchor OK 분리 표시 · mismatch 시 anchor 매칭 점검.
 - [ ] 행동 순서: 샘플 표 또는 Repair apply → price 확인 → 시세 새로고침 → 상태 확인 → Today Brief · API는 접기 영역.
 - [ ] 외부 보유 import·금융 로그인 UI **추가되지 않음**.
+
+### 3c-1. Google Finance direct repair CLI
+
+- [ ] Dry-run: `npm run google-finance-repair --workspace=apps/web -- --dry-run` reports the plan and performs write 0.
+- [ ] Confirmed path is used only intentionally: `npm run google-finance-repair --workspace=apps/web -- --confirm --wait`.
+- [ ] `portfolio_quotes` repair preserves non-empty cells, appends missing US anchors, and shows formula pending vs anchor OK separately.
+- [ ] API key only is not treated as Sheet write capable; service account JSON + spreadsheet Editor access are required.
 
 ## 3b. US data setup · Action Step Runner · Long response fallback
 

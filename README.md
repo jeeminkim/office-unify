@@ -94,6 +94,18 @@ npm run pre-live-smoke --workspace=apps/web
 
 `pre-live-smoke` runs in dry-run mode by default and does not call live HTTP endpoints. For live smoke, provide an origin and session cookie as described by the script output.
 
+## Google Finance Sheet Repair
+
+`/ops/google-finance-setup` remains read-only on GET. Confirmed Sheet repair is available through the UI apply button or the local CLI:
+
+```bash
+npm run google-finance-repair --workspace=apps/web -- --dry-run
+npm run google-finance-repair --workspace=apps/web -- --confirm
+npm run google-finance-repair --workspace=apps/web -- --confirm --wait
+```
+
+Dry-run is the default. Confirmed writes require `GOOGLE_SERVICE_ACCOUNT_JSON` plus `GOOGLE_SHEETS_SPREADSHEET_ID` or `GOOGLE_SPREADSHEET_ID`, and the service account must have Editor access to the spreadsheet. Repair is limited to `portfolio_quotes`, preserves non-empty cells by default, and only fills missing headers, anchor rows, and blank GOOGLEFINANCE formulas. It does not trade, order, rebalance, or mutate the Supabase ledger.
+
 ## Architecture Notes
 
 ### Thin Route Direction
@@ -104,7 +116,11 @@ Recent examples:
 
 - `personaChatRouteRequest`: shared request preparation for `/api/persona-chat/message` and `/api/persona-chat/message/stream`
 - `researchCenterGenerateRequest`: input parsing and desk normalization for `/api/research-center/generate`
+- `todayBriefRouteRequest`: pure route-level parsing for `/api/dashboard/today-brief`
+- `todayBriefResponseService`: planned extraction point for a future `buildTodayBriefResponse`
 - dashboard sections under `apps/web/app/components/dashboard/*`
+
+`GET /api/dashboard/today-brief` is intentionally not fully extracted yet. Its response contract is broad (`primaryCandidateDeck`, `qualityMeta.todayCandidates`, personalization, US diagnostics, feedback, concentration, theme connection, and bounded exposure diagnostics), so service extraction should be preceded by contract tests and small boundary helpers.
 
 ### Domain Boundaries
 
