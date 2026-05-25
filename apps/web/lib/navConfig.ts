@@ -101,3 +101,20 @@ export function flattenNavLinks(): NavLinkItem[] {
   for (const g of NAV_TREE) out.push(...g.children);
   return out;
 }
+
+const MOBILE_SHORT_LABEL_BY_HREF: Record<string, string> = {
+  '/dev-assistant': 'Dev',
+  '/portfolio-ledger': '원장',
+  '/ops/google-finance-setup': 'GF 설정',
+  '/sector-radar': '섹터',
+  '/realized-pnl': '실현손익',
+  '/financial-goals': '목표',
+  '/decision-journal': '판단일지',
+  '/trade-journal': '매매일지',
+  '/action-items': '작업함',
+};
+
+/** Mobile labels keep operational routes readable in narrow drawers/chips. */
+export function mobileNavLabel(item: Pick<NavLinkItem, 'href' | 'label'>): string {
+  return MOBILE_SHORT_LABEL_BY_HREF[item.href] ?? item.label;
+}

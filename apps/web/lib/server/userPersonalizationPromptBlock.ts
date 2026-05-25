@@ -1,14 +1,13 @@
 import 'server-only';
 
 import type { UserPersonalizationContext } from '@office-unify/shared-types';
+import { PERSONA_TRADE_DIRECTIVE_BLOCK_RE, scrubUnsafePersonaPhrases } from '@/lib/personaPrinciples';
 
 export const PERSONALIZATION_PROMPT_MAX_CHARS = 1200;
 
-const BANNED_IN_BLOCK = /자동매매|자동\s*주문|자동\s*리밸런싱|매수\s*추천|즉시\s*매수|즉시\s*매도/g;
-
 export function sanitizePersonalizationLine(line: string, max = 160): string {
   let t = line.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trim();
-  t = t.replace(BANNED_IN_BLOCK, '[확인 관점]');
+  t = scrubUnsafePersonaPhrases(t, '[확인 관점]');
   t = t.replace(/\d{1,3}(,\d{3})+\s*원/g, '[금액 생략]');
   t = t.replace(/\$\s*\d{4,}/g, '[금액 생략]');
   return t.slice(0, max);
@@ -103,7 +102,7 @@ export function buildPersonalizationPromptBlock(ctx: UserPersonalizationContext)
 
   const principlesIdx = compactKo.indexOf('[답변 원칙]');
   const userDerived = principlesIdx >= 0 ? compactKo.slice(0, principlesIdx) : compactKo;
-  if (BANNED_IN_BLOCK.test(userDerived)) {
+  if (PERSONA_TRADE_DIRECTIVE_BLOCK_RE.test(userDerived)) {
     throw new Error('personalization prompt block failed policy check');
   }
 

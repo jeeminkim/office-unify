@@ -1,6 +1,7 @@
 /**
  * EVO-004: PB 주간 점검 리포트(판단 보조). 매수 추천·자동 주문과 무관.
  */
+import type { PbOutputContractAuditSummary } from './pbOutputContract';
 
 export type PbWeeklyReviewItemType =
   | 'today_candidate'
@@ -41,6 +42,7 @@ export type PbWeeklyReviewQualityMeta = {
   /** Additive: POST PB 생성 후 응답 검증. */
   privateBanker?: {
     responseGuard?: PbWeeklyReviewResponseGuardMeta;
+    outputContract?: PbOutputContractAuditSummary;
   };
 };
 

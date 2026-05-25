@@ -2,6 +2,13 @@
 
 배포·실사용 전에 아래를 순서에 맞게 확인합니다. 이 앱은 **관찰·복기·데이터 점검**용이며 **자동매매·자동 주문·자동 리밸런싱**은 없습니다.
 
+## EVO-039 Mobile Trust Repair
+
+- [ ] At a 390px viewport, mobile nav labels do not wrap one character per line and the hidden desktop top nav does not compete with bottom nav/More.
+- [ ] If no verified filing URL/source ref exists, a risk card does not label a Research route as `공시 확인`; it uses `리스크 리서치` or `공시 확인 방법` with truthful after-click copy.
+- [ ] After `mark_reviewed`, the active feedback window shows the risk as review-complete monitoring rather than a main deck candidate.
+- [ ] Mobile risk cards show primary/secondary actions first and move inbox, retrospective, report, and feedback extras behind More.
+
 ## 1. SQL 적용 확인
 
 - [ ] [`docs/sql/APPLY_ORDER.md`](../sql/APPLY_ORDER.md)의 순서와 사전 점검을 따랐는지 확인합니다.
@@ -47,6 +54,21 @@ npm run pre-live-smoke --workspace=apps/web
 - [ ] `GET /api/dashboard/today-brief` — `qualityMeta.todayCandidates.personalization` additive(점수 변화 없음).
 - [ ] Research send-to-pb · PB weekly POST 응답에 `personalizationContextSummary`만(원문 daily note·계좌 정보 없음).
 - [ ] `buildUserPersonalizationContext`는 read-only — GET today-brief·committee round에서 DB write 증가 없음.
+
+## 2f-1. Persona principles centralization (EVO-034)
+
+- [ ] `apps/web/lib/personaPrinciples.ts` remains pure constants/functions only: no DB access, no secret access, no provider/model call.
+- [ ] Safe negated caveats are allowed: “자동 주문은 실행되지 않습니다”, “자동매매를 하지 않습니다”, “매수 추천이 아닙니다”, and “automatic trading is not supported”.
+- [ ] Unsafe directives are still blocked/scrubbed: “지금 매수하세요”, “반드시 사세요”, “수익을 보장합니다”, “buy now”, and auto-order/rebalance phrasing.
+- [ ] Persona Chat structured output, PB response guard, PB Daily Note preview, Persona Coach copy, and personalization prompt block tests still pass without API response shape changes.
+
+## 2f-2. PB output contract validator (EVO-036)
+
+- [ ] PB message exposes additive `qualityMeta.privateBanker.outputContract` while returning the existing assistant body.
+- [ ] PB Weekly keeps existing `privateBanker.responseGuard` and adds `privateBanker.outputContract`; GET preview stays read-only.
+- [ ] PB Daily Note keeps `previewOnly: true`, `autoSaved: false`, `writeAction: false`, and adds `qualityMeta.pbDailyNote.outputContract`.
+- [ ] Research send-to-PB keeps follow-up `discussed`/`tracking` updates and returns additive PB output contract summary only.
+- [ ] Validator warnings never trigger SQL, provider/model changes, prompt rewrite, or automatic trading/order/rebalancing behavior.
 
 ## 2e. Command Center + Risk Review actions (P0 · 2026-05-19)
 

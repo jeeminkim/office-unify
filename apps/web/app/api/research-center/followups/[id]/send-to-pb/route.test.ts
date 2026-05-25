@@ -145,9 +145,16 @@ describe("POST /api/research-center/followups/[id]/send-to-pb", () => {
     expect(upPayload.status).toBe("discussed");
     expect(upPayload.pb_turn_id).toBe("asst-9");
     expect(upPayload.pb_session_id).toBe("usr-8");
-    const json = (await res.json()) as { ok: boolean; pb?: { deduplicated: boolean }; followup?: { status?: string } };
+    const json = (await res.json()) as {
+      ok: boolean;
+      pb?: { deduplicated: boolean; outputContract?: { source?: string } };
+      qualityMeta?: { privateBanker?: { outputContract?: { source?: string } } };
+      followup?: { status?: string };
+    };
     expect(json.ok).toBe(true);
     expect(json.pb?.deduplicated).toBe(false);
+    expect(json.pb?.outputContract?.source).toBe("research_send_to_pb");
+    expect(json.qualityMeta?.privateBanker?.outputContract?.source).toBe("research_send_to_pb");
     expect(json.followup?.status).toBe("discussed");
   });
 

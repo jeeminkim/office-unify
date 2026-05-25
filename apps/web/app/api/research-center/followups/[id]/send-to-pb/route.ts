@@ -18,6 +18,7 @@ import { buildInvestorProfilePromptContext } from '@/lib/server/suitabilityAsses
 import { buildPrivateBankerContentHash, runPrivateBankerMessageWithDbIdempotency } from '@/lib/server/runPrivateBankerMessage';
 import { logResearchFollowupOpsEvent } from '@/lib/server/researchFollowupOps';
 import { loadUserPersonalizationBundle } from '@/lib/server/userPersonalizationContext';
+import { buildPbOutputContractAuditSummary } from '@/lib/server/pbOutputContractValidator';
 
 function asCategory(c: string): ResearchFollowupCategory {
   const allowed: ResearchFollowupCategory[] = [
@@ -151,6 +152,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   const assistantId = result.body.assistantMessage?.id ?? null;
   const userMsgId = result.body.userMessage?.id ?? null;
+  const outputContract = buildPbOutputContractAuditSummary({
+    source: 'research_send_to_pb',
+    text: result.body.assistantMessage.content,
+    personalizationUsed: (personalization?.summary ?? result.body.personalizationContextSummary) ? true : undefined,
+  });
 
   const nextStatus = result.deduplicated ? 'tracking' : 'discussed';
 
@@ -196,6 +202,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       assistantPreview: result.body.assistantMessage.content.slice(0, 2000),
       deduplicated: result.deduplicated,
       personalizationContextSummary: personalization?.summary ?? result.body.personalizationContextSummary,
+      outputContract,
     },
+    qualityMeta: { privateBanker: { outputContract } },
   });
 }

@@ -1086,6 +1086,8 @@ export function DashboardClient() {
           >
             {reloading ? "새로고침 중..." : "요약 새로고침"}
           </button>
+        </div>
+        <div className="hidden gap-2 text-xs md:flex md:flex-wrap md:justify-end">
           <Link href="/dev-assistant" className="rounded border border-slate-300 bg-white px-3 py-1.5">Dev Assistant</Link>
           <Link href="/portfolio" className="rounded border border-slate-300 bg-white px-3 py-1.5">보유 현황</Link>
           <Link href="/portfolio-ledger" className="rounded border border-slate-300 bg-white px-3 py-1.5">보유/거래 원장</Link>
@@ -1543,6 +1545,11 @@ export function DashboardClient() {
                   {(todayBrief?.diagnosticCandidateCards ?? []).slice(0, 6).map((c) => (
                     <li key={c.candidateId} className="rounded border border-slate-200 bg-white p-2 text-[10px]">
                       <p className="font-medium">{c.name}</p>
+                      {c.candidateAction === "reviewed_risk" || c.candidateAction === "risk_review_completed" ? (
+                        <p className="mt-0.5 w-fit rounded bg-emerald-50 px-1.5 py-0.5 font-medium text-emerald-900">
+                          점검 완료 · 관찰 모니터링
+                        </p>
+                      ) : null}
                       <p className="text-slate-600">{scrubTodayCandidateUiCopy(c.reasonSummary).slice(0, 120)}</p>
                     </li>
                   ))}

@@ -55,8 +55,10 @@ describe('runPbDailyNotePreview', () => {
     expect(out.items[0].notTradeInstruction).toBe(true);
     expect(out.qualityMeta.previewOnly).toBe(true);
     expect(out.qualityMeta.autoSaved).toBe(false);
+    expect(out.qualityMeta.writeAction).toBe(false);
+    expect(out.qualityMeta.pbDailyNote?.outputContract?.source).toBe('pb_daily_note_preview');
     expect(JSON.stringify(out)).not.toMatch(/즉시\s*매수|매수\s*추천/);
-  });
+  }, 15000);
 
   it('returns insufficient_data when no previews match scope', async () => {
     const { buildDailyReview } = await import('@/lib/server/dailyReviewService');
@@ -78,5 +80,6 @@ describe('runPbDailyNotePreview', () => {
     const out = await runPbDailyNotePreview({} as never, 'u1', {});
     expect(out.status).toBe('insufficient_data');
     expect(out.items).toHaveLength(0);
+    expect(out.qualityMeta.pbDailyNote?.outputContract?.source).toBe('pb_daily_note_preview');
   });
 });

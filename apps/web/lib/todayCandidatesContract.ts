@@ -87,6 +87,17 @@ export type CorporateActionRiskSnapshot = {
   effectiveFrom: string;
   expiresAt: string | null;
   basisNote?: string;
+  /** Verified filing/disclosure targets are optional and additive. */
+  disclosureUrl?: string;
+  filingUrl?: string;
+  sourceRefs?: Array<{
+    type?: string;
+    sourceType?: string;
+    kind?: string;
+    href?: string;
+    url?: string;
+    label?: string;
+  }>;
 };
 
 export type TodayCandidateCandidateAction = 'observe_only' | 'review_required' | 'reviewed_risk' | 'risk_review_completed';

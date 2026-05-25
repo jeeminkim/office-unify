@@ -25,6 +25,8 @@ DDL 적용 순서: `docs/sql/APPLY_ORDER.md`
 
 ### 리스크 점검 후보 — 사용자 액션 (additive)
 
+- **Disclosure truth labels (EVO-039):** `check_disclosure` keeps its action key, but UI labels follow the target. A verified DART/KIND or explicit `disclosure` source ref is `공시 확인`; a Research Center seed is `리스크 리서치`; an external/manual path with no filing URL is `공시 확인 방법`.
+- **After-click copy:** verified disclosure links say that an external filing page opens. Research seeds say they open research and do not open the original filing. Manual-only checks say no filing URL is available.
 - **2026-05-20 feedback semantics:** `mark_reviewed` means the user completed the risk check for the current feedback window. The candidate is removed from the main deck and shown as reviewed-risk/monitoring when diagnostic cards are available. `reviewedAt`, `reviewedRiskCount`, `hiddenByUserCount`, `keptObservingCount`, and `reviewedRiskSuppressedCount` are additive contract fields.
 - `hide_7d` suppresses normal deck display as `user_hidden_7d`; `keep_observing` keeps the candidate visible and preserves repeated-exposure diagnostics. A new corporate-action event key can be handled in a later round without changing existing fields.
 - **모듈:** `todayCandidateRiskReviewActions`(서버 생성) · `todayCandidateNavigationLinks`(href) · `todayCandidateActionPolicy`(`policyKind`: `local_expand` | `navigate` | `api_post_confirmed` | `disabled_todo`). UI(`TodayCandidateRiskReviewPanel`)는 렌더만.

@@ -428,6 +428,7 @@ export type {
   PbWeeklyReviewQualityMeta,
   PbWeeklyReviewResponseGuardMeta,
 } from './privateBankerWeeklyReview';
+export type { PbOutputContractAuditSummary, PbOutputContractSource } from './pbOutputContract';
 export type {
   DecisionRetroCoachPostQualityMeta,
   DecisionRetroCoachPreview,

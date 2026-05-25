@@ -120,7 +120,7 @@ describe("/api/private-banker/weekly-review", () => {
     expect(hoisted.runPb).not.toHaveBeenCalled();
     const j = (await res.json()) as {
       ok?: boolean;
-      preview?: { weekOf?: string };
+      preview?: { weekOf?: string; qualityMeta?: { privateBanker?: { outputContract?: { source?: string } } } };
       recommendedIdempotencyKey?: string;
       sqlReadiness?: {
         investorProfileTableMissing?: boolean;
@@ -130,6 +130,7 @@ describe("/api/private-banker/weekly-review", () => {
     };
     expect(j.ok).toBe(true);
     expect(j.preview?.weekOf).toBe("2026-05-11");
+    expect(j.preview?.qualityMeta?.privateBanker?.outputContract?.source).toBe("pb_weekly_review");
     expect(j.sqlReadiness?.investorProfileTableMissing).toBe(false);
     expect(j.sqlReadiness?.researchFollowupTableMissing).toBe(false);
     expect(Array.isArray(j.sqlReadiness?.actionHints)).toBe(true);
@@ -204,12 +205,13 @@ describe("/api/private-banker/weekly-review", () => {
     const j = (await res.json()) as {
       pbSessionId?: string;
       pbTurnId?: string;
-      report?: { qualityMeta?: { todayCandidateCount?: number; privateBanker?: { responseGuard?: { missingSections?: string[]; policyPhraseWarnings?: string[] } } } };
+      report?: { qualityMeta?: { todayCandidateCount?: number; privateBanker?: { responseGuard?: { missingSections?: string[]; policyPhraseWarnings?: string[] }; outputContract?: { source?: string } } } };
     };
     expect(j.pbSessionId).toBe("sess-wr-1");
     expect(j.pbTurnId).toBe("am-1");
     expect(j.report?.qualityMeta?.todayCandidateCount).toBe(0);
     expect(j.report?.qualityMeta?.privateBanker?.responseGuard?.missingSections).toEqual([]);
     expect(j.report?.qualityMeta?.privateBanker?.responseGuard?.policyPhraseWarnings ?? []).toEqual([]);
+    expect(j.report?.qualityMeta?.privateBanker?.outputContract?.source).toBe("pb_weekly_review");
   });
 });

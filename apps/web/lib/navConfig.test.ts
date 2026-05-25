@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MOBILE_PRIMARY, NAV_HOME, NAV_TREE, flattenNavLinks, isNavActive } from '@/lib/navConfig';
+import { MOBILE_PRIMARY, NAV_HOME, NAV_TREE, flattenNavLinks, isNavActive, mobileNavLabel } from '@/lib/navConfig';
 
 describe('navConfig', () => {
   it('renders main tree groups', () => {
@@ -20,6 +20,12 @@ describe('navConfig', () => {
   it('active paths include watchlist under portfolio routes', () => {
     expect(isNavActive('/watchlist', '/watchlist')).toBe(true);
     expect(isNavActive('/portfolio-ledger', '/portfolio-ledger')).toBe(true);
+  });
+
+  it('uses short mobile labels for narrow operational routes', () => {
+    expect(mobileNavLabel({ href: '/dev-assistant', label: 'Dev Assistant' })).toBe('Dev');
+    expect(mobileNavLabel({ href: '/ops/google-finance-setup', label: 'Google Finance 설정' })).toBe('GF 설정');
+    expect(mobileNavLabel({ href: '/sector-radar', label: 'Sector Radar' })).toBe('섹터');
   });
 
   it('labels avoid auto-trade wording', () => {

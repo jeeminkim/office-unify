@@ -2,9 +2,9 @@ import 'server-only';
 
 import type { PbDailyNotePreviewItem, PbDailyNotePreviewResponse } from '@office-unify/shared-types';
 import { buildLongResponseFallback, isMessageExceedsLimitError } from '@/lib/longResponseFallback';
+import { scrubUnsafePersonaPhrases } from '@/lib/personaPrinciples';
 
 const TIMEOUT_MS = 12_000;
-const TRADE_BLOCK = /(즉시\s*매수|즉시\s*매도|지금\s*매수|주문\s*실행|자동\s*주문|자동\s*리밸런싱|자동\s*매매|매수\s*추천|매도\s*추천)/gi;
 
 export type PbDailyNoteLlmResult = {
   items?: PbDailyNotePreviewItem[];
@@ -15,7 +15,7 @@ export type PbDailyNoteLlmResult = {
 };
 
 function scrub(text: string, max = 400): string {
-  return text.replace(TRADE_BLOCK, '—').trim().slice(0, max);
+  return scrubUnsafePersonaPhrases(text, '—').trim().slice(0, max);
 }
 
 function parseLlmJson(raw: string): PbDailyNotePreviewItem[] | null {

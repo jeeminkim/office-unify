@@ -6,6 +6,7 @@ import {
   isRiskReviewNavigateAction,
   orderedRiskReviewActionsForUi,
   resolveRiskReviewActionHref,
+  resolveRiskReviewActionPresentation,
   riskReviewActionButtonLabel,
 } from '@/lib/todayCandidateRiskReviewPanelUi';
 
@@ -35,7 +36,7 @@ function hlb(): TodayStockCandidate {
 }
 
 describe('todayCandidateRiskReviewPanelUi', () => {
-  it('check_disclosure resolves research seed href when href missing', () => {
+  it('check_disclosure resolves research seed href without claiming it is a disclosure page', () => {
     const c = hlb();
     const actions = buildRiskReviewActions(c);
     const disc = actions.find((a) => a.actionKey === 'check_disclosure');
@@ -44,15 +45,56 @@ describe('todayCandidateRiskReviewPanelUi', () => {
     const href = resolveRiskReviewActionHref(disc!, c);
     expect(href).toContain('/research-center');
     expect(href).toContain('riskReview=1');
-    expect(riskReviewActionButtonLabel(disc!)).toBe('공시 확인');
+    expect(riskReviewActionButtonLabel(disc!, c)).toBe('리스크 리서치');
+    expect(resolveRiskReviewActionPresentation(disc!, c)).toMatchObject({
+      label: '리스크 리서치',
+      isVerifiedDisclosure: false,
+    });
   });
 
-  it('external_hint style actions use disclosure label', () => {
+  it('external_hint style actions without a disclosure URL explain the manual check', () => {
     const c = hlb();
-    const actions = buildRiskReviewActions(c);
-    const disc = actions.find((a) => a.actionType === 'external_hint');
-    expect(disc).toBeDefined();
-    expect(riskReviewActionButtonLabel(disc!)).toBe('공시 확인');
+    const manual = {
+      actionKey: 'check_holding_exposure',
+      label: '외부 확인',
+      description: '',
+      actionType: 'external_hint',
+      priority: 'secondary',
+      dangerLevel: 'caution',
+    } as const;
+    expect(resolveRiskReviewActionPresentation(manual, c)).toMatchObject({
+      label: '공시 확인 방법',
+      afterClickExpectation: '공시 URL이 없어 확인 방법만 안내합니다.',
+      isVerifiedDisclosure: false,
+    });
+  });
+
+  it('uses disclosure label only for verified disclosure URLs', () => {
+    const c = hlb();
+    c.corporateActionRisk = {
+      ...c.corporateActionRisk!,
+      disclosureUrl: 'https://dart.fss.or.kr/dsaf001/main.do?rcpNo=1',
+    };
+    const disc = buildRiskReviewActions(c).find((a) => a.actionKey === 'check_disclosure');
+    expect(resolveRiskReviewActionPresentation(disc!, c)).toMatchObject({
+      href: 'https://dart.fss.or.kr/dsaf001/main.do?rcpNo=1',
+      label: '공시 확인',
+      isVerifiedDisclosure: true,
+      afterClickExpectation: '외부 공시 페이지를 엽니다.',
+    });
+  });
+
+  it('does not show disclosure label when a disclosure source ref has no URL', () => {
+    const c = hlb();
+    c.corporateActionRisk = {
+      ...c.corporateActionRisk!,
+      sourceRefs: [{ type: 'disclosure', label: 'manual registry without URL' }],
+    };
+    const disc = buildRiskReviewActions(c).find((a) => a.actionKey === 'check_disclosure');
+    const presentation = resolveRiskReviewActionPresentation(disc!, c);
+    expect(presentation.label).toBe('리스크 리서치');
+    expect(presentation.isVerifiedDisclosure).toBe(false);
+    expect(presentation.href).toContain('/research-center');
   });
 
   it('ordered actions include navigate keys for UI', () => {

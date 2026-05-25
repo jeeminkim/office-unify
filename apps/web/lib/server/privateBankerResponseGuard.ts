@@ -1,4 +1,5 @@
 import type { PbWeeklyReviewQualityMeta, PbWeeklyReviewResponseGuardMeta } from '@office-unify/shared-types';
+import { isSafeNegatedCaveat } from '@/lib/personaPrinciples';
 
 const REQUIRED_SECTION_MARKERS = [
   '[행동 분류]',
@@ -80,7 +81,7 @@ export function auditPrivateBankerStructuredResponse(text: string): PbWeeklyRevi
     for (const { start, end } of collectMatches(re, text)) {
       if (looksLikeForbiddenBehaviorBullet(text, start)) continue;
       const w = windowAround(text, start, end);
-      if (!SAFE_POLICY_WINDOW.test(w)) push(code);
+      if (!SAFE_POLICY_WINDOW.test(w) && !isSafeNegatedCaveat(w)) push(code);
     }
   }
 
@@ -134,7 +135,7 @@ export function auditRetroCoachPolicyWarnings(text: string): { policyPhraseWarni
         if (/^[-*•]/.test(trimmed) || /^\d+\./.test(trimmed)) continue;
       }
       const w = text.slice(Math.max(0, start - 48), Math.min(text.length, end + 72));
-      if (!SAFE_POLICY_WINDOW.test(w)) push(code);
+      if (!SAFE_POLICY_WINDOW.test(w) && !isSafeNegatedCaveat(w)) push(code);
     }
   }
 

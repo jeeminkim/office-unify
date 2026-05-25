@@ -13,6 +13,8 @@
 - `/` : 개인 투자 대시보드
   - **Operational UX Guidance Layer:** shared Button Action Contract badges/hints explain whether a control only navigates, performs a read-only check, writes after confirmation, saves to Action Inbox, saves a note, updates feedback priority, changes local UI state, or sends the user to an external manual check.
   - **Persona Coach Guidance:** deterministic, non-LLM copy gives each major screen a short role-specific purpose and next-step guide. It does not save data by itself.
+  - **Persona principles(EVO-034):** `apps/web/lib/personaPrinciples.ts` is the shared pure guardrail module for no-trade/no-auto-execution caveats, forbidden phrase detection, safe negated caveats, common section labels, and role snippets. Existing prompt/guard behavior remains intact; this layer centralizes copy and detection only.
+  - **PB output contract audit(EVO-036):** `pbOutputContractValidator` adds warning-only quality summaries for PB message, PB Weekly, PB Daily Note preview, and Research send-to-PB. It reuses persona principles and never rewrites or blocks generated PB text.
   - **Command Center(EVO-027):** data blocker 1개 + 오늘 확인할 운영 작업 최대 3개. 데이터 문제와 투자 판단을 분리하고 자동 주문을 실행하지 않는다.
   - **Section split:** `DashboardClient.tsx`는 상위 state/API orchestration을 유지하고, 렌더링은 `apps/web/app/components/dashboard/*`의 `CommandCenterSection`, `TodayBriefSection`, `TodayCandidatesSection`, `DataReadinessSection`, `ActionItemsSummarySection`, `JudgmentReviewSummarySection`, `WatchlistRecommendationSection`으로 1차 분리한다.
   - **WatchlistRecommendationSection:** pending candidate는 approve 전 `web_portfolio_watchlist`에 등록되지 않으며, approve/reject는 명시 버튼에서만 기존 write API를 호출한다.

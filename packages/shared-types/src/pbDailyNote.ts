@@ -1,6 +1,7 @@
 /** EVO-015-2: PB Daily Note preview (명시 요청, 자동 저장 없음). */
 
 import type { LongResponseFallback } from './longResponseFallback';
+import type { PbOutputContractAuditSummary } from './pbOutputContract';
 
 export type PbDailyNoteScope =
   | 'holdings'
@@ -92,5 +93,9 @@ export type PbDailyNotePreviewResponse = {
     generatedAt: string;
     /** additive: read-only 개인화 요약(원문 메모 없음) */
     personalizationContextSummary?: import('./userPersonalizationContext').PersonalizationContextSummary;
+    /** additive: warning-only PB preview output audit. */
+    pbDailyNote?: {
+      outputContract?: PbOutputContractAuditSummary;
+    };
   };
 };

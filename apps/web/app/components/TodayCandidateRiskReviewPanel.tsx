@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type {
   TodayCandidateFeedbackAction,
   TodayCandidateRiskReviewAction,
@@ -10,6 +10,7 @@ import type { TodayStockCandidate } from "@/lib/todayCandidatesContract";
 import { riskReviewChecklistItems } from "@/lib/todayCandidateUiCopy";
 import { SaveToActionInboxButton } from "@/components/SaveToActionInboxButton";
 import { ActionIntentBadge } from "@/app/components/ActionIntentBadge";
+import { ActionStatusHint } from "@/app/components/ActionStatusHint";
 import { PersonaCoachHint } from "@/app/components/PersonaCoachHint";
 import {
   buildActionItemDetailFromTodayCandidate,
@@ -21,6 +22,7 @@ import {
   isRiskReviewFeedbackAction,
   isRiskReviewNavigateAction,
   orderedRiskReviewActionsForUi,
+  resolveRiskReviewActionPresentation,
   resolveRiskReviewActionHref,
   riskReviewActionButtonLabel,
 } from "@/lib/todayCandidateRiskReviewPanelUi";
@@ -64,6 +66,11 @@ export function TodayCandidateRiskReviewPanel({
   const [retroBusy, setRetroBusy] = useState(false);
   const [feedbackBusy, setFeedbackBusy] = useState<string | null>(null);
   const [localMsg, setLocalMsg] = useState<string | null>(null);
+  const [localFeedback, setLocalFeedback] = useState(candidate.userFeedbackState);
+
+  useEffect(() => {
+    setLocalFeedback(candidate.userFeedbackState);
+  }, [candidate.candidateId, candidate.userFeedbackState]);
 
   const riskActions = orderedRiskReviewActionsForUi(candidate.riskReviewActions);
   const reportHref =
@@ -95,7 +102,7 @@ export function TodayCandidateRiskReviewPanel({
       candidate,
     ) ??
     undefined;
-  const disclosureHref = resolveRiskReviewActionHref(
+  const disclosureAction =
     findAction(candidate, "check_disclosure") ?? {
       actionKey: "check_disclosure",
       label: "",
@@ -103,11 +110,16 @@ export function TodayCandidateRiskReviewPanel({
       actionType: "external_hint",
       priority: "primary",
       dangerLevel: "caution",
-    },
-    candidate,
-  );
+    };
+  const disclosurePresentation = resolveRiskReviewActionPresentation(disclosureAction, candidate);
+  const disclosureHref = disclosurePresentation.href;
 
-  const fb = candidate.userFeedbackState;
+  const fb = localFeedback ?? candidate.userFeedbackState;
+  const reviewedFeedbackActive =
+    fb?.active === true &&
+    (fb.action === "mark_reviewed" ||
+      candidate.candidateAction === "reviewed_risk" ||
+      candidate.candidateAction === "risk_review_completed");
 
   const saveRetro = async () => {
     if (!window.confirm("Today Candidate 리스크 점검 내용을 판단 복기 초안으로 저장할까요? (자동 주문 없음)")) {
@@ -146,6 +158,18 @@ export function TodayCandidateRiskReviewPanel({
 
     setFeedbackBusy(actionKey);
     setLocalMsg(null);
+    const previousFeedback = localFeedback;
+    if (feedbackAction === "mark_reviewed") {
+      const reviewedAt = new Date().toISOString();
+      setLocalFeedback({
+        action: "mark_reviewed",
+        active: true,
+        createdAt: fb?.createdAt ?? reviewedAt,
+        reviewedAt,
+        effectiveUntil: fb?.effectiveUntil,
+        feedbackId: fb?.feedbackId,
+      });
+    }
     try {
       const symbol = (candidate.stockCode ?? candidate.symbol ?? "").trim();
       const res = await fetch("/api/dashboard/today-candidates/feedback", {
@@ -175,6 +199,7 @@ export function TodayCandidateRiskReviewPanel({
         error?: string;
       };
       if (!res.ok) {
+        setLocalFeedback(previousFeedback);
         setLocalMsg(j.actionHint ?? j.error ?? "피드백 저장 실패");
         return;
       }
@@ -189,6 +214,7 @@ export function TodayCandidateRiskReviewPanel({
       setLocalMsg(msg);
       onFeedbackSaved?.(msg);
     } catch (e: unknown) {
+      setLocalFeedback(previousFeedback);
       setLocalMsg(e instanceof Error ? e.message : "피드백 저장 실패");
     } finally {
       setFeedbackBusy(null);
@@ -199,13 +225,18 @@ export function TodayCandidateRiskReviewPanel({
     const act = findAction(candidate, key);
     if (!act || act.actionType !== "api_post") return null;
     const busy = feedbackBusy === key;
-    const applied = act.deferred === true;
+    const applied =
+      act.deferred === true ||
+      (fb?.active === true &&
+        ((key === "mark_risk_reviewed" && fb.action === "mark_reviewed") ||
+          (key === "hide_for_7d" && fb.action === "hide_7d") ||
+          (key === "keep_observing" && fb.action === "keep_observing")));
     return (
       <button
         key={key}
         type="button"
         disabled={busy || applied}
-        className="rounded border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+        className="min-h-11 w-full rounded border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-800 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0 sm:w-auto"
         onClick={() => void submitFeedback(key)}
       >
         {busy ? "저장 중…" : act.label}
@@ -215,8 +246,91 @@ export function TodayCandidateRiskReviewPanel({
 
   return (
     <div className="mt-2 space-y-2">
-      <PersonaCoachHint role="risk_manager" className="mt-2" />
-      <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap">
+      <PersonaCoachHint role="risk_manager" variant="compact" className="mt-2" />
+      <div className="grid gap-2 sm:hidden">
+        <button
+          type="button"
+          className="min-h-11 w-full rounded border border-rose-300 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-950"
+          onClick={onTogglePanel}
+        >
+          {reviewedFeedbackActive
+            ? "점검 완료 · 관찰 모니터링"
+            : panelOpen
+              ? "리스크 점검 접기"
+              : "리스크 점검하기"}
+        </button>
+        <div className="grid gap-2">
+          {disclosureHref ? (
+            <Link
+              href={disclosureHref}
+              target={disclosurePresentation.isVerifiedDisclosure ? "_blank" : undefined}
+              rel={disclosurePresentation.isVerifiedDisclosure ? "noopener noreferrer" : undefined}
+              className="flex min-h-11 w-full items-center justify-center rounded border border-amber-400 bg-amber-50 px-3 py-2 text-center text-sm font-medium text-amber-950"
+            >
+              {disclosurePresentation.label}
+            </Link>
+          ) : null}
+          {journalHref ? (
+            <Link
+              href={journalHref}
+              className="flex min-h-11 w-full items-center justify-center rounded border border-violet-200 bg-violet-50 px-3 py-2 text-center text-sm text-violet-950"
+            >
+              관찰 메모
+            </Link>
+          ) : null}
+        </div>
+        {disclosurePresentation.afterClickExpectation ? (
+          <ActionStatusHint
+            intent={disclosurePresentation.isVerifiedDisclosure ? "external_manual_check" : "navigate_only"}
+            afterClick={disclosurePresentation.afterClickExpectation}
+          />
+        ) : null}
+        <details className="rounded border border-slate-200 bg-white p-2">
+          <summary className="cursor-pointer select-none text-sm font-medium text-slate-800">더보기</summary>
+          <div className="mt-2 grid gap-2">
+            {reportHref ? (
+              <Link
+                href={reportHref}
+                className="flex min-h-11 w-full items-center justify-center rounded border border-slate-300 bg-white px-3 py-2 text-center text-sm text-slate-800"
+              >
+                리포트 확인
+              </Link>
+            ) : null}
+            <button
+              type="button"
+              disabled={retroBusy}
+              className="min-h-11 w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 disabled:opacity-50"
+              onClick={() => void saveRetro()}
+            >
+              {retroBusy ? "저장 중" : "복기로 남기기"}
+            </button>
+            <SaveToActionInboxButton
+              compact
+              label="액션 인박스"
+              className="min-h-11 w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 disabled:opacity-50"
+              request={{
+                title: `[리스크 점검] ${candidate.name ?? candidate.stockCode}`,
+                description: candidate.reasonSummary,
+                sourceType: "today_candidate",
+                sourceId: candidate.candidateId,
+                sourceLabel: candidate.name ?? candidate.stockCode,
+                symbol: candidate.stockCode,
+                idempotencyKey: `today-candidate-risk:${candidate.candidateId}`,
+                detailJson: buildActionItemDetailFromTodayCandidate(candidate, {
+                  whyCreated: "모바일 리스크 점검 카드에서 저장됨",
+                }),
+              }}
+            />
+            {feedbackButtons}
+          </div>
+          <ActionStatusHint
+            className="mt-2"
+            intent="feedback_update"
+            afterClick="점검 완료와 7일 낮은 우선순위는 다음 Today Brief 노출 순서에 반영됩니다."
+          />
+        </details>
+      </div>
+      <div className="hidden flex-col gap-1.5 sm:flex sm:flex-row sm:flex-wrap">
         <button
           type="button"
           className="rounded border border-rose-300 bg-rose-50 px-2 py-1 text-[11px] font-medium text-rose-950"
@@ -259,9 +373,11 @@ export function TodayCandidateRiskReviewPanel({
         {disclosureHref ? (
           <Link
             href={disclosureHref}
+            target={disclosurePresentation.isVerifiedDisclosure ? "_blank" : undefined}
+            rel={disclosurePresentation.isVerifiedDisclosure ? "noopener noreferrer" : undefined}
             className="rounded border border-amber-400 bg-amber-50 px-2 py-1 text-center text-[11px] font-medium text-amber-950"
           >
-            공시 확인
+            {disclosurePresentation.label}
           </Link>
         ) : null}
         {journalHref ? (
@@ -279,6 +395,12 @@ export function TodayCandidateRiskReviewPanel({
         <ActionIntentBadge intent="save_to_inbox" compact />
         <ActionIntentBadge intent="external_manual_check" compact />
       </div>
+      {disclosurePresentation.afterClickExpectation ? (
+        <ActionStatusHint
+          intent={disclosurePresentation.isVerifiedDisclosure ? "external_manual_check" : "navigate_only"}
+          afterClick={disclosurePresentation.afterClickExpectation}
+        />
+      ) : null}
       {fb?.active ? (
         <div className="rounded border border-emerald-200 bg-emerald-50 p-2 text-[10px] text-emerald-950">
           <p>
@@ -355,7 +477,7 @@ export function TodayCandidateRiskReviewPanel({
                         rel={external ? "noopener noreferrer" : undefined}
                         className="rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] text-amber-950"
                       >
-                        {riskReviewActionButtonLabel(act)}
+                        {riskReviewActionButtonLabel(act, candidate)}
                       </Link>
                     );
                   }

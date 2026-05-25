@@ -10,6 +10,7 @@ import {
   flattenNavLinks,
   isGroupActive,
   isNavActive,
+  mobileNavLabel,
   type NavGroup,
 } from "@/lib/navConfig";
 
@@ -89,7 +90,7 @@ export function AppNav() {
             <Link
               key={item.href}
               href={item.href}
-              className={`mobile-nav-target flex min-w-[3rem] flex-col items-center justify-center rounded-lg px-2 py-1 text-[10px] ${
+              className={`mobile-nav-target flex min-w-[3rem] flex-col items-center justify-center whitespace-nowrap break-normal [overflow-wrap:normal] [word-break:keep-all] [writing-mode:horizontal-tb] rounded-lg px-2 py-1 text-[10px] ${
                 isNavActive(pathname, item.href) ||
                 (item.href === "/portfolio" &&
                   (pathname.startsWith("/portfolio-ledger") || pathname.startsWith("/watchlist")))
@@ -98,12 +99,12 @@ export function AppNav() {
               }`}
               title={item.label}
             >
-              <span>{item.short}</span>
+              <span className="whitespace-nowrap [word-break:keep-all]">{item.short}</span>
             </Link>
           ))}
           <button
             type="button"
-            className={`mobile-nav-target flex min-w-[3rem] flex-col items-center justify-center rounded-lg px-2 py-1 text-[10px] ${
+            className={`mobile-nav-target flex min-w-[3rem] flex-col items-center justify-center whitespace-nowrap break-normal [overflow-wrap:normal] [word-break:keep-all] [writing-mode:horizontal-tb] rounded-lg px-2 py-1 text-[10px] ${
               moreActive || moreOpen ? "font-semibold text-slate-900" : "text-slate-600"
             }`}
             aria-expanded={moreOpen}
@@ -116,7 +117,7 @@ export function AppNav() {
           <div className="mobile-nav-drawer max-h-[50vh] overflow-y-auto border-t bg-white px-3 py-2">
             {NAV_TREE.map((group) => (
               <details key={group.id} className="mb-2 rounded border border-slate-100" open={isGroupActive(pathname, group)}>
-                <summary className="cursor-pointer select-none px-2 py-1.5 text-[11px] font-semibold text-slate-800">
+                <summary className="cursor-pointer select-none whitespace-nowrap break-normal [overflow-wrap:normal] [word-break:keep-all] [writing-mode:horizontal-tb] px-2 py-1.5 text-[11px] font-semibold text-slate-800">
                   {group.label}
                   <span className="ml-1 font-normal text-slate-500">— {group.description}</span>
                 </summary>
@@ -125,13 +126,13 @@ export function AppNav() {
                     <li key={item.href}>
                       <Link
                         href={item.href}
-                        className={`block rounded border px-2 py-1.5 ${
+                        className={`block min-h-11 rounded border px-2 py-1.5 whitespace-nowrap break-normal [overflow-wrap:normal] [word-break:keep-all] [writing-mode:horizontal-tb] ${
                           isNavActive(pathname, item.href) ? "border-slate-800 bg-slate-100 font-medium" : "border-slate-200"
                         }`}
                         onClick={() => setMoreOpen(false)}
                       >
-                        <span className="text-[11px]">{item.label}</span>
-                        <span className="block text-[9px] text-slate-500">{item.description}</span>
+                        <span className="text-[11px]">{mobileNavLabel(item)}</span>
+                        <span className="block whitespace-normal text-[9px] text-slate-500">{item.description}</span>
                       </Link>
                     </li>
                   ))}

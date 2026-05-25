@@ -13,11 +13,11 @@ import { buildDailyReview } from '@/lib/server/dailyReviewService';
 import { buildDailyReviewNoteIdempotencyKey } from '@/lib/server/dailyReviewNotesStore';
 import { tryEnhancePbDailyNotesWithLlm } from '@/lib/server/pbDailyNoteLlm';
 import { loadUserPersonalizationBundle } from '@/lib/server/userPersonalizationContext';
+import { scrubUnsafePersonaPhrases } from '@/lib/personaPrinciples';
+import { buildPbOutputContractAuditSummary } from '@/lib/server/pbOutputContractValidator';
 
 const DEFAULT_MAX_ITEMS = 6;
 const MAX_ITEMS_CAP = 8;
-
-const TRADE_BLOCK = /(즉시\s*매수|즉시\s*매도|지금\s*매수|주문\s*실행|자동\s*주문|자동\s*리밸런싱|자동\s*매매|매수\s*추천|매도\s*추천)/gi;
 
 const DEFAULT_DO_NOT = [
   '자동 주문·자동 리밸런싱 없음',
@@ -29,7 +29,7 @@ function ymdKst(d = new Date()): string {
 }
 
 function scrubText(text: string, max = 500): string {
-  return text.replace(TRADE_BLOCK, '—').trim().slice(0, max);
+  return scrubUnsafePersonaPhrases(text, '—').trim().slice(0, max);
 }
 
 function scrubList(items: string[], max = 6): string[] {
@@ -186,6 +186,9 @@ export async function runPbDailyNotePreview(
         writeAction: false,
         warnings,
         generatedAt: new Date().toISOString(),
+        pbDailyNote: {
+          outputContract: buildPbOutputContractAuditSummary({ source: 'pb_daily_note_preview', items: [] }),
+        },
       },
     };
   }
@@ -247,6 +250,14 @@ export async function runPbDailyNotePreview(
       warnings,
       generatedAt: new Date().toISOString(),
       personalizationContextSummary: personalization?.summary,
+      pbDailyNote: {
+        outputContract: buildPbOutputContractAuditSummary({
+          source: 'pb_daily_note_preview',
+          items,
+          personalizationUsed: personalization?.summary ? true : undefined,
+          longResponseFallbackUsed: Boolean(longResponseFallback),
+        }),
+      },
     },
   };
 }

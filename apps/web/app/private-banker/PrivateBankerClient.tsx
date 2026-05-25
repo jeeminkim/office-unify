@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   LongResponseFallback,
+  PbOutputContractAuditSummary,
   PersonaChatMessageDto,
   PersonaChatSessionInitResponseBody,
 } from "@office-unify/shared-types";
@@ -36,6 +37,7 @@ export function PrivateBankerClient() {
   } | null>(null);
   const [modelUsage, setModelUsage] = useState<{ providerUsed: string; fallbackUsed: boolean } | null>(null);
   const [longResponseFallback, setLongResponseFallback] = useState<LongResponseFallback | null>(null);
+  const [outputContract, setOutputContract] = useState<PbOutputContractAuditSummary | null>(null);
 
   const sendInFlightRef = useRef(false);
   const idempotencyKeyRef = useRef<string | null>(null);
@@ -113,6 +115,11 @@ export function PrivateBankerClient() {
         };
         modelUsage?: { providerUsed: string; fallbackUsed: boolean };
         longResponseFallback?: LongResponseFallback;
+        qualityMeta?: {
+          privateBanker?: {
+            outputContract?: PbOutputContractAuditSummary;
+          };
+        };
         error?: string;
         code?: string;
       };
@@ -152,6 +159,7 @@ export function PrivateBankerClient() {
       setOutputQuality(data.outputQuality ?? null);
       setModelUsage(data.modelUsage ?? null);
       setLongResponseFallback(data.longResponseFallback ?? null);
+      setOutputContract(data.qualityMeta?.privateBanker?.outputContract ?? null);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "전송 실패";
       const fb = buildLongResponseFallbackFromError(msg);
@@ -255,6 +263,13 @@ export function PrivateBankerClient() {
           {outputQuality?.missingSections?.length ? (
             <p className="mt-1 text-[11px] text-amber-800">누락 섹션: {outputQuality.missingSections.join(", ")}</p>
           ) : null}
+        </div>
+      ) : null}
+
+      {outputContract && outputContract.status !== "ok" ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+          <p className="font-medium">PB 응답 품질 점검: 일부 확인 섹션이 부족합니다.</p>
+          <p className="mt-0.5">본문은 유지되며, 자동 주문은 실행되지 않습니다.</p>
         </div>
       ) : null}
 

@@ -1,3 +1,5 @@
+import { containsUnsafeDirective } from '@/lib/personaPrinciples';
+
 export type PersonaCoachRole =
   | 'operator'
   | 'data_manager'
@@ -35,8 +37,8 @@ const GUIDANCE: Record<PersonaCoachRole, PersonaCoachGuidance> = {
   data_manager: {
     role: 'data_manager',
     title: '데이터 관리자',
-    oneLinePurpose: '미국 anchor 시세가 Google Sheets에서 계산되는지 확인합니다.',
-    whatYouCanDoNow: ['상태 다시 확인', '시세 새로고침', 'confirm 후 portfolio_quotes 안전 보강'],
+    oneLinePurpose: '시세·공시·원장 연결 상태를 점검합니다.',
+    whatYouCanDoNow: ['상태 다시 확인', '시세 새로고침', '연결 상태 점검'],
     whatWillBeSaved: ['안전 보강을 확인하면 portfolio_quotes의 빈 셀만 보강됩니다.'],
     whatNotToDo: ['Supabase 원장을 자동 변경하지 않습니다.'],
     primaryNextActionLabel: '상태 다시 확인',
@@ -91,7 +93,7 @@ const GUIDANCE: Record<PersonaCoachRole, PersonaCoachGuidance> = {
   action_secretary: {
     role: 'action_secretary',
     title: '액션 비서',
-    oneLinePurpose: '여러 화면에서 생긴 확인 작업을 한 곳에서 추적합니다.',
+    oneLinePurpose: '저장 버튼을 누를 때만 Action Inbox에 남깁니다.',
     whatYouCanDoNow: ['원본 보기', '단계 실행', '완료/보류 처리'],
     whatWillBeSaved: ['완료/보류/step 완료 버튼을 누른 내용이 저장됩니다.'],
     whatNotToDo: ['작업 완료를 투자 실행으로 해석하지 않습니다.'],
@@ -106,6 +108,5 @@ export function getPersonaCoachGuidance(role: PersonaCoachRole): PersonaCoachGui
 }
 
 export function assertNoForbiddenPersonaCoachCopy(): boolean {
-  const blob = JSON.stringify(GUIDANCE);
-  return !/자동\s*주문|자동매매|자동\s*리밸런싱/.test(blob);
+  return !containsUnsafeDirective(JSON.stringify(GUIDANCE));
 }

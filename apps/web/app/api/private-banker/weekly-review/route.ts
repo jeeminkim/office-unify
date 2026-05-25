@@ -19,6 +19,7 @@ import { buildLongResponseFallback } from '@/lib/longResponseFallback';
 import { INVESTOR_PROFILE_TABLE_ACTION_HINT } from '@/lib/server/investorProfileSupabaseErrors';
 import { RESEARCH_FOLLOWUP_TABLE_ACTION_HINT } from '@/lib/server/researchFollowupSupabaseErrors';
 import { loadUserPersonalizationBundle } from '@/lib/server/userPersonalizationContext';
+import { buildPbOutputContractAuditSummary } from '@/lib/server/pbOutputContractValidator';
 
 /**
  * GET /api/private-banker/weekly-review
@@ -38,6 +39,15 @@ export async function GET() {
   try {
     const ctx = await buildPrivateBankerWeeklyReviewContext(supabase, auth.userKey as string);
     const preview = buildPbWeeklyReviewFromContext(ctx);
+    preview.qualityMeta.privateBanker = {
+      ...preview.qualityMeta.privateBanker,
+      outputContract: buildPbOutputContractAuditSummary({
+        source: 'pb_weekly_review',
+        text: preview.caveat,
+        sections: Object.keys(preview.sections),
+        items: Object.values(preview.sections).flat(),
+      }),
+    };
     const context = sanitizeWeeklyReviewContext(ctx);
     const recommendedIdempotencyKey = buildRecommendedWeeklyReviewIdempotencyKey(ctx.weekOf, context);
     const sqlReadinessHints: string[] = [];
@@ -177,6 +187,15 @@ export async function POST(req: Request) {
     const fallbackUsed = Boolean(result.body.llmProviderNote && result.body.llmProviderNote.toLowerCase().includes('gemini'));
     const guard = auditPrivateBankerStructuredResponse(normalized.text);
     const qualityMeta = mergePbWeeklyReviewQualityMetaWithGuard(preview.qualityMeta, guard);
+    qualityMeta.privateBanker = {
+      ...qualityMeta.privateBanker,
+      outputContract: buildPbOutputContractAuditSummary({
+        source: 'pb_weekly_review',
+        text: normalized.text,
+        longResponseFallbackUsed: longResponseFallback.exceededLimit,
+        personalizationUsed: personalization?.summary ? true : undefined,
+      }),
+    };
 
     return NextResponse.json({
       ...result.body,

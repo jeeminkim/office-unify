@@ -17,6 +17,8 @@ The main consistency gap is that the same principles are implemented in several 
 
 No implementation changes were made in this audit. No SQL was added. No API fields were removed.
 
+2026-05-21 follow-up: EVO-034 first-pass centralization is now implemented with `apps/web/lib/personaPrinciples.ts`. This is a no-behavior-change refactor: shared caveats, forbidden phrase detection, safe negated caveat handling, section labels, role snippets, scrub helpers, and a local coverage helper are centralized, while API fields, provider/model choices, prompts, SQL, and memory namespaces remain unchanged.
+
 ## 2. Persona / Prompt Map
 
 | Path | Prompt / builder | Guard / sanitize | Memory | Fallback | Action bridge |
@@ -173,11 +175,15 @@ Recommended PB hardening:
 - `personaPrinciples.ts`: forbidden phrases, not-trade instruction, allowed action language, do-not-do/check/next-check section names.
 - Tests: no-trade phrase registry, safe negated mentions, Korean/English variants.
 
+Status: first pass shipped on 2026-05-21. Existing guards now share the central registry/helper where safe, but full prompt composition remains deferred.
+
 ### P1 - Prompt composition and PB validator
 
 - `personaPromptComposer.ts`: role profile + principles + personalization + output contract assembly.
 - `personaRoleProfiles.ts`: PB/Hindenburg/Simons/CIO/Drucker/Research/Coach role definitions.
 - `pbOutputContractValidator.ts`: PB message/weekly/daily/research-send-to-PB coverage.
+
+Status: EVO-036 first pass shipped on 2026-05-23. `pbOutputContractValidator` is audit-only and attaches additive quality meta to PB message, PB Weekly, PB Daily Note preview, and Research send-to-PB; it does not rewrite prompts, transform PB text, or block responses.
 
 ### P2 - Quality audit and action bridge
 

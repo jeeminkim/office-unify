@@ -2,7 +2,30 @@
 
 ## Unreleased
 
+### 2026-05-23 EVO-039 Mobile Trust Repair + Disclosure Truth Contract
+
+- **Mobile IA:** mobile navigation keeps the desktop top nav hidden, shortens long drawer labels, and applies nowrap/keep-all guards so narrow routes do not collapse into vertical letter stacks at 390px widths.
+- **Disclosure truth:** risk-review UI labels a button `공시 확인` only for verified disclosure targets. Research Center seeds are labeled `리스크 리서치`, manual-only paths explain that no filing URL is opened, and after-click hints state the actual behavior.
+- **Risk feedback UX:** reviewed risk cards expose monitoring copy, `mark_reviewed` gets immediate optimistic UI feedback with rollback on failure, and mobile risk cards show primary/secondary actions before a compact More section.
+- **Guidance:** Persona Coach supports a compact dismissible mobile variant, while PB output-contract warnings remain a small non-blocking banner.
+- **Guardrails:** additive UI and type changes only; no SQL, no API field removal, no read-only GET write, and no automatic trading/order/rebalancing behavior.
+
 > 문서 관리 메모: Unreleased 항목이 누적되어 길어졌습니다. 이력은 유지하고, 현재 운영 기준은 `docs/CURRENT_SYSTEM_BASELINE.md`를 우선 참조합니다.
+
+### 2026-05-23 EVO-036 PB Output Contract Validator - Additive Quality Meta
+
+- **PB contract audit:** added pure `pbOutputContractValidator` coverage for PB message, PB Weekly, PB Daily Note preview, and Research send-to-PB. It audits section coverage, safe caveats, unsafe directives, forbidden phrases, fallback use, and a recommended warning action without blocking PB output generation.
+- **Additive quality meta:** PB message and Research send-to-PB expose `qualityMeta.privateBanker.outputContract`; PB Weekly merges the same summary beside existing `responseGuard`; PB Daily Note preview exposes `qualityMeta.pbDailyNote.outputContract` while keeping preview-only/writeAction false.
+- **Policy reuse:** validator uses the centralized `personaPrinciples` safe-caveat and unsafe-directive helpers so negated no-trade/no-auto-execution caveats remain allowed.
+- **Guardrails:** no SQL, no API field removal, no prompt rewrite, no provider/model change, no memory migration, and no automatic trading/order/rebalancing behavior.
+
+### 2026-05-21 EVO-034 Persona Principles Centralization - No Behavior Change
+
+- **Central persona principles:** added pure `apps/web/lib/personaPrinciples.ts` for the Personal Investment OS principle, no-trade caveat, no-auto-execution caveat, shared section labels, role snippets, forbidden phrase registry, safe-negated-caveat detection, unsafe directive detection, scrub helper, and a local coverage report helper.
+- **Shared guardrails:** Persona structured output, personalization prompt block, PB daily note scrub, PB response guard, and Persona Coach copy assertion now reuse the central registry/helpers where safe, without introducing a prompt composer or changing public API response shapes.
+- **Safe caveat policy:** negated guardrail copy such as “자동 주문은 실행되지 않습니다”, “매수 추천이 아닙니다”, and “automatic trading is not supported” is explicitly allowed, while imperative buy/sell, auto-order/rebalance, and guaranteed-profit language remains blocked.
+- **Tests/docs:** added regression coverage for Korean/English unsafe phrases and safe caveats; recorded EVO-034 as a first-pass centralization ahead of EVO-036 PB output contract validator.
+- **Guardrails:** no SQL, no API field removal, no model/provider change, no memory migration, and no automatic trading/order/rebalancing behavior.
 
 ### 2026-05-21 Google Finance Repair UX Finalization - Anchor OK State
 

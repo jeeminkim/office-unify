@@ -8,6 +8,7 @@ import { getInvestorProfileForUser } from '@/lib/server/investorProfile';
 import { buildConcentrationRiskPromptSection, getPortfolioExposureSnapshotForUser } from '@/lib/server/concentrationRisk';
 import { buildInvestorProfilePromptContext } from '@/lib/server/suitabilityAssessment';
 import { buildLongResponseFallback, buildLongResponseFallbackFromError } from '@/lib/longResponseFallback';
+import { buildPbOutputContractAuditSummary } from '@/lib/server/pbOutputContractValidator';
 
 /**
  * POST /api/private-banker/message
@@ -111,6 +112,18 @@ export async function POST(req: Request) {
       ? longResponseFallback.displayText
       : normalized.text;
     const fallbackUsed = Boolean(result.body.llmProviderNote && result.body.llmProviderNote.toLowerCase().includes('gemini'));
+    const qualityMeta = {
+      ...((result.body as { qualityMeta?: Record<string, unknown> }).qualityMeta ?? {}),
+      privateBanker: {
+        ...(((result.body as { qualityMeta?: { privateBanker?: Record<string, unknown> } }).qualityMeta?.privateBanker) ?? {}),
+        outputContract: buildPbOutputContractAuditSummary({
+          source: 'pb_message',
+          text: normalized.text,
+          longResponseFallbackUsed: longResponseFallback.exceededLimit,
+          personalizationUsed: result.body.personalizationContextSummary ? true : undefined,
+        }),
+      },
+    };
     return NextResponse.json({
       ...result.body,
       assistantMessage: {
@@ -123,6 +136,7 @@ export async function POST(req: Request) {
         providerUsed: fallbackUsed ? 'gemini_fallback_after_openai' : 'openai_primary',
         fallbackUsed,
       },
+      qualityMeta,
       deduplicated: result.deduplicated,
     });
   } catch (e: unknown) {

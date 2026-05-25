@@ -14,6 +14,8 @@
 - **Action Item hub(EVO-028 1차):** 모든 inbox 저장 경로는 `sourceSummary`·`checklist`·`doNotDo`·`sourceRefs`/`recommendedNextLinks`·`actionSteps` 목표. `source_type=manual`이어도 `detail_json.sourceLabel`로 PB/Trend 등 구분. `POST`만 write; GET·링크는 read-only. 상세: `docs/ops/action_items.md`.
 - **Dashboard Command Center(EVO-027 1차):** `/` 상단은 data blocker 1개와 오늘 확인할 운영 작업 최대 3개를 보여준다. `DashboardClient.tsx`는 `CommandCenterSection`, `TodayBriefSection`, `TodayCandidatesSection`, `DataReadinessSection`, `ActionItemsSummarySection`, `JudgmentReviewSummarySection`, `WatchlistRecommendationSection`으로 1차 렌더 분리했다.
 - **Today Brief thin-route prep:** `GET /api/dashboard/today-brief`는 아직 넓은 계약을 가진 route이므로 전체 service 추출 전 contract regression을 강화했다. `todayBriefRouteRequest`는 request/query parsing만 담당하고 DB 접근·ops write를 하지 않는다. `buildTodayBriefResponse`는 다음 라운드 추출 후보 skeleton만 있다.
+- **Persona principles centralization(EVO-034 1차):** `apps/web/lib/personaPrinciples.ts`가 no-trade/no-auto-execution caveat, forbidden phrase registry, safe negated caveat detection, 공통 섹션명, role snippets, scrub helper, local coverage report helper를 중앙화한다. 행동 변경 없는 guardrail 리팩터링이며 API 필드 삭제, prompt composer 도입, SQL, 모델/provider 변경, memory migration은 없다.
+- **PB output contract audit(EVO-036 1차):** `pbOutputContractValidator`가 PB message, PB Weekly, PB Daily Note preview, Research send-to-PB 응답의 section coverage와 policy copy를 audit-only로 점검한다. 결과는 additive `outputContract` quality meta이며 PB 본문 차단/변환, prompt rewrite, 신규 write는 없다.
 
 ## 주요 화면
 
@@ -33,6 +35,9 @@
 - `/ops-events`
 
 ## Dashboard Command Center baseline (EVO-027)
+
+- **Mobile trust repair (EVO-039):** mobile IA is not a squeezed desktop nav. The desktop top tree stays desktop-only; mobile drawer labels and touch targets use mobile-specific short labels and nowrap guards at narrow widths.
+- **Disclosure truth contract:** `공시 확인` is reserved for verified filing/disclosure targets such as DART/KIND or explicit disclosure source refs. A Research Center seed is labeled `리스크 리서치`, and a manual path explains that it is a confirmation method rather than a filing page.
 
 - **Operational UX guidance layer (2026-05-20):** Button Action Contract labels distinguish navigation, read-only checks, confirmed writes, Action Inbox saves, note saves, feedback updates, local-only UI state, and external manual checks. Persona Coach hints provide deterministic screen guidance without LLM calls.
 - **Risk feedback semantics:** `mark_reviewed` risk-review candidates move out of the main candidate deck into a reviewed-risk/monitoring path for the current feedback window. `hide_7d` remains suppressed as user-hidden, and `keep_observing` keeps repeat-exposure diagnostics visible. Summary counts are additive under `qualityMeta.todayCandidates.feedbackSummary`.

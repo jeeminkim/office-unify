@@ -14,22 +14,9 @@ import type {
   PersonaScoreAdjustmentSuggestion,
   PersonaStructuredOutputQualitySummary,
 } from '@office-unify/shared-types';
+import { PERSONA_FORBIDDEN_PHRASE_TEXTS } from '@/lib/personaPrinciples';
 
-export const PERSONA_STRUCTURED_BANNED_PHRASES: readonly string[] = [
-  '지금 사라',
-  '강력 매수',
-  '무조건 매수',
-  '수익 보장',
-  '확실한 수익',
-  '자동 매수',
-  '자동 주문',
-  '자동매수',
-  '자동주문',
-  '자동 리밸런싱',
-  '무조건',
-  '확실하다',
-  '목표 수익 보장',
-];
+export const PERSONA_STRUCTURED_BANNED_PHRASES: readonly string[] = PERSONA_FORBIDDEN_PHRASE_TEXTS;
 
 export function extractLeadingJsonObject(text: string): { jsonStr: string; rest: string } | null {
   const s = text.trimStart();
