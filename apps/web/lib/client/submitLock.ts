@@ -12,19 +12,19 @@ export type ActionLogEntry = {
 export function formatActionMessage(phase: ActionPhase, label: string): string {
   switch (phase) {
     case 'clicked':
-      return `「${label}」 버튼이 눌렸습니다.`;
+      return `"${label}" 버튼을 눌렀습니다.`;
     case 'running':
-      return `「${label}」 처리 중입니다.`;
+      return `"${label}" 처리 중입니다.`;
     case 'success':
-      return `「${label}」 완료되었습니다.`;
+      return `"${label}" 완료되었습니다.`;
     case 'error':
-      return `「${label}」 실패했습니다.`;
+      return `"${label}" 실패했습니다.`;
     default:
       return '';
   }
 }
 
-/** In-memory lock per action key — ignore duplicate while running. */
+/** In-memory lock per action key to ignore duplicate requests while running. */
 export function createSubmitLockRegistry() {
   const running = new Set<string>();
 
@@ -49,5 +49,14 @@ export function pushActionLog(
   max = 3,
 ): ActionLogEntry[] {
   const row: ActionLogEntry = { ...entry, at: entry.at ?? new Date().toISOString() };
-  return [row, ...prev].slice(0, max);
+  const rowTime = Date.parse(row.at);
+  const next = prev.filter((old) => {
+    if (old.actionKey !== row.actionKey) return true;
+    if (old.phase === 'running' && (row.phase === 'success' || row.phase === 'error')) return false;
+    if (old.phase !== row.phase) return true;
+    const oldTime = Date.parse(old.at);
+    if (!Number.isFinite(rowTime) || !Number.isFinite(oldTime)) return true;
+    return Math.abs(rowTime - oldTime) > 1500;
+  });
+  return [row, ...next].slice(0, max);
 }

@@ -7,14 +7,13 @@ import type {
   OfficeUserKey,
   PersonaStructuredOutput,
 } from '@office-unify/shared-types';
-import { COMMITTEE_DISCUSSION_USER_CONTENT_MAX_CHARS, PERSONA_CHAT_ASSISTANT_TARGET_MAX_CHARS } from '@office-unify/shared-types';
+import { COMMITTEE_DISCUSSION_USER_CONTENT_MAX_CHARS } from '@office-unify/shared-types';
 import {
   buildWebPersonaSystemInstruction,
   generatePersonaAssistantReply,
   resolveWebPersona,
 } from '@office-unify/ai-office-engine';
 import { getCommitteeSystemPromptAppend } from '@office-unify/ai-office-engine';
-import { remediateCommitteePersonaReply } from '@office-unify/ai-office-engine';
 import { formatCommitteeLongTermForPrompt, COMMITTEE_LT_MEMORY_KEY } from '@office-unify/ai-office-engine';
 import { formatWebPortfolioLedgerForCommitteePrompt } from '@office-unify/ai-office-engine';
 import { formatCommitteeInputSummaryForPrompt } from '@office-unify/ai-office-engine';
@@ -25,23 +24,28 @@ import {
 } from '@office-unify/supabase-access';
 import { getKstDateString } from '@office-unify/shared-utils';
 import { guardCommitteeDiscussionLine } from '@/lib/server/committeeOutputGuard';
-import { parsePersonaStructuredOutput, buildInsufficientPersonaStructuredOutput } from '@/lib/server/personaStructuredOutput';
+import {
+  parsePersonaStructuredOutput,
+  buildInsufficientPersonaStructuredOutput,
+  buildCommitteeCompactCard,
+} from '@/lib/server/personaStructuredOutput';
 import { buildLongResponseFallback } from '@/lib/longResponseFallback';
 
 const REGENERATE_TARGET_CHARS = 1200;
-const REGENERATE_HARD_MAX = 1800;
+const REGENERATE_HARD_MAX = 1400;
 
-const LINE_REGENERATE_APPEND = `[위원회 발언 재생성 — 사용자가 명시적으로 요청]
-- 반드시 ${REGENERATE_TARGET_CHARS}자 이내(최대 ${REGENERATE_HARD_MAX}자)로 작성한다.
-- \`\`\`json 또는 JSON fenced block을 출력하지 않는다. 구조화 필드는 서버가 별도 처리한다.
-- 화면 표시용 한국어 요약·대괄호 섹션 본문을 우선한다.
-- keyReasons·riskFlags·missingEvidence·doNotDo·nextChecks 관점을 본문에 녹인다.
-- 매수·매도·자동 주문·자동 리밸런싱 지시는 금지한다.
-- 이전 발언이 중간에 끊겼다면, 끊긴 지점부터 자연스럽게 이어 완결한다.`;
+const LINE_REGENERATE_APPEND = `[위원회 발언 재생성 지침]
+- 반드시 ${REGENERATE_TARGET_CHARS}자 이내의 짧은 한국어 카드로 답합니다.
+- JSON, fenced code block, 원문 디버그 덤프를 출력하지 않습니다.
+- 섹션은 [결론], [핵심 근거], [리스크], [누락 근거], [하지 말 것], [다음 확인]만 사용합니다.
+- 각 섹션의 항목은 최대 3개이며, [하지 말 것]은 최대 2개입니다.
+- portfolioContext, scoreAdjustmentSuggestion 같은 내부 필드는 길게 노출하지 않고 필요한 의미만 요약합니다.
+- 매수/매도 지시, 자동 주문, 자동 리밸런싱처럼 보이는 표현은 금지합니다.
+- 이전 발언이 잘렸다면 JSON 복원이 아니라 같은 persona 관점의 짧고 읽을 수 있는 발언으로 다시 씁니다.`;
 
 function truncate(text: string, max: number): string {
   if (text.length <= max) return text;
-  return `${text.slice(0, max - 40)}\n\n… [길이 제한]`;
+  return `${text.slice(0, max - 1).trimEnd()}…`;
 }
 
 async function loadLedgerSnapshotReadOnly(supabase: SupabaseClient, userKey: OfficeUserKey): Promise<string> {
@@ -65,22 +69,22 @@ function buildRepairUserContent(req: CommitteeLineRegenerateRequest): string {
     mode,
   ];
   if (req.previousLine?.trim()) {
-    parts.push('', '## 이전 발언(끊김·불완전 가능)', req.previousLine.trim());
+    parts.push('', '## 이전 발언(참고용, 복원하지 말고 짧게 재작성)', req.previousLine.trim().slice(0, 1600));
   }
   if (req.previousOutputQuality && typeof req.previousOutputQuality === 'object') {
-    parts.push('', '## 이전 outputQuality', JSON.stringify(req.previousOutputQuality).slice(0, 800));
+    parts.push('', '## 이전 outputQuality', JSON.stringify(req.previousOutputQuality).slice(0, 500));
   }
   if (req.actionRoadmapContext) {
-    parts.push('', '## 액션 로드맵 맥락(참고)', JSON.stringify(req.actionRoadmapContext).slice(0, 2000));
+    parts.push('', '## 액션 로드맵 맥락(참고)', JSON.stringify(req.actionRoadmapContext).slice(0, 1200));
   }
   parts.push(
     '',
     '## 지시',
     mode === 'structured_only'
-      ? '구조화 요약 관점만 짧게 다시 작성하세요. 대괄호 섹션을 유지하세요.'
+      ? 'LLM 없이도 읽히는 핵심 요약에 가깝게, 짧은 한국어 카드만 작성하세요.'
       : mode === 'short_retry'
-        ? '더 짧고 완결된 발언으로 다시 작성하세요.'
-        : '끊긴 발언을 복구해 완결된 한 편의 발언으로 다시 작성하세요.',
+        ? '짧고 완결된 위원회 발언으로 다시 작성하세요.'
+        : '끊긴 발언을 JSON 복원이 아니라 같은 persona 관점의 짧은 발언으로 복구하세요.',
   );
   return truncate(parts.join('\n'), COMMITTEE_DISCUSSION_USER_CONTENT_MAX_CHARS);
 }
@@ -90,27 +94,37 @@ function buildDeterministicFallback(
   req: CommitteeLineRegenerateRequest,
   structured?: PersonaStructuredOutput,
 ): string {
-  const slug = personaKey.trim().toLowerCase();
-  const prev = req.previousLine?.trim() ?? '';
-  if (structured) {
-    const lines = [
-      `[${slug} 발언 복구 요약]`,
-      structured.displaySummary,
-      structured.keyReasons.length ? `\n핵심 근거:\n${structured.keyReasons.map((x) => `- ${x}`).join('\n')}` : '',
-      structured.riskFlags.length ? `\n리스크:\n${structured.riskFlags.map((x) => `- ${x}`).join('\n')}` : '',
-      structured.doNotDo.length ? `\n하지 말 것:\n${structured.doNotDo.map((x) => `- ${x}`).join('\n')}` : '',
-      structured.nextChecks.length ? `\n다음 확인:\n${structured.nextChecks.map((x) => `- ${x}`).join('\n')}` : '',
-    ];
-    return lines.filter(Boolean).join('\n').slice(0, REGENERATE_HARD_MAX);
-  }
-  if (prev.length > 80) {
-    return `[복구 요약] 이전 발언이 완전하지 않습니다. 아래 핵심만 참고하고 Research·액션 로드맵에서 보완하세요.\n\n${prev.slice(0, 900)}`;
-  }
-  return `[복구 요약] ${req.originalQuestion.slice(0, 200)}에 대해 ${slug} 관점의 확인·리스크·하지 말 것을 다시 정리하세요. (자동 재생성 실패 — 수동 확인 권장)`;
+  if (structured) return buildCommitteeCompactCard(structured);
+  const fallback = buildInsufficientPersonaStructuredOutput(
+    personaKey,
+    req.previousLine || req.originalQuestion || 'structured_output_parse_failed',
+  );
+  return buildCommitteeCompactCard({
+    ...fallback,
+    nextChecks:
+      fallback.nextChecks.length > 0
+        ? fallback.nextChecks
+        : ['원 발언의 핵심 근거를 다시 확인합니다.', '리스크와 하지 말 것을 분리합니다.', '필요하면 Research 또는 Journal로 이어갑니다.'],
+  });
 }
 
 function isTimeoutError(message: string): boolean {
   return /timeout|timed out|deadline|abort/i.test(message);
+}
+
+function stripFencedJson(text: string): string {
+  return text.replace(/```(?:json)?\s*[\s\S]*?```/gi, '').trim();
+}
+
+function looksLikeJson(text: string): boolean {
+  const t = stripFencedJson(text).trim();
+  return /^\s*[\[{]/.test(t) || t.includes('"displaySummary"') || t.includes('"keyReasons"');
+}
+
+function normalizePlainCard(raw: string, fallback: string): string {
+  const cleaned = stripFencedJson(raw).trim();
+  if (!cleaned || looksLikeJson(cleaned)) return fallback;
+  return truncate(cleaned, REGENERATE_TARGET_CHARS);
 }
 
 export function parseCommitteeLineRegenerateRequest(body: unknown): CommitteeLineRegenerateRequest | null {
@@ -170,11 +184,11 @@ export async function executeCommitteeLineRegenerate(params: {
     ledgerSnapshot,
   });
   if (committeeLt) {
-    systemInstruction += `\n\n[투자위원회 누적 피드백 기억]\n${committeeLt}`;
+    systemInstruction += `\n\n[사용자 위원회 장기 기억]\n${committeeLt}`;
   }
   systemInstruction += `\n\n${LINE_REGENERATE_APPEND}`;
 
-  const maxLen = params.request.maxLength ?? REGENERATE_HARD_MAX;
+  const maxLen = Math.min(params.request.maxLength ?? REGENERATE_TARGET_CHARS, REGENERATE_HARD_MAX);
 
   try {
     const { text: raw } = await generatePersonaAssistantReply({
@@ -195,22 +209,22 @@ export async function executeCommitteeLineRegenerate(params: {
       },
     });
 
-    const rem = remediateCommitteePersonaReply(slug, raw);
-    const parsed = parsePersonaStructuredOutput(rem.text, slug);
-    let structured: PersonaStructuredOutput | undefined;
+    const parsed = parsePersonaStructuredOutput(raw, slug);
+    let structured: PersonaStructuredOutput;
     let displayText: string;
     const warnings: string[] = [];
 
     if (parsed.ok) {
       structured = parsed.output;
-      displayText = parsed.displayText.slice(0, maxLen);
+      displayText = buildCommitteeCompactCard(structured);
       warnings.push(...parsed.warnings);
     } else {
       structured = buildInsufficientPersonaStructuredOutput(slug, parsed.fallbackSummary);
-      displayText = buildDeterministicFallback(slug, params.request, structured).slice(0, maxLen);
+      displayText = normalizePlainCard(raw, buildDeterministicFallback(slug, params.request, structured));
       warnings.push(...parsed.warnings);
     }
 
+    displayText = truncate(displayText, maxLen);
     const line = guardCommitteeDiscussionLine({
       slug,
       displayName: def.displayName,
@@ -219,9 +233,9 @@ export async function executeCommitteeLineRegenerate(params: {
     });
 
     const longResponseFallback =
-      rem.text.length > PERSONA_CHAT_ASSISTANT_TARGET_MAX_CHARS
-        ? buildLongResponseFallback(rem.text, {
-            actionHint: '재생성 원문이 깁니다. 미리보기를 확인한 뒤 적용하세요.',
+      raw.length > 2000
+        ? buildLongResponseFallback(raw, {
+            actionHint: '재생성 원문이 길어 요약 카드만 표시합니다.',
           })
         : undefined;
 
@@ -259,7 +273,7 @@ export async function executeCommitteeLineRegenerate(params: {
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'unknown';
     const timeout = isTimeoutError(message);
-    const fallbackText = buildDeterministicFallback(slug, params.request);
+    const fallbackText = truncate(buildDeterministicFallback(slug, params.request), REGENERATE_TARGET_CHARS);
     return {
       ok: true,
       status: timeout ? 'timeout' : 'fallback_summary',

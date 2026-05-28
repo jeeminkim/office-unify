@@ -130,6 +130,127 @@ function scrubBanned(text: string): string {
   return out.trim();
 }
 
+const COMMITTEE_COMPACT_MAX = 1200;
+const COMMITTEE_COMPACT_ITEM_MAX = 160;
+
+function stripJsonFencesForSummary(text: string): string {
+  return text.replace(/```(?:json)?\s*[\s\S]*?```/gi, '').trim();
+}
+
+function compactText(text: string, max = COMMITTEE_COMPACT_ITEM_MAX): string {
+  const cleaned = stripJsonFencesForSummary(text).replace(/\s+/g, ' ').trim();
+  if (!cleaned) return '';
+  if (cleaned.length <= max) return cleaned;
+  return `${cleaned.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
+}
+
+function compactItems(items: readonly string[], maxItems = 3, maxChars = COMMITTEE_COMPACT_ITEM_MAX): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of items) {
+    const item = compactText(String(raw ?? ''), maxChars);
+    if (!item || seen.has(item)) continue;
+    seen.add(item);
+    out.push(item);
+    if (out.length >= maxItems) break;
+  }
+  return out;
+}
+
+function decodeJsonStringFragment(fragment: string): string {
+  try {
+    return JSON.parse(`"${fragment}"`) as string;
+  } catch {
+    return fragment.replace(/\\"/g, '"').replace(/\\n/g, ' ');
+  }
+}
+
+function extractPartialString(rawText: string, field: string): string | undefined {
+  const re = new RegExp(`"${field}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)`);
+  const match = re.exec(rawText);
+  return match ? compactText(decodeJsonStringFragment(match[1]), 240) : undefined;
+}
+
+function extractPartialStringArray(rawText: string, field: string): string[] {
+  const startRe = new RegExp(`"${field}"\\s*:\\s*\\[`);
+  const start = startRe.exec(rawText);
+  if (!start || start.index === undefined) return [];
+  const rest = rawText.slice(start.index + start[0].length);
+  const nextField = rest.search(/,\s*"[A-Za-z0-9_]+"\s*:/);
+  const endBracket = rest.indexOf(']');
+  const end =
+    endBracket >= 0 && (nextField < 0 || endBracket < nextField)
+      ? endBracket
+      : nextField >= 0
+        ? nextField
+        : Math.min(rest.length, 2000);
+  const segment = rest.slice(0, end);
+  const values: string[] = [];
+  const itemRe = /"((?:\\.|[^"\\])*)"/g;
+  let match: RegExpExecArray | null;
+  while ((match = itemRe.exec(segment)) && values.length < 3) {
+    const decoded = compactText(decodeJsonStringFragment(match[1]));
+    if (decoded) values.push(decoded);
+  }
+  return compactItems(values);
+}
+
+function plainFallbackSnippet(rawText: string): string {
+  const text = stripJsonFencesForSummary(rawText);
+  if (!text) return '';
+  if (/^\s*[\[{]/.test(text) || text.includes('"displaySummary"') || text.includes('"keyReasons"')) {
+    return '';
+  }
+  return compactText(text, 220);
+}
+
+export function buildCommitteeCompactCard(output: PersonaStructuredOutput): string {
+  const sections: string[] = [];
+  sections.push(`[결론]\n${compactText(output.displaySummary, 240) || '이 발언은 일부 손상되어 핵심 요약만 표시합니다.'}`);
+
+  const rows: Array<[string, string[]]> = [
+    ['핵심 근거', compactItems(output.keyReasons)],
+    ['리스크', compactItems(output.riskFlags)],
+    ['누락 근거', compactItems(output.missingEvidence, 2)],
+    ['하지 말 것', compactItems(output.doNotDo, 2)],
+    ['다음 확인', compactItems(output.nextChecks, 3)],
+  ];
+
+  for (const [label, items] of rows) {
+    if (items.length === 0) continue;
+    sections.push(`[${label}]\n${items.map((x) => `- ${x}`).join('\n')}`);
+  }
+
+  const card = sections.join('\n\n').trim();
+  return card.length <= COMMITTEE_COMPACT_MAX
+    ? card
+    : `${card.slice(0, COMMITTEE_COMPACT_MAX - 1).trimEnd()}…`;
+}
+
+function buildCompactFallbackFromRaw(personaSlug: string, rawText: string): PersonaStructuredOutput {
+  const displaySummary =
+    extractPartialString(rawText, 'displaySummary') ||
+    plainFallbackSnippet(rawText) ||
+    '이 발언은 일부 손상되어 핵심 요약만 표시합니다.';
+
+  return {
+    role: mapPersonaSlugToRole(personaSlug),
+    stance: 'insufficient_data',
+    confidence: 'unknown',
+    keyReasons: extractPartialStringArray(rawText, 'keyReasons'),
+    riskFlags: extractPartialStringArray(rawText, 'riskFlags'),
+    opportunityDrivers: extractPartialStringArray(rawText, 'opportunityDrivers'),
+    missingEvidence: compactItems([
+      ...extractPartialStringArray(rawText, 'missingEvidence'),
+      'structured_output_parse_failed',
+    ], 2),
+    contradictions: extractPartialStringArray(rawText, 'contradictions'),
+    doNotDo: extractPartialStringArray(rawText, 'doNotDo').slice(0, 2),
+    nextChecks: extractPartialStringArray(rawText, 'nextChecks'),
+    displaySummary,
+  };
+}
+
 function sanitizeStringFields(output: PersonaStructuredOutput): { output: PersonaStructuredOutput; bannedCount: number } {
   let bannedCount = 0;
   const clone: PersonaStructuredOutput = {
@@ -301,12 +422,12 @@ export type ParsePersonaStructuredOutputResult =
  */
 export function parsePersonaStructuredOutput(rawText: string, personaSlug: string): ParsePersonaStructuredOutputResult {
   const extracted = extractLeadingJsonObject(rawText);
-  const tail = extracted?.rest.trim() ?? rawText.trim();
 
   if (!extracted) {
+    const fallback = buildCompactFallbackFromRaw(personaSlug, rawText);
     return {
       ok: false,
-      fallbackSummary: tail.slice(0, 8000),
+      fallbackSummary: buildCommitteeCompactCard(fallback),
       warnings: ['structured_output_parse_failed'],
       bannedPhraseCount: 0,
     };
@@ -316,9 +437,10 @@ export function parsePersonaStructuredOutput(rawText: string, personaSlug: strin
   try {
     parsed = JSON.parse(extracted.jsonStr) as unknown;
   } catch {
+    const fallback = buildCompactFallbackFromRaw(personaSlug, rawText);
     return {
       ok: false,
-      fallbackSummary: tail || rawText.trim().slice(0, 8000),
+      fallbackSummary: buildCommitteeCompactCard(fallback),
       warnings: ['structured_output_parse_failed'],
       bannedPhraseCount: 0,
     };
@@ -326,9 +448,10 @@ export function parsePersonaStructuredOutput(rawText: string, personaSlug: strin
 
   const validated = validatePersonaStructuredOutput(parsed, personaSlug);
   if (!validated.ok) {
+    const fallback = buildCompactFallbackFromRaw(personaSlug, rawText);
     return {
       ok: false,
-      fallbackSummary: tail || rawText.trim().slice(0, 8000),
+      fallbackSummary: buildCommitteeCompactCard(fallback),
       warnings: ['structured_output_parse_failed', validated.reason],
       bannedPhraseCount: 0,
     };
@@ -359,7 +482,7 @@ export function parsePersonaStructuredOutput(rawText: string, personaSlug: strin
     };
   }
 
-  const displayText = (tail.length > 0 ? tail : out.displaySummary).trim();
+  const displayText = buildCommitteeCompactCard(out);
   const lowConfidence = out.confidence === 'low' || out.confidence === 'unknown';
 
   return {
@@ -471,7 +594,7 @@ export function buildPersonaStructuredLayer(personaSlug: string, rawAssistantTex
   }
   const insufficient = buildInsufficientPersonaStructuredOutput(personaSlug, parsed.fallbackSummary);
   return {
-    displayReplyText: insufficient.displaySummary,
+    displayReplyText: buildCommitteeCompactCard(insufficient),
     personaStructuredOutput: insufficient,
     personaStructuredFallbackSummary: parsed.fallbackSummary,
     personaStructuredOutputSummary: {
@@ -487,18 +610,19 @@ export function buildPersonaStructuredLayer(personaSlug: string, rawAssistantTex
 
 /** 파싱 실패 시 최소 계약 객체 */
 export function buildInsufficientPersonaStructuredOutput(personaSlug: string, fallbackSummary: string): PersonaStructuredOutput {
-  const safe = scrubBanned(fallbackSummary.trim().slice(0, 4000));
+  const compact = buildCompactFallbackFromRaw(personaSlug, scrubBanned(fallbackSummary));
+  const safe = compact.displaySummary;
   return {
     role: mapPersonaSlugToRole(personaSlug),
     stance: 'insufficient_data',
     confidence: 'unknown',
-    keyReasons: [],
-    riskFlags: [],
-    opportunityDrivers: [],
-    missingEvidence: ['structured_output_parse_failed'],
-    contradictions: [],
-    doNotDo: [],
-    nextChecks: [],
+    keyReasons: compact.keyReasons,
+    riskFlags: compact.riskFlags,
+    opportunityDrivers: compact.opportunityDrivers,
+    missingEvidence: compactItems([...compact.missingEvidence, 'structured_output_parse_failed'], 2),
+    contradictions: compact.contradictions,
+    doNotDo: compact.doNotDo,
+    nextChecks: compact.nextChecks,
     displaySummary: safe || '구조화 응답을 해석하지 못했습니다. 원문을 참고해 주세요.',
   };
 }

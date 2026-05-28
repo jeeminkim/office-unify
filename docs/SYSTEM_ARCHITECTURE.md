@@ -313,3 +313,9 @@
 - Committee roadmap/regenerate, Research, LongResponseFallback, US diagnostics, and Daily Review flows now have a shared bridge-ready shape.
 - Long raw text is not persisted to `detail_json`; explicit Action Inbox save remains the only write path.
 - No SQL, no GET write, no automatic trading/order/rebalancing.
+## EVO-045 Committee Output Reliability Architecture
+
+- Committee structured output is normalized into a compact display card before it reaches the primary UI path.
+- Regenerate requests are read-heavy preview operations: they call the provider, return a compact card, and keep replacement as client-only state until a separate explicit save action is used.
+- Parser fallback extracts partial structured fields from truncated JSON, then falls back to deterministic summary copy. Raw/debug JSON is only available behind an explicit disclosure.
+- Action roadmap and downstream links continue to use structured fields when available; no automatic trading/order/rebalancing path is introduced.

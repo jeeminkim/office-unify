@@ -38,7 +38,8 @@ describe('personaStructuredOutput', () => {
     expect(r.ok).toBe(true);
     if (r.ok) {
       expect(r.output.role).toBe('risk');
-      expect(r.displayText).toContain('본문 요약');
+      expect(r.displayText).toContain('[결론]');
+      expect(r.displayText).toContain('요약');
     }
   });
 
@@ -142,5 +143,28 @@ describe('personaStructuredOutput', () => {
   it('buildInsufficientPersonaStructuredOutput maps slug to role', () => {
     const o = buildInsufficientPersonaStructuredOutput('cio', 'fallback');
     expect(o.role).toBe('cio');
+  });
+
+  it('truncated JSON extracts partial fields without exposing raw JSON as primary text', () => {
+    const raw =
+      '{"displaySummary":"반도체 집중도는 다시 점검해야 합니다","keyReasons":["비중이 높습니다","수익률 후회가 판단을 흔듭니다"],"riskFlags":["변동성 확대"],"nextChecks":["섹터 비중 확인"';
+    const r = parsePersonaStructuredOutput(raw, 'hindenburg');
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.fallbackSummary).toContain('[결론]');
+      expect(r.fallbackSummary).toContain('비중이 높습니다');
+      expect(r.fallbackSummary).not.toContain('"keyReasons"');
+      expect(r.fallbackSummary.length).toBeLessThanOrEqual(1200);
+    }
+  });
+
+  it('malformed JSON returns deterministic compact fallback', () => {
+    const r = parsePersonaStructuredOutput('{"displaySummary":', 'drucker');
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.fallbackSummary).toContain('이 발언은 일부 손상되어 핵심 요약만 표시합니다.');
+      expect(r.fallbackSummary).toContain('structured_output_parse_failed');
+      expect(r.fallbackSummary).not.toContain('{"displaySummary"');
+    }
   });
 });

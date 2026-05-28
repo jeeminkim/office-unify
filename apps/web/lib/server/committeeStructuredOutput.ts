@@ -4,7 +4,11 @@ import type {
   CommitteeDiscussionLineDto,
   PersonaStructuredOutputQualitySummary,
 } from '@office-unify/shared-types';
-import { parsePersonaStructuredOutput, buildInsufficientPersonaStructuredOutput } from '@/lib/server/personaStructuredOutput';
+import {
+  parsePersonaStructuredOutput,
+  buildInsufficientPersonaStructuredOutput,
+  buildCommitteeCompactCard,
+} from '@/lib/server/personaStructuredOutput';
 
 export function enrichCommitteeLinesWithStructuredOutput(lines: CommitteeDiscussionLineDto[]): {
   lines: CommitteeDiscussionLineDto[];
@@ -24,7 +28,7 @@ export function enrichCommitteeLinesWithStructuredOutput(lines: CommitteeDiscuss
       const fallback = buildInsufficientPersonaStructuredOutput(slug, parsed.fallbackSummary);
       return {
         ...line,
-        content: parsed.fallbackSummary.slice(0, 8000),
+        content: buildCommitteeCompactCard(fallback),
         structuredOutput: fallback,
         structuredParseWarnings: parsed.warnings,
       };
@@ -35,7 +39,7 @@ export function enrichCommitteeLinesWithStructuredOutput(lines: CommitteeDiscuss
     if (parsed.lowConfidence) lowConfidenceCount += 1;
     return {
       ...line,
-      content: parsed.displayText.slice(0, 8000),
+      content: buildCommitteeCompactCard(parsed.output),
       structuredOutput: parsed.output,
       structuredParseWarnings: parsed.warnings,
     };

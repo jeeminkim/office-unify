@@ -3,6 +3,26 @@ import type { CommitteeDiscussionLineDto, PersonaStructuredOutput } from '@offic
 const JSON_FENCE = /```(?:json)?\s*[\s\S]*?```/gi;
 const LOOKS_JSON = /^\s*[\[{]/;
 
+function compactText(text: string, max = 160): string {
+  const cleaned = stripJsonFences(text).replace(/\s+/g, ' ').trim();
+  if (!cleaned) return '';
+  if (cleaned.length <= max) return cleaned;
+  return `${cleaned.slice(0, max - 1).trimEnd()}…`;
+}
+
+function compactItems(items: readonly string[], maxItems: number): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of items) {
+    const item = compactText(String(raw ?? ''));
+    if (!item || seen.has(item)) continue;
+    seen.add(item);
+    out.push(item);
+    if (out.length >= maxItems) break;
+  }
+  return out;
+}
+
 export function stripJsonFences(text: string): string {
   return text.replace(JSON_FENCE, '').trim();
 }
@@ -13,23 +33,22 @@ export function contentLooksLikeRawJson(text: string): boolean {
 }
 
 export function buildReadableSummaryFromStructured(so: PersonaStructuredOutput): string {
-  const parts: string[] = [so.displaySummary];
-  if (so.keyReasons.length) {
-    parts.push(`\n핵심 근거:\n${so.keyReasons.map((x) => `• ${x}`).join('\n')}`);
+  const sections: string[] = [];
+  const summary = compactText(so.displaySummary, 240) || '이 발언은 일부 손상되어 핵심 요약만 표시합니다.';
+  sections.push(`[결론]\n${summary}`);
+  const rows: Array<[string, string[], number]> = [
+    ['핵심 근거', so.keyReasons, 3],
+    ['리스크', so.riskFlags, 3],
+    ['누락 근거', so.missingEvidence, 2],
+    ['하지 말 것', so.doNotDo, 2],
+    ['다음 확인', so.nextChecks, 3],
+  ];
+  for (const [label, rawItems, max] of rows) {
+    const items = compactItems(rawItems, max);
+    if (items.length > 0) sections.push(`[${label}]\n${items.map((x) => `- ${x}`).join('\n')}`);
   }
-  if (so.riskFlags.length) {
-    parts.push(`\n리스크:\n${so.riskFlags.map((x) => `• ${x}`).join('\n')}`);
-  }
-  if (so.missingEvidence.length) {
-    parts.push(`\n누락 근거:\n${so.missingEvidence.map((x) => `• ${x}`).join('\n')}`);
-  }
-  if (so.doNotDo.length) {
-    parts.push(`\n하지 말 것:\n${so.doNotDo.map((x) => `• ${x}`).join('\n')}`);
-  }
-  if (so.nextChecks.length) {
-    parts.push(`\n다음 확인:\n${so.nextChecks.map((x) => `• ${x}`).join('\n')}`);
-  }
-  return parts.join('\n').trim();
+  const card = sections.join('\n\n').trim();
+  return card.length <= 1200 ? card : `${card.slice(0, 1199).trimEnd()}…`;
 }
 
 export function resolveLineDisplayContent(line: CommitteeDiscussionLineDto): {
@@ -47,7 +66,7 @@ export function resolveLineDisplayContent(line: CommitteeDiscussionLineDto): {
   }
   if (contentLooksLikeRawJson(raw)) {
     return {
-      readable: '구조화 요약을 파싱하지 못했습니다. 「원문 보기」에서 확인하거나 「이 발언 다시 생성」을 사용하세요.',
+      readable: '이 발언은 일부 손상되어 핵심 요약만 표시합니다. 원문은 디버그 보기에서만 확인할 수 있습니다.',
       rawForDebug: raw,
       hasStructured: false,
     };

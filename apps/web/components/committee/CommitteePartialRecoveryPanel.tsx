@@ -24,6 +24,7 @@ import {
   type ActionLogEntry,
   type ActionPhase,
 } from "@/lib/client/submitLock";
+import { resolveLineDisplayContent } from "@/lib/committeeStructuredDisplay";
 
 type Props = {
   lineIndex: number;
@@ -245,6 +246,12 @@ function CommitteeRegeneratePreviewActions({
     doNotDo: structured?.doNotDo,
     nextChecks: structured?.nextChecks,
   });
+  const previewDisplay = resolveLineDisplayContent({
+    slug: line.slug,
+    displayName: line.displayName,
+    content: preview.displayText,
+    structuredOutput: preview.structuredOutput,
+  });
 
   const handleHint = async (actionKey: CommitteeLineRegenerateActionKey) => {
     if (actionKey === "apply_to_line") {
@@ -279,7 +286,15 @@ function CommitteeRegeneratePreviewActions({
   return (
     <div className="mt-3 rounded border border-violet-200 bg-white p-2 text-slate-800">
       <p className="text-[11px] font-semibold text-violet-900">재생성 미리보기 (저장 안 됨)</p>
-      <p className="mt-1 whitespace-pre-wrap text-[11px]">{preview.displayText}</p>
+      <p className="mt-1 whitespace-pre-wrap text-[11px]">{previewDisplay.readable}</p>
+      {previewDisplay.rawForDebug ? (
+        <details className="mt-2 rounded border border-slate-200 bg-slate-50 p-2">
+          <summary className="cursor-pointer text-[10px] text-slate-600">원문/디버그 보기</summary>
+          <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap text-[10px] text-slate-600">
+            {previewDisplay.rawForDebug}
+          </pre>
+        </details>
+      ) : null}
       {preview.longResponseFallback?.exceededLimit ? (
         <div className="mt-2">
           <LongResponseFallbackCard fallback={preview.longResponseFallback} source="committee_discussion" />

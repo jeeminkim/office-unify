@@ -10,7 +10,7 @@ const sampleStructured: PersonaStructuredOutput = {
   role: 'risk',
   stance: 'review',
   confidence: 'medium',
-  keyReasons: ['섹터 집중'],
+  keyReasons: ['데이터 집중'],
   riskFlags: ['변동성'],
   opportunityDrivers: [],
   missingEvidence: ['수급'],
@@ -33,7 +33,18 @@ describe('committeeStructuredDisplay', () => {
       structuredOutput: sampleStructured,
     });
     expect(readable).toContain('요약 본문');
-    expect(buildReadableSummaryFromStructured(sampleStructured)).toContain('핵심 근거');
+    expect(buildReadableSummaryFromStructured(sampleStructured)).toContain('[핵심 근거]');
     expect(rawForDebug).toBeTruthy();
+  });
+
+  it('keeps raw JSON out of the primary body when structured output is missing', () => {
+    const { readable, rawForDebug } = resolveLineDisplayContent({
+      slug: 'hindenburg',
+      displayName: 'H',
+      content: '{"displaySummary":"hidden","keyReasons":["raw"]',
+    });
+    expect(readable).toContain('핵심 요약만 표시');
+    expect(readable).not.toContain('"keyReasons"');
+    expect(rawForDebug).toContain('"keyReasons"');
   });
 });

@@ -177,3 +177,14 @@ followup lifecycle 안에서 재분석은 상태 자동 변경이 아니라, 작
 - smart quote / trailing comma 응답: `repair_succeeded` 상태 + 사용자 안내 문구 노출
 - partial JSON 응답: repair 실패 시 fallback draft(2~5개) 반환, 빈 목록 금지
 - 완전 실패 응답: `fallback_used` + `자동 복구 초안` 배지 노출, 저장 전 점검 안내 노출
+## EVO-045 Committee Output Reliability
+
+- Persona 발언의 사용자 기본 본문은 최대 1200자 안팎의 한국어 카드형 요약이다.
+- 카드 구조는 `[결론]`, `[핵심 근거]`, `[리스크]`, `[누락 근거]`, `[하지 말 것]`, `[다음 확인]`을 사용하며 각 배열은 짧게 제한한다.
+- `structured_output_parse_failed`가 발생해도 raw JSON을 기본 본문으로 표시하지 않는다. 가능한 필드만 부분 추출하고, 실패하면 deterministic compact fallback을 표시한다.
+- `POST /api/committee-discussion/line/regenerate`는 full JSON 복원이 아니라 같은 persona 관점의 짧은 한국어 카드 preview만 반환한다. “이 발언으로 교체”는 client state 교체이며 DB write가 아니다.
+- raw/debug와 구조화 필드는 기본 접힘 상태다. Action Item 저장은 명시 버튼에서만 발생한다.
+- 매수/매도 지시, 자동 주문, 자동 리밸런싱 문구는 금지한다.
+- parser fallback은 raw JSON 기본 노출 금지를 유지하며, 가능한 필드만 부분 추출한다.
+- “이 발언으로 교체”는 client-only 동작이다.
+- no SQL, no automatic trading/order/rebalancing.

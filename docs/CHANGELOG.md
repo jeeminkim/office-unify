@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### 2026-05-29 EVO-045 Committee Output Reliability
+
+- **Compact persona line contract:** Committee persona lines now resolve to a short Korean card with conclusion, key reasons, risks, missing evidence, guardrails, and next checks instead of showing raw structured JSON as the primary body.
+- **Regenerate hardening:** line regeneration no longer tries to restore full JSON. It requests a compact Korean card, strips fenced/debug output from previews, returns deterministic compact fallback on malformed output, and remains preview/client-state only.
+- **Client-only replace:** “이 발언으로 교체” remains client-only and does not write to the database.
+- **Parser fallback:** truncated or malformed structured output is partially salvaged for `keyReasons`, `riskFlags`, `missingEvidence`, `doNotDo`, and `nextChecks`; full raw JSON is kept out of the default display path.
+- **UI cleanup:** structured fields and raw/debug text are collapsed by default, regenerate previews render readable summaries first, and duplicate action-status log rows are deduped.
+- **Guardrails:** no SQL, no API field removal, no GET/write boundary change, explicit Action Inbox save only, no automatic trading/order/rebalancing behavior, and no commit in this round.
+
 ### 2026-05-28 EVO-037 Persona Action Bridge - Structured Output to Action Flow
 
 - **Bridge contract:** added a client-safe `personaActionBridge` that turns PB, Committee, Research, Today Candidate, Daily Review, Judgment Review, US diagnostics, and long-response fallback outputs into standard `ActionItemDetail`, `actionSteps`, guardrails, source refs, and recommended next links.

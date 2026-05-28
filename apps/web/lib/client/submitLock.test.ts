@@ -25,4 +25,32 @@ describe('submitLock', () => {
     });
     expect(more.length).toBeLessThanOrEqual(3);
   });
+
+  it('dedupes near-identical action logs and removes stale running row on success', () => {
+    const at = '2026-05-29T00:00:00.000Z';
+    const running = pushActionLog([], {
+      at,
+      actionKey: 'regen',
+      actionLabel: '재생성',
+      phase: 'running',
+      message: 'running',
+    });
+    const duplicated = pushActionLog(running, {
+      at: '2026-05-29T00:00:00.500Z',
+      actionKey: 'regen',
+      actionLabel: '재생성',
+      phase: 'running',
+      message: 'running',
+    });
+    expect(duplicated).toHaveLength(1);
+    const success = pushActionLog(duplicated, {
+      at: '2026-05-29T00:00:01.000Z',
+      actionKey: 'regen',
+      actionLabel: '재생성',
+      phase: 'success',
+      message: 'success',
+    });
+    expect(success).toHaveLength(1);
+    expect(success[0].phase).toBe('success');
+  });
 });

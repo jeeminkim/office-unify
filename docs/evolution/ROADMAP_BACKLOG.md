@@ -78,3 +78,12 @@
 - Committee roadmap/regenerate, Research, LongResponseFallback, US diagnostics, and Daily Review flows now have a shared bridge-ready shape.
 - Long raw text is not persisted to `detail_json`; explicit Action Inbox save remains the only write path.
 - No SQL, no GET write, no automatic trading/order/rebalancing.
+
+## EVO-045 Committee Output Reliability
+
+- Shipped compact Korean card fallback for Committee persona lines.
+- Regenerate now targets short readable recovery previews instead of full JSON restoration.
+- Truncated structured output salvages partial fields and hides raw/debug content by default.
+- raw JSON 기본 노출 금지와 parser fallback 개선을 포함한다.
+- “이 발언으로 교체” remains client-only; Action Inbox save remains explicit-only.
+- No SQL, no GET write, no API field removal, no automatic trading/order/rebalancing.

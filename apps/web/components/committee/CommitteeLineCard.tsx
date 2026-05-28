@@ -30,24 +30,25 @@ function StructuredSections({ line }: { line: CommitteeDiscussionLineDto }) {
     { key: "nextChecks", items: so.nextChecks },
   ];
   return (
-    <div className="mt-2 space-y-2 rounded border border-slate-100 bg-slate-50/80 p-2 text-[11px] text-slate-800">
-      <p className="font-semibold text-slate-700">
-        {STRUCTURED_SECTION_LABELS.stance}: {so.stance} · 신뢰도 {so.confidence}
-      </p>
-      {sections.map(
-        (sec) =>
+    <details className="mt-2 rounded border border-slate-100 bg-slate-50/80 p-2 text-[11px] text-slate-800">
+      <summary className="cursor-pointer font-semibold text-slate-700">
+        구조화 필드 보기 · {STRUCTURED_SECTION_LABELS.stance}: {so.stance} · 신뢰도 {so.confidence}
+      </summary>
+      <div className="mt-2 space-y-2">
+        {sections.map((sec) =>
           sec.items.length > 0 ? (
             <div key={sec.key}>
               <p className="font-medium text-slate-600">{STRUCTURED_SECTION_LABELS[sec.key]}</p>
               <ul className="mt-0.5 list-disc pl-4">
-                {sec.items.map((it) => (
+                {sec.items.slice(0, 3).map((it) => (
                   <li key={it.slice(0, 40)}>{it}</li>
                 ))}
               </ul>
             </div>
           ) : null,
-      )}
-    </div>
+        )}
+      </div>
+    </details>
   );
 }
 
@@ -75,10 +76,10 @@ export function CommitteeLineCard({
           </span>
         ) : line.outputQuality?.status === "format_warning" ? (
           <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-900">
-            일부 누락
+            일부 형식 보강
           </span>
         ) : line.outputQuality?.sanitizedPromptLeaks ? (
-          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">형식 잔여물 제거됨</span>
+          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">디버그 문구 정리됨</span>
         ) : null}
       </div>
       {line.outputQuality?.actionHint ? (
@@ -106,7 +107,7 @@ export function CommitteeLineCard({
             className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[10px] text-slate-600"
             onClick={() => setShowRaw((v) => !v)}
           >
-            {showRaw ? "원문 숨기기" : "원문/디버그 보기"}
+            {showRaw ? "원문/디버그 숨기기" : "원문/디버그 보기"}
           </button>
           {showRaw ? (
             <pre className="mt-1 max-h-48 overflow-auto rounded border border-slate-200 bg-slate-900 p-2 text-[10px] text-slate-100">

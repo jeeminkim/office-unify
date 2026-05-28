@@ -212,3 +212,13 @@ npm run pre-live-smoke --workspace=apps/web
 - Committee roadmap/regenerate, Research, LongResponseFallback, US diagnostics, and Daily Review flows now have a shared bridge-ready shape.
 - Long raw text is not persisted to `detail_json`; explicit Action Inbox save remains the only write path.
 - No SQL, no GET write, no automatic trading/order/rebalancing.
+## EVO-045 Committee Output Reliability
+
+- [ ] Committee persona lines render compact Korean cards, not raw JSON or fenced blocks.
+- [ ] `structured_output_parse_failed` appears only as low-level/debug context; the primary body remains readable.
+- [ ] “이 발언 다시 생성” returns a short preview card under 1200 characters.
+- [ ] “이 발언으로 교체” changes only local screen state and does not POST a save.
+- [ ] parser fallback keeps raw JSON out of the default body, and “이 발언으로 교체” remains client-only.
+- [ ] Raw/debug and structured fields are collapsed by default.
+- [ ] Action Item save still requires an explicit button click.
+- [ ] No buy/sell directive, automatic order, or automatic rebalancing copy appears.
