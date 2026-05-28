@@ -223,6 +223,20 @@ type PatternAnalysisResponse = {
   }>;
 };
 
+type DashboardApiError = { error?: string };
+
+async function readDashboardJson<T>(res: Response): Promise<T & DashboardApiError> {
+  try {
+    return (await res.json()) as T & DashboardApiError;
+  } catch {
+    return { error: `Invalid JSON response (HTTP ${res.status})` } as T & DashboardApiError;
+  }
+}
+
+function dashboardSectionError(label: string, res: Response, body: DashboardApiError): string {
+  return `${label}: ${body.error ?? `HTTP ${res.status}`}`;
+}
+
 function statusTone(status: StatusSection["status"]): string {
   if (status === "ok") return "bg-emerald-100 text-emerald-900";
   if (status === "warn") return "bg-amber-100 text-amber-900";
@@ -406,27 +420,44 @@ export function DashboardClient() {
         fetch("/api/portfolio/alerts", { credentials: "same-origin" }),
         fetch("/api/dashboard/today-candidates/ops-summary?range=7d", { credentials: "same-origin" }),
       ]);
-      const statusJson = (await statusRes.json()) as { sections?: StatusSection[]; error?: string };
-      const overviewJson = (await overviewRes.json()) as DashboardResponse & { error?: string };
-      const briefJson = (await briefRes.json()) as TodayBriefResponse & { error?: string };
-      const profitGoalJson = (await profitGoalRes.json()) as ProfitGoalSummaryResponse & { error?: string };
-      const patternJson = (await patternRes.json()) as PatternAnalysisResponse & { error?: string };
-      const alertsJson = (await alertsRes.json()) as { alerts?: Array<{ id: string; symbol: string; title: string; body: string; severity: string }>; error?: string };
-      const todayOpsJson = (await todayOpsRes.json()) as TodayCandidatesOpsSummaryResponse;
+      const statusJson = await readDashboardJson<{ sections?: StatusSection[] }>(statusRes);
+      const overviewJson = await readDashboardJson<DashboardResponse>(overviewRes);
+      const briefJson = await readDashboardJson<TodayBriefResponse>(briefRes);
+      const profitGoalJson = await readDashboardJson<ProfitGoalSummaryResponse>(profitGoalRes);
+      const patternJson = await readDashboardJson<PatternAnalysisResponse>(patternRes);
+      const alertsJson = await readDashboardJson<{ alerts?: Array<{ id: string; symbol: string; title: string; body: string; severity: string }> }>(alertsRes);
+      const todayOpsJson = await readDashboardJson<TodayCandidatesOpsSummaryResponse>(todayOpsRes);
       if (!statusRes.ok) throw new Error(statusJson.error ?? `HTTP ${statusRes.status}`);
       if (!overviewRes.ok) throw new Error(overviewJson.error ?? `HTTP ${overviewRes.status}`);
-      if (!briefRes.ok) throw new Error(briefJson.error ?? `HTTP ${briefRes.status}`);
-      if (!profitGoalRes.ok) throw new Error(profitGoalJson.error ?? `HTTP ${profitGoalRes.status}`);
-      if (!patternRes.ok) throw new Error(patternJson.error ?? `HTTP ${patternRes.status}`);
-      if (!alertsRes.ok) throw new Error(alertsJson.error ?? `HTTP ${alertsRes.status}`);
+      const sectionErrors: string[] = [];
       setStatusSections(statusJson.sections ?? []);
       setOverview(overviewJson);
-      setTodayBrief(briefJson);
-      setProfitGoal(profitGoalJson);
-      setPattern(patternJson);
-      setPortfolioAlerts(alertsJson.alerts ?? []);
-      setTodayOpsSummary(todayOpsJson);
-      setError(null);
+      if (briefRes.ok) setTodayBrief(briefJson);
+      else {
+        setTodayBrief(null);
+        sectionErrors.push(dashboardSectionError("오늘 브리핑", briefRes, briefJson));
+      }
+      if (profitGoalRes.ok) setProfitGoal(profitGoalJson);
+      else {
+        setProfitGoal(null);
+        sectionErrors.push(dashboardSectionError("Profit Goal", profitGoalRes, profitGoalJson));
+      }
+      if (patternRes.ok) setPattern(patternJson);
+      else {
+        setPattern(null);
+        sectionErrors.push(dashboardSectionError("Trade Pattern", patternRes, patternJson));
+      }
+      if (alertsRes.ok) setPortfolioAlerts(alertsJson.alerts ?? []);
+      else {
+        setPortfolioAlerts([]);
+        sectionErrors.push(dashboardSectionError("Portfolio Alerts", alertsRes, alertsJson));
+      }
+      if (todayOpsRes.ok) setTodayOpsSummary(todayOpsJson);
+      else {
+        setTodayOpsSummary(null);
+        sectionErrors.push(dashboardSectionError("Today Ops", todayOpsRes, todayOpsJson));
+      }
+      setError(sectionErrors.length > 0 ? `일부 섹션을 불러오지 못했습니다. ${sectionErrors.join(" · ")}` : null);
       try {
         const [sectorRes, watchRes, djRes, opsSumRes, portfolioSummaryRes, watchRecRes] = await Promise.all([
           fetch("/api/sector-radar/summary", { credentials: "same-origin" }),
