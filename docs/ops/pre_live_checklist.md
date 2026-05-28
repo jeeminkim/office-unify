@@ -203,3 +203,12 @@ npm run pre-live-smoke --workspace=apps/web
 ---
 
 관련: [`docs/ops/today_candidates.md`](today_candidates.md), [`docs/sql/APPLY_ORDER.md`](../sql/APPLY_ORDER.md).
+
+## EVO-037 Persona Action Bridge
+
+- Added the `personaActionBridge` first pass for source output -> ActionItemDetail/actionSteps/guardrails/recommendedNextLinks.
+- `doNotDo` is guardrail copy, not a runnable step or button.
+- PB output-contract warnings can become manual-review follow-up steps without blocking PB output.
+- Committee roadmap/regenerate, Research, LongResponseFallback, US diagnostics, and Daily Review flows now have a shared bridge-ready shape.
+- Long raw text is not persisted to `detail_json`; explicit Action Inbox save remains the only write path.
+- No SQL, no GET write, no automatic trading/order/rebalancing.

@@ -304,3 +304,12 @@
 - The core only writes with `confirm:true` or CLI `--confirm`, only targets `portfolio_quotes`, and defaults to `overwrite=false`.
 - The simplified layout is `symbol`, `google_ticker`, `price`, `name`, `volume`, `marketcap`, `tradetime`, `status`, `checked_at`, `source`.
 - Post-check separates `anchorMatched`, `anchorOk`, and `formulaPendingCount`; Today Brief diagnostics separate `sheets_anchor_zero`, `sheets_anchor_ok_but_us_signal_empty`, and `gating_not_connected`.
+
+## EVO-037 Persona Action Bridge
+
+- Added the `personaActionBridge` first pass for source output -> ActionItemDetail/actionSteps/guardrails/recommendedNextLinks.
+- `doNotDo` is guardrail copy, not a runnable step or button.
+- PB output-contract warnings can become manual-review follow-up steps without blocking PB output.
+- Committee roadmap/regenerate, Research, LongResponseFallback, US diagnostics, and Daily Review flows now have a shared bridge-ready shape.
+- Long raw text is not persisted to `detail_json`; explicit Action Inbox save remains the only write path.
+- No SQL, no GET write, no automatic trading/order/rebalancing.

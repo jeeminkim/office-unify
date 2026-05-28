@@ -145,11 +145,14 @@ export function ActionStepRunner({ actionItemId, detail, onStepDone, compact, ti
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [copyHint, setCopyHint] = useState<string | null>(null);
   const [busyStep, setBusyStep] = useState<string | null>(null);
+  const [showAllSteps, setShowAllSteps] = useState(false);
 
   if (!steps.length) return null;
 
   const runnable = steps.filter((s) => s.category !== "do_not_do");
   const doNotSteps = steps.filter((s) => s.category === "do_not_do");
+  const visibleRunnable = showAllSteps ? runnable : runnable.slice(0, 3);
+  const hiddenStepCount = Math.max(0, runnable.length - visibleRunnable.length);
 
   const runCopy = async (step: ActionItemStep) => {
     const text = buildActionStepCopyText({ symbol: detail.symbol, name: detail.name, step, detail });
@@ -175,7 +178,7 @@ export function ActionStepRunner({ actionItemId, detail, onStepDone, compact, ti
         가장 궁금한 항목부터 선택하세요. 선택만으로 저장되지 않습니다. 완료를 누를 때만 상태가 저장됩니다.
       </p>
       <ul className="mt-2 space-y-2">
-        {runnable.map((step) => (
+        {visibleRunnable.map((step) => (
           <StepRow
             key={step.stepId}
             step={step}
@@ -191,6 +194,15 @@ export function ActionStepRunner({ actionItemId, detail, onStepDone, compact, ti
           />
         ))}
       </ul>
+      {runnable.length > 3 ? (
+        <button
+          type="button"
+          className="mt-2 w-full rounded border border-violet-200 bg-white px-2 py-1 text-[10px] text-violet-900"
+          onClick={() => setShowAllSteps((value) => !value)}
+        >
+          {showAllSteps ? "접기" : `+${hiddenStepCount}개 더 보기`}
+        </button>
+      ) : null}
       {doNotSteps.length ? (
         <div className="mt-2 text-[10px] text-amber-900">
           <p className="font-medium">지금 하면 안 되는 것</p>

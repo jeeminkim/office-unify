@@ -69,3 +69,12 @@
 ---
 
 **ID 규칙 (예시):** `EVO-001` 처럼 저장소 내에서만 통일하면 된다.
+
+## EVO-037 Persona Action Bridge
+
+- Added the `personaActionBridge` first pass for source output -> ActionItemDetail/actionSteps/guardrails/recommendedNextLinks.
+- `doNotDo` is guardrail copy, not a runnable step or button.
+- PB output-contract warnings can become manual-review follow-up steps without blocking PB output.
+- Committee roadmap/regenerate, Research, LongResponseFallback, US diagnostics, and Daily Review flows now have a shared bridge-ready shape.
+- Long raw text is not persisted to `detail_json`; explicit Action Inbox save remains the only write path.
+- No SQL, no GET write, no automatic trading/order/rebalancing.

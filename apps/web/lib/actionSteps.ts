@@ -92,17 +92,6 @@ export function buildActionStepsFromDetail(
     });
   }
 
-  for (const label of detail.doNotDo ?? []) {
-    const stepId = slugId(`dnd-${label}`, idx++);
-    steps.push({
-      stepId,
-      label,
-      category: 'do_not_do',
-      status: statusById.get(stepId) ?? 'open',
-      recommendedActions: defaultActionsForCategory('do_not_do', opts ?? {}),
-    });
-  }
-
   for (const label of detail.evidenceNeeded ?? []) {
     const stepId = slugId(`ev-${label}`, idx++);
     steps.push({
@@ -118,6 +107,9 @@ export function buildActionStepsFromDetail(
 }
 
 export function attachActionStepsToDetail(detail: ActionItemDetailJson): ActionItemDetailJson {
+  if (detail.actionSteps?.length) {
+    return detail;
+  }
   const steps = buildActionStepsFromDetail(detail, {
     symbol: detail.symbol,
     market: detail.market,

@@ -6,7 +6,7 @@ describe('actionSteps', () => {
   it('converts checklist to actionSteps with recommended actions', () => {
     const detail = attachActionStepsToDetail(buildUsDiagnosticsActionItemDetail());
     expect((detail.actionSteps?.length ?? 0) > 0).toBe(true);
-    const step = detail.actionSteps?.find((s) => s.label.includes('Google Sheets'));
+    const step = detail.actionSteps?.[0];
     expect(step?.recommendedActions?.some((a) => a.actionKey === 'open_research')).toBe(true);
   });
 

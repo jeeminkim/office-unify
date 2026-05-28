@@ -1,4 +1,4 @@
-import type { ActionItemDetailJson } from '@office-unify/shared-types';
+﻿import type { ActionItemDetailJson } from '@office-unify/shared-types';
 
 export type ActionItemDetailCompleteness = 'full' | 'partial' | 'minimal';
 
@@ -17,7 +17,7 @@ export type ActionItemDetailCompletenessReport = {
   actionStepCount: number;
 };
 
-const TRADE_BLOCK = /즉시\s*매수|즉시\s*매도|자동\s*매매|자동\s*주문|자동\s*리밸런싱|매수\s*추천/i;
+const TRADE_BLOCK = /(?:즉시|지금)\s*(?:매수|매도)|(?:매수|매도)\s*주문\s*실행|자동\s*(?:주문|매매|리밸런싱)|buy\s+now|sell\s+now|place\s+a\s+(?:buy|sell)\s+order|execute\s+(?:buy|sell)|auto\s+rebalance/i;
 const MAX_FIELD = 600;
 const MAX_TOTAL_RAW = 4500;
 
@@ -36,7 +36,7 @@ export function analyzeActionItemDetailCompleteness(detail: ActionItemDetailJson
   const hasChecklist = (detail.checklist?.length ?? 0) > 0;
   const hasDoNotDo =
     (detail.doNotDo?.length ?? 0) > 0 &&
-    detail.doNotDo!.some((x) => /매수|매도|자동\s*주문|자동\s*리밸런싱|자동\s*매매/i.test(x));
+    detail.doNotDo!.some((x) => /매수|매도|주문|자동|리밸런싱|buy|sell|order|automatic|rebalance/i.test(x));
   const hasSourceRefsOrLinks =
     (detail.sourceRefs?.length ?? 0) > 0 || (detail.recommendedNextLinks?.length ?? 0) > 0;
   const hasActionSteps = (detail.actionSteps?.length ?? 0) > 0;

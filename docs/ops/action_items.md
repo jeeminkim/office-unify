@@ -68,3 +68,37 @@ DB enum 추가(`pb_response`, `trend_report`)는 후속 SQL 라운드 — `ROADM
 - idempotency + dedupe title 유지
 - **POST만 write** — GET·목록 렌더·링크 클릭은 read-only
 - `sourceRefs` / `recommendedNextLinks`는 원본 추적·화면 이동용, 자동 실행 아님
+
+## EVO-037 personaActionBridge
+
+`apps/web/lib/personaActionBridge.ts` is a pure client-safe adapter. It performs no DB access, no fetch, no provider call, and no env/secret access.
+
+- `nextChecks` -> `actionSteps` with category `checklist`.
+- `missingEvidence` -> `actionSteps` with category `research`.
+- `riskFlags` -> `actionSteps` with category `risk_review`.
+- PB output-contract missing sections -> `actionSteps` with category `manual_review`.
+- `doNotDo` -> `guardrails` and `detail_json.doNotDo`; never a runnable action step.
+- Unsafe execution directives -> block guardrail + `bridgeWarnings`.
+- Long response fallback stores only a compact `sourceSummary`; raw/full text stays in sessionStorage seed.
+- `recommendedNextLinks` dedupes by `actionKey`.
+
+US diagnostics bridge contract:
+
+- `us_signal_mapping_empty` + anchor OK produces Watchlist sector/theme, Sector Radar mapping, US-KR theme registry, quote-quality, and next Today Brief checks.
+- Google Finance setup is a secondary context link only; bridge does not create a primary repair/write step when anchors are OK.
+- No spreadsheet repair/write, no SQL, no GET write, no automatic trading/order/rebalancing.
+
+## EVO-037 Coverage Matrix
+
+| Source | Coverage | Dedicated builder | nextChecks->steps | doNotDo->guardrails | missingEvidence->research | riskFlags->risk_review | recommendedNextLinks | sourceRefs |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| `pb_message` | high | yes | yes | yes | yes | yes | yes | yes |
+| `pb_weekly_review` | high | yes | yes | yes | yes | yes | yes | yes |
+| `pb_daily_note` | high | yes | yes | yes | yes | yes | yes | yes |
+| `committee_roadmap` | high | yes | yes | yes | yes | yes | yes | yes |
+| `committee_regenerate` | high | yes | yes | yes | yes | yes | yes | yes |
+| `research_report` | high | yes | yes | yes | yes | partial | yes | yes |
+| `today_candidate` | medium | existing | yes | yes | yes | yes | yes | yes |
+| `us_diagnostics` | high | yes | yes | yes | yes | n/a | yes | yes |
+| `judgment_review` | medium | bridge-ready | yes | yes | yes | yes | yes | fallback |
+| `long_response_fallback` | high | yes | yes | yes | yes | partial | yes | yes |

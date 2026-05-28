@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### 2026-05-28 EVO-037 Persona Action Bridge - Structured Output to Action Flow
+
+- **Bridge contract:** added a client-safe `personaActionBridge` that turns PB, Committee, Research, Today Candidate, Daily Review, Judgment Review, US diagnostics, and long-response fallback outputs into standard `ActionItemDetail`, `actionSteps`, guardrails, source refs, and recommended next links.
+- **Guardrail semantics:** `doNotDo` is stored as guardrail copy, not executable action steps. Unsafe execution directives are blocked into manual-review guardrails while safe caveats remain allowed.
+- **US diagnostics bridge:** `us_signal_mapping_empty` now saves as Watchlist sector/theme, Sector Radar mapping, US-KR theme registry, quote quality, and next Today Brief checks. Google Finance setup remains a secondary context link when anchors are OK.
+- **PB/Research/Committee bridge:** PB output-contract missing sections become manual-review steps; Committee roadmap and regenerate flows keep source refs and next checks; long response fallback stores only a compact summary and action links, not raw full text.
+- **Action Item UI:** action steps show the first three steps with a More affordance, guardrails render as non-button text, recommended links dedupe by action key, and low-context items display a context-repair hint.
+- **Guardrails:** no SQL, no API field removal, no GET write, explicit Action Inbox save only, no automatic trading/order/rebalancing behavior, and no commit in this round.
+
 ### 2026-05-27 EVO-042 Today Brief US Diagnostics Consistency
 
 - **Anchor normalization:** Today Brief US diagnostics now normalizes `anchorOk`, `sheetsAnchorOk`, `anchorMatched`, missing anchors, and legacy received counts before building copy. Current read-back wins over stale `received=0`, so anchor OK states no longer show zero-anchor remediation.

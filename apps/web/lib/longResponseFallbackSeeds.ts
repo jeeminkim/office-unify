@@ -1,4 +1,4 @@
-import type { ActionItemCreateRequest, LongResponseFallback } from '@office-unify/shared-types';
+import type { ActionItemCreateRequest, LongResponseFallback, PbOutputContractAuditSummary } from '@office-unify/shared-types';
 import {
   buildJournalHrefFromActionItem,
   buildResearchHrefFromActionItem,
@@ -136,6 +136,7 @@ export function buildLongResponseActionItemRequest(input: {
   market?: string;
   sourceId?: string;
   description?: string;
+  outputContract?: PbOutputContractAuditSummary;
 }): ActionItemCreateRequest {
   const dbSourceType =
     input.sourceType === 'research_report' ? 'research_report' : ('manual' as const);
@@ -167,6 +168,7 @@ export function buildLongResponseActionItemRequest(input: {
           checklist: compactLines.length
             ? compactLines
             : undefined,
+          outputContract: input.outputContract,
         });
 
   return {

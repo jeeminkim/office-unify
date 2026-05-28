@@ -20,13 +20,15 @@ import {
   type ActionItemDetailCompletenessReport,
 } from '@/lib/actionItemDetailCompleteness';
 import { attachActionStepsToDetail } from '@/lib/actionSteps';
+import { buildPersonaActionBridge } from '@/lib/personaActionBridge';
 
 export { scoreActionItemDetailCompleteness, analyzeActionItemDetailCompleteness };
 
-export { buildJournalHrefFromActionItem, buildResearchHrefFromActionItem, buildRetrospectiveHrefFromActionItem };
-
 const DEFAULT_DO_NOT = ['매수·매도·자동 주문·자동 리밸런싱 지시가 아닙니다.'];
 const GENERIC_CHECKLIST = ['원본 출처·맥락을 확인합니다.', '저장 이유와 다음 확인 항목을 점검합니다.'];
+
+export { buildJournalHrefFromActionItem, buildResearchHrefFromActionItem, buildRetrospectiveHrefFromActionItem };
+
 
 function sourceRef(
   sourceType: string,
@@ -86,7 +88,7 @@ function linksFor(actionItemId: string, detail: Partial<ActionItemDetailJson>): 
     },
     {
       kind: 'committee',
-      label: '위원회',
+      label: 'Committee',
       actionKey: 'open_committee',
       href: `/committee-discussion?source=action_item&actionItemId=${encId}`,
     },
@@ -201,7 +203,7 @@ export function ensureDetailContract(
   if (!d.checklist?.length) {
     d.checklist = GENERIC_CHECKLIST.map((label) => ({ label, source: ctx?.sourceType ?? 'generic' }));
   }
-  if (!d.doNotDo?.length || !d.doNotDo.some((x) => /매수|매도|자동/i.test(x))) {
+  if (!d.doNotDo?.length || !d.doNotDo.some((x) => /buy|sell|order|rebalance|매수|매도|주문|리밸런싱/i.test(x))) {
     d.doNotDo = [...new Set([...(d.doNotDo ?? []), ...DEFAULT_DO_NOT])];
   }
   if (!d.confirmNow?.length) d.confirmNow = d.checklist.map((c) => c.label).slice(0, 5);
@@ -294,7 +296,7 @@ export function buildActionItemDetailFromTodayCandidate(
           sourceHref: sym ? `/?symbol=${encodeURIComponent(sym)}` : '/',
           label: 'Today Candidate',
         }),
-        sourceRef('dashboard', { sourceHref: '/', label: '대시보드' }),
+        sourceRef('dashboard', { sourceHref: '/', label: 'Dashboard' }),
       ],
       sym ? [sourceRef('symbol', { sourceId: sym, sourceHref: `/portfolio/${encodeURIComponent(sym)}`, label: sym })] : [],
     ),
@@ -422,6 +424,7 @@ export function buildGoogleFinanceSetupActionItemDetail(
       'SQL 문제로 단정하지 않기',
       'Yahoo fallback만으로 Google Finance 설정 완료로 보지 않기',
       '즉시 매수·매도·자동 주문 금지',
+      '자동 주문·자동 리밸런싱 없음',
     ],
     evidenceNeeded: [
       `sheets_ok:${s.sheetsAnchorOk}`,
@@ -478,47 +481,15 @@ export function buildUsDiagnosticsActionItemDetail(input?: {
   suggestedNextChecks?: string[];
 }): ActionItemDetailJson {
   const anchorOk = input?.googleFinanceAnchorOk === true;
-  return attachActionStepsToDetail({
-    notTradeInstruction: true,
-    actionCategory: 'check_now',
-    whyCreated: anchorOk
-      ? 'Google Finance anchor는 정상이나 미국장 신호가 한국/관심 후보로 연결되지 않음'
-      : '미국 anchor 데이터가 0개라 미국 후보가 일반 관찰 후보에서 제외됨',
-    confirmNow: anchorOk
-      ? ['Watchlist sector/theme 확인', 'Sector Radar mapping 확인', 'quote quality 확인', 'US→KR theme registry 확인']
-      : ['미국 anchor 시세 상태 확인', 'Today Brief 재확인'],
-    checklist: anchorOk
-      ? [
-          { label: 'Watchlist sector/theme 확인', source: 'us_mapping' },
-          { label: 'Sector Radar mapping 확인', source: 'us_mapping' },
-          { label: 'quote quality 확인', source: 'us_mapping' },
-          { label: 'US→KR theme registry 확인', source: 'us_mapping' },
-        ]
-      : [
-          { label: 'Google Sheets tab 존재 확인', source: 'us_setup' },
-          { label: 'SPY/QQQ/SMH GOOGLEFINANCE 수식 결과 확인', source: 'us_setup' },
-          { label: 'range parse 오류 확인', source: 'us_setup' },
-          { label: 'ticker format 확인', source: 'us_setup' },
-          { label: 'refresh 후 Today Brief 재실행', source: 'us_setup' },
-        ],
-    doNotDo: ['미국 데이터 empty 상태에서 미국 종목을 일반 후보로 판단하지 않기', '즉시 매수·매도·자동 주문 금지'],
-    evidenceNeeded: anchorOk
-      ? ['us_signal_mapping', 'watchlist_theme', 'quote_quality']
-      : ['anchor_coverage', 'quote_provider', 'sheets_tab'],
-    decisionContext: {
-      sourceQuestion: anchorOk
-        ? '미국장 신호가 한국/관심 후보로 연결되는가?'
-        : '미국 시장 anchor·Google Sheets 설정이 충분한가?',
-      sourceSummary: anchorOk
-        ? 'Google Finance anchor는 정상입니다. 미국 후보 미노출은 mapping/gating 진단으로 확인합니다.'
-        : '미국 후보는 점검 카드로 분리됩니다. SQL이 아니라 quote provider·Sheets 문제일 수 있습니다.',
-    },
-    recommendedNextLinks: linksFor('pending', {
-      whyCreated: 'US diagnostics',
-      decisionContext: { sourceQuestion: '미국 anchor 확인' },
-    }),
-    usDiagnostics: input,
-  });
+  return buildPersonaActionBridge({
+    source: 'us_diagnostics',
+    title: anchorOk ? 'US diagnostics: mapping/gating check' : 'US diagnostics: anchor/quote check',
+    googleFinanceAnchorOk: anchorOk,
+    anchorOk,
+    gatingReason: input?.gatingReason,
+    nextChecks: anchorOk ? input?.suggestedNextChecks : ['Check US anchor quote status', 'Re-run Today Brief'],
+    missingEvidence: anchorOk ? ['us_signal_mapping', 'watchlist_theme', 'quote_quality'] : ['anchor_coverage', 'quote_provider', 'sheets_tab'],
+  }).detail;
 }
 
 /** Risk review panel — 개별 step 저장용 */
@@ -556,17 +527,17 @@ export function buildCommitteeLineRegenerateActionItemDetail(input: {
     notTradeInstruction: true,
     actionCategory: 'check_now',
     sourceLabel: 'committee_line_regenerate',
-    whyCreated: `위원회 발언 복구 (${input.personaKey})`,
-    confirmNow: input.nextChecks?.slice(0, 5) ?? ['복구 발언 검토'],
+    whyCreated: 'Committee line recovery (' + input.personaKey + ')',
+    confirmNow: input.nextChecks?.slice(0, 5) ?? ['Review recovered committee line'],
     doNotDo: input.doNotDo?.length
       ? input.doNotDo
-      : ['매수·매도·자동 주문 지시가 아님', '즉시 실행·자동 리밸런싱 없음'],
+      : ['Not a buy/sell/order instruction.', 'No automatic rebalancing.'],
     evidenceNeeded: input.missingEvidence?.length
       ? input.missingEvidence
-      : ['토론 맥락', '원장·시세 확인'],
+      : ['discussion context', 'ledger/quote check'],
     checklist: [
-      { label: '복구 발언 검토', reason: structured.slice(0, 200), source: 'committee_partial_recovery' },
-      { label: '원 질문과의 정합성 확인', source: 'committee_discussion' },
+      { label: 'Review recovered committee line', reason: structured.slice(0, 200), source: 'committee_partial_recovery' },
+      { label: 'Check against the original question', source: 'committee_discussion' },
     ],
     decisionContext: {
       sourceQuestion: input.originalQuestion.slice(0, 400),
@@ -583,7 +554,7 @@ export function buildCommitteeLineRegenerateActionItemDetail(input: {
           sourceHref: input.committeeTurnId
             ? `/committee-discussion?committeeTurnId=${encodeURIComponent(input.committeeTurnId)}`
             : '/committee-discussion',
-          label: '위원회 토론',
+          label: 'Committee discussion',
         }),
         sourceRef('committee_turn', { sourceId: input.committeeTurnId }),
         sourceRef('persona_line', { sourceId: input.personaKey, label: input.personaKey }),
@@ -646,28 +617,20 @@ export function buildCommitteeRoadmapItemDetail(input: {
       ? `끊긴 발언(${input.partialLineRefs.join(', ')}) 보완`
       : undefined);
 
-  return attachActionStepsToDetail({
-    notTradeInstruction: true,
-    actionCategory: category,
-    whyCreated: `위원회 토론 로드맵 (${b})`,
-    confirmNow: checklist.map((c) => c.label).slice(0, 5),
-    doNotDo: doNotDo.length ? doNotDo : ['매수·매도·자동 주문 지시가 아님', '즉시 실행·자동 리밸런싱 없음'],
-    evidenceNeeded:
+  const bridge = buildPersonaActionBridge({
+    source: b === 'partialRecovery' ? 'committee_regenerate' : 'committee_roadmap',
+    title: `위원회 토론 로드맵 (${b})`,
+    sourceSummary: `${input.title} — ${input.reason}`,
+    nextChecks: checklist.map((c) => c.label).slice(0, 5),
+    doNotDo: doNotDo.length ? doNotDo : undefined,
+    missingEvidence:
       b === 'researchNeeded' || b === 'partialRecovery'
-        ? ['토론 기록', '원장·시세 확인']
+        ? ['토론 기록', '원장·시세 확인', ...(input.partialLineRefs ?? [])]
         : input.bucket === 'monitor'
           ? ['추적 지표·후속 확인']
-          : [],
-    checklist,
-    decisionContext: {
-      sourceQuestion,
-      originalQuestion: sourceQuestion,
-      sourceSummary: input.reason.slice(0, 400),
-      personaKey: input.personaRefs?.[0],
-      riskFlags: b === 'riskReview' ? [input.title.slice(0, 120)] : undefined,
-      missingEvidence: input.partialLineRefs,
-      nextChecks: checklist.map((c) => c.label).slice(0, 4),
-    },
+          : input.partialLineRefs,
+    riskFlags: b === 'riskReview' ? [input.title.slice(0, 120)] : undefined,
+    originalQuestion: sourceQuestion,
     sourceRefs: mergeSourceRefs(
       [
         sourceRef('committee_discussion', {
@@ -681,13 +644,11 @@ export function buildCommitteeRoadmapItemDetail(input: {
       input.personaRefs?.map((p) => sourceRef('persona_line', { sourceId: p, label: p })),
       input.partialLineRefs?.map((p) => sourceRef('partial_line', { sourceId: p, label: p })),
     ),
-    sourceSummary: `${input.title} — ${input.reason}`.slice(0, 500),
-    recommendedNextLinks: linksFor('pending', {
-      whyCreated: input.reason,
-      sourceSummary: input.reason,
-      decisionContext: { sourceQuestion, originalQuestion: sourceQuestion },
-    }),
-  });
+  }).detail;
+  return {
+    ...bridge,
+    actionCategory: category,
+  };
 }
 
 export function buildSectorMatchReviewDetail(input: {
@@ -990,25 +951,14 @@ export function buildResearchReportActionItemDetail(input: {
   const href = input.requestId
     ? `/research-center?requestId=${encodeURIComponent(input.requestId)}`
     : '/research-center';
-  return attachActionStepsToDetail({
-    notTradeInstruction: true,
-    actionCategory: 'research_needed',
-    whyCreated: 'Research Report에서 저장됨',
+  return buildPersonaActionBridge({
+    source: 'research_report',
+    title: 'Saved from Research Report',
     sourceSummary: input.sourceSummary?.slice(0, 400) ?? input.title,
-    checklist: [
-      { label: '근거·출처 확인', source: 'research_report' },
-      { label: '반대 근거 확인', source: 'research_report' },
-      { label: '추적 항목·follow-up 업데이트', source: 'research_report' },
-    ],
-    doNotDo: ['매수·매도·자동 주문 지시가 아님', '리포트 문구를 즉시 실행 지시로 해석하지 않기'],
-    evidenceNeeded: ['원문·시세·포지션 맥락'],
-    decisionContext: {
-      sourceQuestion: q,
-      originalQuestion: q,
-      sourceSummary: input.sourceSummary?.slice(0, 400),
-      relatedSymbol: input.symbol,
-      relatedName: input.name,
-    },
+    nextChecks: ['Review key summary', 'Check missing evidence', 'Ask PB/Committee follow-up', 'Record in Journal/Retrospective'],
+    doNotDo: ['Do not treat report text as an execution instruction.'],
+    missingEvidence: ['source context', 'quote context', 'position context'],
+    originalQuestion: q,
     sourceRefs: mergeSourceRefs(
       [sourceRef('research_report', { sourceId: input.reportRunId ?? input.requestId, sourceHref: href })],
       input.requestId ? [sourceRef('research_request_id', { sourceId: input.requestId })] : [],
@@ -1017,14 +967,7 @@ export function buildResearchReportActionItemDetail(input: {
     symbol: input.symbol,
     name: input.name,
     market: input.market,
-    recommendedNextLinks: linksFor('pending', {
-      symbol: input.symbol,
-      name: input.name,
-      market: input.market,
-      sourceSummary: input.sourceSummary,
-      decisionContext: { sourceQuestion: q, originalQuestion: q },
-    }),
-  });
+  }).detail;
 }
 
 /** manual source_type + semantic sourceLabel (pb_response, trend_report 등) */
@@ -1040,6 +983,7 @@ export function buildManualSemanticActionItemDetail(input: {
   checklist?: string[];
   doNotDo?: string[];
   originalQuestion?: string;
+  outputContract?: import('@office-unify/shared-types').PbOutputContractAuditSummary;
 }): ActionItemDetailJson {
   const isPb = input.sourceLabel.startsWith('pb');
   const isTrend = input.sourceLabel === 'trend_report';
@@ -1058,23 +1002,25 @@ export function buildManualSemanticActionItemDetail(input: {
   const href =
     input.sourceHref ??
     (isPb ? '/private-banker' : isTrend ? '/trend-analysis' : '/action-items');
-  return attachActionStepsToDetail({
-    notTradeInstruction: true,
-    actionCategory: isTrend ? 'monitor' : 'check_now',
-    sourceLabel: input.sourceLabel,
-    whyCreated: `${input.sourceLabel}에서 저장 — 확인·복기용`,
+  const source =
+    input.sourceLabel === 'pb_weekly_review'
+      ? 'pb_weekly_review'
+      : input.sourceLabel === 'pb_daily_note'
+        ? 'pb_daily_note'
+        : isPb
+          ? 'pb_message'
+          : input.sourceLabel === 'research_report'
+            ? 'research_report'
+            : 'long_response_fallback';
+  const bridge = buildPersonaActionBridge({
+    source,
+    title: input.sourceLabel + ' follow-up',
     sourceSummary: input.sourceSummary.slice(0, 400),
-    confirmNow: checklist.map((c) => c.label).slice(0, 4),
-    checklist,
+    nextChecks: checklist.map((c) => c.label),
     doNotDo: input.doNotDo ?? pbDoNot,
-    evidenceNeeded: ['원문 seed 또는 후속 상담에서 맥락 유지'],
-    decisionContext: {
-      originalQuestion: input.originalQuestion?.slice(0, 400),
-      sourceQuestion: input.originalQuestion?.slice(0, 400),
-      sourceSummary: input.sourceSummary.slice(0, 400),
-      relatedSymbol: input.symbol,
-      relatedName: input.name,
-    },
+    missingEvidence: ['source seed or follow-up context'],
+    originalQuestion: input.originalQuestion?.slice(0, 400),
+    outputContract: input.outputContract,
     sourceRefs: [
       sourceRef(input.sourceLabel, {
         sourceId: input.sourceId,
@@ -1085,14 +1031,12 @@ export function buildManualSemanticActionItemDetail(input: {
     symbol: input.symbol,
     name: input.name,
     market: input.market,
-    recommendedNextLinks: linksFor('pending', {
-      symbol: input.symbol,
-      name: input.name,
-      market: input.market,
-      sourceSummary: input.sourceSummary,
-      sourceRefs: [{ sourceType: input.sourceLabel, sourceHref: href }],
-    }),
-  });
+  }).detail;
+  return {
+    ...bridge,
+    actionCategory: isTrend ? 'monitor' : bridge.actionCategory,
+    sourceLabel: input.sourceLabel,
+  };
 }
 
 export function buildGenericActionItemDetail(input: {

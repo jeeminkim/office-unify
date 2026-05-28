@@ -2,6 +2,26 @@
 
 import type { ActionItemStep } from './actionItemSteps';
 
+export type PersonaActionBridgeSource =
+  | 'pb_message'
+  | 'pb_weekly_review'
+  | 'pb_daily_note'
+  | 'committee_roadmap'
+  | 'committee_regenerate'
+  | 'research_report'
+  | 'today_candidate'
+  | 'daily_review_note'
+  | 'judgment_review'
+  | 'us_diagnostics'
+  | 'long_response_fallback';
+
+export type ActionGuardrail = {
+  id: string;
+  label: string;
+  reason?: string;
+  severity: 'warn' | 'block';
+};
+
 export type ActionItemChecklistEntry = {
   label: string;
   reason?: string;
@@ -75,6 +95,11 @@ export type UsDiagnosticsActionItemSummary = {
 
 export type ActionItemDetailJson = {
   notTradeInstruction?: boolean;
+  bridgeSource?: PersonaActionBridgeSource;
+  bridgeWarnings?: string[];
+  guardrails?: ActionGuardrail[];
+  completenessScore?: number;
+  completenessLevel?: 'full' | 'high' | 'medium' | 'low';
   actionCategory?: 'check_now' | 'monitor' | 'research_needed' | 'retrospective_needed' | 'risk_review';
   whyCreated?: string;
   confirmNow?: string[];
@@ -103,6 +128,11 @@ export function parseActionItemDetailJson(raw: Record<string, unknown> | undefin
   const dc = d.decisionContext as ActionItemDecisionContext | undefined;
   return {
     notTradeInstruction: d.notTradeInstruction !== false,
+    bridgeSource: typeof d.bridgeSource === 'string' ? d.bridgeSource : undefined,
+    bridgeWarnings: Array.isArray(d.bridgeWarnings) ? d.bridgeWarnings.map(String) : undefined,
+    guardrails: Array.isArray(d.guardrails) ? (d.guardrails as ActionGuardrail[]) : undefined,
+    completenessScore: typeof d.completenessScore === 'number' ? d.completenessScore : undefined,
+    completenessLevel: typeof d.completenessLevel === 'string' ? d.completenessLevel : undefined,
     actionCategory: d.actionCategory,
     whyCreated: typeof d.whyCreated === 'string' ? d.whyCreated : undefined,
     confirmNow: Array.isArray(d.confirmNow) ? d.confirmNow.map(String) : undefined,

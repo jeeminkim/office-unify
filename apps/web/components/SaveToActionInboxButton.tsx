@@ -4,9 +4,14 @@ import Link from "next/link";
 import { useState } from "react";
 import type { ActionItemCreateRequest } from "@office-unify/shared-types";
 import { createActionItem } from "@/lib/actionItemsClient";
+import {
+  mergeActionItemDetailWithBridge,
+  type PersonaActionBridgeResult,
+} from "@/lib/personaActionBridge";
 
 type Props = {
   request: ActionItemCreateRequest;
+  bridgeResult?: PersonaActionBridgeResult;
   label?: string;
   className?: string;
   compact?: boolean;
@@ -15,8 +20,20 @@ type Props = {
   onSaved?: (result: { deduped: boolean }) => void;
 };
 
+export function mergeActionInboxRequestWithBridge(
+  request: ActionItemCreateRequest,
+  bridgeResult?: PersonaActionBridgeResult,
+): ActionItemCreateRequest {
+  if (!bridgeResult) return request;
+  return {
+    ...request,
+    detailJson: mergeActionItemDetailWithBridge(request.detailJson, bridgeResult),
+  };
+}
+
 export function SaveToActionInboxButton({
   request,
+  bridgeResult,
   label = "액션 인박스에 저장",
   className,
   compact,
@@ -31,7 +48,7 @@ export function SaveToActionInboxButton({
     setBusy(true);
     setHint(null);
     try {
-      const r = await createActionItem(request);
+      const r = await createActionItem(mergeActionInboxRequestWithBridge(request, bridgeResult));
       if (!r.ok) {
         setHint(r.actionHint ?? r.error ?? "저장 실패");
         return;

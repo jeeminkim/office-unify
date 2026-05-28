@@ -218,12 +218,14 @@ export {
   normalizeActionItemDedupeTitle,
 } from './actionItems';
 export type {
+  ActionGuardrail,
   ActionItemChecklistEntry,
   ActionItemDecisionContext,
   ActionItemDetailJson,
   ActionItemRecommendedLink,
   ActionItemRecommendedLinkActionKey,
   ActionItemSourceRef,
+  PersonaActionBridgeSource,
 } from './actionItemDetail';
 export type { ActionItemCreateQualityMeta, ActionItemDetailCompletenessLevel } from './actionItems';
 export { parseActionItemDetailJson } from './actionItemDetail';

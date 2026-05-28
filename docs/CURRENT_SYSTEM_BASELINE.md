@@ -126,3 +126,12 @@
 - Confirmed UI apply and `npm run google-finance-repair --workspace=apps/web -- --confirm --wait` share the same repair core.
 - Dry-run is the CLI default. Confirmed writes are limited to `portfolio_quotes`, use `overwrite=false`, preserve non-empty cells, and add missing simplified headers, US anchor rows, and blank GOOGLEFINANCE formulas.
 - This is a data readiness repair for Today Brief US gating only. It does not trade, order, rebalance, or mutate the Supabase ledger.
+
+## EVO-037 Persona Action Bridge
+
+- Added the `personaActionBridge` first pass for source output -> ActionItemDetail/actionSteps/guardrails/recommendedNextLinks.
+- `doNotDo` is guardrail copy, not a runnable step or button.
+- PB output-contract warnings can become manual-review follow-up steps without blocking PB output.
+- Committee roadmap/regenerate, Research, LongResponseFallback, US diagnostics, and Daily Review flows now have a shared bridge-ready shape.
+- Long raw text is not persisted to `detail_json`; explicit Action Inbox save remains the only write path.
+- No SQL, no GET write, no automatic trading/order/rebalancing.

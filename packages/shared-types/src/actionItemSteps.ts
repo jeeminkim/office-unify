@@ -1,10 +1,13 @@
 /** Action Item 실행 단계 — checklist를 순차 실행 가능한 step으로 분해 (additive). */
 
 export type ActionItemStepCategory =
+  | 'checklist'
   | 'check_now'
   | 'do_not_do'
   | 'evidence'
   | 'research'
+  | 'risk_review'
+  | 'manual_review'
   | 'retrospective'
   | 'portfolio'
   | 'ops'
