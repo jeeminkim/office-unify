@@ -1,5 +1,5 @@
 /**
- * 클라이언트 표시문 방어적 필터 (관찰 후보 카드 등).
+ * 클라이언트 표시문 방어 필터 (관찰 후보 카드용).
  */
 
 import type { TodayStockCandidate } from '@/lib/todayCandidatesContract';
@@ -9,16 +9,16 @@ const UI_BANNED_SUBSTRINGS = [
   '강력 매수',
   '무조건 매수',
   '수익 보장',
-  '확실한 수익',
+  '확정 수익',
   '자동 매수',
   '자동 주문',
   '매수 추천',
 ];
 
-/** 면책·부정 문구는 유지하고, 오해 가능한 단독 표현만 치환한다. */
+/** 매수·부추김 문구는 낮추고, 오해 가능한 단독 표현만 치환한다. */
 const OBSERVATION_PHRASE_REPLACEMENTS: Array<[RegExp, string]> = [
   [/추천 종목/g, '관찰 후보'],
-  [/추천 후보/g, '검토 후보'],
+  [/추천 후보/g, '점검 후보'],
   [/매수 판단/g, '확인 후 판단'],
   [/리스크 있음/g, '리스크 점검 필요'],
   [/자동 등록/g, '승인 후 등록'],
@@ -28,19 +28,19 @@ const OBSERVATION_PHRASE_REPLACEMENTS: Array<[RegExp, string]> = [
 export const TODAY_CANDIDATE_UI_DISCLAIMERS = [
   '매수 추천이 아닙니다.',
   '자동매매·자동주문 기능은 없습니다.',
-  '승인 전에는 관심종목에 등록되지 않습니다.',
+  '승인 전에는 관심종목에 등록하지 않습니다.',
   '리스크 점검은 확인과 복기를 위한 상태입니다.',
 ] as const;
 
-/** 면책 문구(「매수 추천이 아닙니다」 등)는 금지 치환에서 제외한다. */
-const NEGATED_BUY_RECOMMENDATION = /매수\s*추천\s*이\s*아님/i;
+/** 면책 문구(매수 추천이 아닙니다)는 금지 치환에서 제외한다. */
+const NEGATED_BUY_RECOMMENDATION = /매수\s*추천\s*(이\s*)?아님|매수\s*추천이\s*아닙니다/i;
 
 export function scrubTodayCandidateUiCopy(text: string): string {
   let out = text;
   for (const ph of UI_BANNED_SUBSTRINGS) {
     if (ph === '매수 추천' && NEGATED_BUY_RECOMMENDATION.test(out)) continue;
     const re = new RegExp(ph.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
-    out = out.replace(re, '—');
+    out = out.replace(re, '관찰');
   }
   return out.trim();
 }
@@ -75,15 +75,15 @@ export function riskReviewNextActionLine(): string {
   return '다음 액션: 리포트 확인 · 판단 복기 · 관찰 메모';
 }
 
-/** 카드에서 중복 표시할 문구 제거(리스크 카드용) */
+/** 카드에서 중복 표시되는 문구 제거(리스크 카드용) */
 export function scrubRiskReviewDuplicateCopy(c: TodayStockCandidate, lines: string[]): string[] {
   const banned = new Set<string>();
   if (c.corporateActionRisk?.headline) {
     banned.add(c.corporateActionRisk.headline.trim().toLowerCase());
     banned.add('기업 이벤트 리스크 점검');
   }
-  banned.add('가벼운 겹침 신호입니다. 참고용입니다.');
-  banned.add('중립 관찰대 · 참고용 해석입니다.');
+  banned.add('가벼운 관찰 신호입니다. 참고용입니다.');
+  banned.add('중립 관찰군 · 참고용 해석입니다.');
   const out: string[] = [];
   const seen = new Set<string>();
   for (const raw of lines) {

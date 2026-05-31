@@ -131,6 +131,15 @@ function deckRank(c: TodayStockCandidate, repeatMap?: Map<string, TodayCandidate
   return r;
 }
 
+function repeatCount(c: TodayStockCandidate, repeatMap?: Map<string, TodayCandidateRepeatStat>): number {
+  return repeatMap?.get(c.candidateId)?.candidateRepeatCount7d ?? 0;
+}
+
+function shouldMoveToMonitoring(c: TodayStockCandidate, repeatMap?: Map<string, TodayCandidateRepeatStat>): boolean {
+  if (c.briefDeckSlot === 'risk_review' || c.corporateActionRisk?.active) return false;
+  return repeatCount(c, repeatMap) >= 5;
+}
+
 function pickPrimaryRiskCandidate(userCtx: TodayStockCandidate[], usKr: TodayStockCandidate[]): TodayStockCandidate | null {
   const pool = [...userCtx, ...usKr].filter((c) => c.corporateActionRisk?.active);
   if (pool.length === 0) return null;
@@ -149,8 +158,8 @@ function pickInterestSlots(input: {
   const blocked = new Set<string>();
   if (input.riskSlot) blocked.add(input.riskSlot.candidateId);
 
-  const uc = input.userContextCandidates.filter((c) => !blocked.has(c.candidateId));
-  const us = input.usMarketKrCandidates.filter((c) => !blocked.has(c.candidateId));
+  const uc = input.userContextCandidates.filter((c) => !blocked.has(c.candidateId) && !shouldMoveToMonitoring(c, repeatMap));
+  const us = input.usMarketKrCandidates.filter((c) => !blocked.has(c.candidateId) && !shouldMoveToMonitoring(c, repeatMap));
 
   const entries = [...us.map((c) => ({ c, kind: 'us' as const })), ...uc.map((c) => ({ c, kind: 'uc' as const }))];
   entries.sort((a, b) => deckRank(b.c, repeatMap) - deckRank(a.c, repeatMap));
@@ -233,6 +242,21 @@ export function composeTodayBriefCandidates(input: {
 
   const riskSlot = pickPrimaryRiskCandidate(input.userContextCandidates, input.usMarketKrCandidates);
   if (riskSlot) droppedReasons.push('corporate_action_risk_slot_reserved');
+  const repeatedMonitoringCandidates = [...input.userContextCandidates, ...input.usMarketKrCandidates]
+    .filter((c) => shouldMoveToMonitoring(c, input.repeatByCandidateId))
+    .map((c) => ({
+      ...c,
+      briefDeckSlot: 'interest_stock' as TodayStockCandidate['briefDeckSlot'],
+      reasonDetails: [
+        '최근 7일 반복 노출로 메인 덱 대신 모니터링으로 이동했습니다.',
+        ...(c.reasonDetails ?? []).slice(0, 3),
+      ],
+      cautionNotes: [
+        '반복 노출 감점 적용',
+        ...(c.cautionNotes ?? []).slice(0, 3),
+      ],
+    }));
+  if (repeatedMonitoringCandidates.length > 0) droppedReasons.push('repeat_exposure_moved_to_monitoring');
 
   const interestSlots = pickInterestSlots({
     userContextCandidates: input.userContextCandidates,
@@ -266,10 +290,18 @@ export function composeTodayBriefCandidates(input: {
         maxUsMapped: 1,
       });
       const need = 2 - filler.length;
-      const pad = interestSorted.filter((c) => !filler.some((f) => f.candidateId === c.candidateId) && c.candidateId !== riskSlot.candidateId).slice(0, Math.max(0, need));
+      const pad = interestSorted
+        .filter((c) => !shouldMoveToMonitoring(c, input.repeatByCandidateId))
+        .filter((c) => !filler.some((f) => f.candidateId === c.candidateId) && c.candidateId !== riskSlot.candidateId)
+        .slice(0, Math.max(0, need));
       deck = [...filler, { ...riskSlot, briefDeckSlot: 'risk_review' as TodayStockCandidate['briefDeckSlot'] }, ...pad].slice(0, 3);
     } else {
-      deck = [...interestSlots, ...interestSorted.filter((c) => !interestSlots.some((s) => s.candidateId === c.candidateId))].slice(0, 3);
+      const nonRepeated = interestSorted.filter((c) => !shouldMoveToMonitoring(c, input.repeatByCandidateId));
+      deck = [...interestSlots, ...nonRepeated.filter((c) => !interestSlots.some((s) => s.candidateId === c.candidateId))].slice(0, 3);
+      if (deck.length < 3) {
+        fallbackReason = 'insufficient_alternatives_after_repeat_exposure_filter';
+        droppedReasons.push(fallbackReason);
+      }
     }
   }
 
@@ -290,7 +322,7 @@ export function composeTodayBriefCandidates(input: {
 
   return {
     deck: usAttach.primaryDeck,
-    diagnosticCandidateCards: usAttach.diagnosticCandidateCards,
+    diagnosticCandidateCards: [...repeatedMonitoringCandidates, ...usAttach.diagnosticCandidateCards],
     qualityMeta: {
       interestCandidateCount: input.userContextCandidates.length,
       sectorRadarEtfCandidateCount: picked ? 1 : 0,

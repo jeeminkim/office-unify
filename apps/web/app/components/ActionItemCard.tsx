@@ -22,10 +22,10 @@ import { ActionIntentBadge } from "@/app/components/ActionIntentBadge";
 import { PersonaCoachHint } from "@/app/components/PersonaCoachHint";
 
 const DISMISS_OPTIONS: { value: ActionItemDismissReason; label: string }[] = [
-  { value: "already_confirmed", label: "Already confirmed" },
-  { value: "no_longer_relevant", label: "No longer relevant" },
-  { value: "duplicate", label: "Duplicate" },
-  { value: "insufficient_data", label: "Insufficient data" },
+  { value: "already_confirmed", label: "이미 확인함" },
+  { value: "no_longer_relevant", label: "더 이상 관련 없음" },
+  { value: "duplicate", label: "중복 작업" },
+  { value: "insufficient_data", label: "근거 부족" },
 ];
 
 function statusBadge(status: ActionItemStatus): string {
@@ -40,6 +40,21 @@ function statusBadge(status: ActionItemStatus): string {
       return "bg-slate-200 text-slate-600";
     default:
       return "bg-slate-100 text-slate-700";
+  }
+}
+
+function statusLabel(status: ActionItemStatus): string {
+  switch (status) {
+    case "open":
+      return "열림";
+    case "in_progress":
+      return "진행 중";
+    case "done":
+      return "완료";
+    case "dismissed":
+      return "보류";
+    default:
+      return status;
   }
 }
 
@@ -81,7 +96,7 @@ function DetailExpanded({
     <div className="mt-2 space-y-2 border-t pt-2 text-xs">
       {detail.decisionContext?.originalQuestion || detail.decisionContext?.sourceQuestion ? (
         <div>
-          <p className="font-medium text-slate-800">??吏덈Ц</p>
+          <p className="font-medium text-slate-800">원본 질문</p>
           <p className="text-slate-600">
             {detail.decisionContext.originalQuestion ?? detail.decisionContext.sourceQuestion}
           </p>
@@ -89,14 +104,14 @@ function DetailExpanded({
       ) : null}
       {detail.sourceRefs?.length ? (
         <div>
-          <p className="font-medium text-slate-800">異쒖쿂</p>
+          <p className="font-medium text-slate-800">출처</p>
           <ul className="mt-0.5 flex flex-wrap gap-1">
             {detail.sourceRefs.map((ref, i) => (
               <li key={i}>
                 {ref.sourceHref ? (
                   <Link href={ref.sourceHref} className="rounded border bg-slate-50 px-1.5 py-0.5 text-[10px]">
                     {ref.label ?? ref.sourceType}
-                    {ref.sourceId ? ` 쨌 ${ref.sourceId}` : ""}
+                    {ref.sourceId ? ` · ${ref.sourceId}` : ""}
                   </Link>
                 ) : (
                   <span className="rounded border bg-slate-50 px-1.5 py-0.5 text-[10px]">
@@ -110,7 +125,7 @@ function DetailExpanded({
       ) : null}
       {detail.confirmNow?.length ? (
         <div>
-          <p className="font-medium text-slate-800">Confirm now</p>
+          <p className="font-medium text-slate-800">다음 확인</p>
           <ul className="mt-0.5 list-inside list-disc text-slate-700">
             {detail.confirmNow.map((x, i) => (
               <li key={i}>{x}</li>
@@ -120,8 +135,8 @@ function DetailExpanded({
       ) : null}
       {detail.doNotDo?.length ? (
         <div>
-          <p className="font-medium text-amber-950">Do not do</p>
-          <p className="text-amber-900">{detail.doNotDo.join(" 쨌 ")}</p>
+          <p className="font-medium text-amber-950">하지 말아야 할 것</p>
+          <p className="text-amber-900">{detail.doNotDo.join(" · ")}</p>
         </div>
       ) : null}
       {detail.guardrails?.length ? (
@@ -138,13 +153,13 @@ function DetailExpanded({
       ) : null}
       {detail.evidenceNeeded?.length ? (
         <div>
-          <p className="font-medium text-slate-800">?꾩슂??利앷굅</p>
+          <p className="font-medium text-slate-800">필요한 근거</p>
           <p className="text-slate-600">{detail.evidenceNeeded.join(", ")}</p>
         </div>
       ) : null}
       {detail.decisionContext?.sourceSummary || detail.sourceSummary ? (
         <div>
-          <p className="font-medium text-slate-800">?먮낯 ?붿빟</p>
+          <p className="font-medium text-slate-800">원본 요약</p>
           <p className="text-slate-600">{detail.decisionContext?.sourceSummary ?? detail.sourceSummary}</p>
         </div>
       ) : null}
@@ -184,7 +199,7 @@ export function ActionItemCard({
   const completeness = analyzeActionItemDetailCompleteness(detail);
   const recommendedLinks = dedupeRecommendedLinks(detail.recommendedNextLinks);
   const sourceDisplay = resolveActionItemSourceDisplay(it, detail);
-  const nextTask = detail.confirmNow?.[0] ?? detail.checklist?.[0]?.label ?? "?먮낯 留λ씫???뺤씤?⑸땲??";
+  const nextTask = detail.confirmNow?.[0] ?? detail.checklist?.[0]?.label ?? "원본 맥락을 확인합니다.";
   const showWeakBadge = completeness.level !== "full";
   const showMissingSteps =
     completeness.missingFields.includes("actionSteps") && (detail.actionSteps?.length ?? 0) === 0;
@@ -240,22 +255,22 @@ export function ActionItemCard({
             <span className="shrink-0">{sourceDisplay}</span>
             {showWeakBadge ? (
               <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium text-amber-900">
-                留λ씫 蹂닿컯 ?꾩슂
+                맥락 보강 필요
               </span>
             ) : null}
-            {it.symbol ? <span className="shrink-0">쨌 {it.symbol}</span> : null}
+            {it.symbol ? <span className="shrink-0">· {it.symbol}</span> : null}
             {detail.name && detail.name !== it.symbol ? (
-              <span className="shrink-0">쨌 {detail.name}</span>
+              <span className="shrink-0">· {detail.name}</span>
             ) : null}
             <span className="shrink-0">
-              쨌 {it.priority} / {it.status}
+              · {it.priority} / {statusLabel(it.status)}
             </span>
           </p>
           {detail.whyCreated ? <p className="mt-1 text-xs text-slate-600 line-clamp-2">{detail.whyCreated}</p> : null}
-          <p className="mt-1 text-xs font-medium text-violet-900">?ㅼ쓬: {nextTask}</p>
+          <p className="mt-1 text-xs font-medium text-violet-900">다음: {nextTask}</p>
         </div>
         <span className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-medium ${statusBadge(it.status)}`}>
-          {it.status}
+          {statusLabel(it.status)}
         </span>
       </div>
 
@@ -264,7 +279,7 @@ export function ActionItemCard({
         className="mt-2 text-[10px] font-medium text-violet-800 underline"
         onClick={() => setOpen((v) => !v)}
       >
-        {open ? "Close" : "Details"}
+        {open ? "접기" : "상세 보기"}
       </button>
 
       {open ? (
@@ -277,17 +292,17 @@ export function ActionItemCard({
           </div>
           <DetailExpanded detail={detail} it={it} showMissingSteps={showMissingSteps} onStepDone={onStepDone} />
           <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-            <NavLink href={researchHref} label="Research" hint="Open context in Research" />
+            <NavLink href={researchHref} label="Research" hint="원본 맥락 열기" />
             <NavLink href={pbHref} label="PB" />
             <NavLink href={committeeHref} label="Committee" />
             <NavLink href={journalHref} label="Journal" />
-            <NavLink href={retroHref} label="蹂듦린" />
+            <NavLink href={retroHref} label="복기" />
             <Link href={portfolioHref} className="rounded border px-2 py-1 text-center text-[10px] sm:self-start">
               Portfolio
             </Link>
             {it.source_href && !detail.sourceRefs?.some((r) => r.sourceHref === it.source_href) ? (
               <Link href={it.source_href} className="rounded border px-2 py-1 text-center text-[10px] sm:self-start">
-                ?먮낯 蹂닿린
+                원본 보기
               </Link>
             ) : null}
             {extraLinks?.map((l, i) => (
@@ -310,12 +325,12 @@ export function ActionItemCard({
             disabled={patchingId === it.id}
             className="rounded bg-emerald-700 px-3 py-1.5 text-[11px] text-white disabled:opacity-50"
             onClick={() => {
-              if (window.confirm("???묒뾽???꾨즺濡??쒖떆?좉퉴?? 留ㅻℓ媛 ?ㅽ뻾?섏????딆뒿?덈떎.")) {
+              if (window.confirm("이 작업을 완료로 표시할까요? 매매나 주문은 실행되지 않습니다.")) {
                 onPatch(it.id, "done");
               }
             }}
           >
-            ?꾨즺
+            완료
           </button>
         ) : null}
         {it.status !== "dismissed" ? (
@@ -325,7 +340,7 @@ export function ActionItemCard({
             className="rounded border px-3 py-1.5 text-[11px] disabled:opacity-50"
             onClick={() => setDismissOpen((v) => !v)}
           >
-            蹂대쪟
+            보류
           </button>
         ) : null}
       </div>

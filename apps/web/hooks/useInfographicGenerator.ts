@@ -13,6 +13,30 @@ const jsonHeaders: HeadersInit = {
   'Content-Type': 'application/json',
 };
 
+type FriendlyInfographicError = {
+  error?: string;
+  code?: string;
+  requestId?: string;
+  actionHint?: string;
+};
+
+export function isAbortLikeInfographicError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return lower.includes('aborted') || lower.includes('aborterror') || lower.includes('timeout');
+}
+
+export function formatFriendlyInfographicError(input: FriendlyInfographicError | undefined, fallback: string): string {
+  const base = input?.error || fallback;
+  const safeBase = isAbortLikeInfographicError(base) ? 'URL 분석 시간이 초과되었습니다.' : base;
+  const hint =
+    input?.actionHint ??
+    (isAbortLikeInfographicError(base)
+      ? '원문 추출은 실패했지만, URL을 Research Center로 보내거나 본문을 직접 붙여넣어 계속할 수 있습니다.'
+      : undefined);
+  const request = input?.requestId ? ` 요청 ID: ${input.requestId}` : '';
+  return [safeBase, hint, request].filter(Boolean).join(' ');
+}
+
 export function useInfographicGenerator() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +65,7 @@ export function useInfographicGenerator() {
     articlePattern?: string;
     industryPattern?: string;
   } | null>(null);
+  const [requestId, setRequestId] = useState<string | null>(null);
   const [pipelineStage, setPipelineStage] = useState<
     'idle' | 'source_extracted' | 'cleaned_preview_ready' | 'spec_generation_succeeded' | 'spec_generation_fallback' | 'spec_generation_degraded'
   >('idle');
@@ -77,8 +102,9 @@ export function useInfographicGenerator() {
       const res = await fetch('/api/infographic/extract', {
         ...requestInit,
       });
-      const data = (await res.json()) as InfographicExtractResponseBody & { error?: string };
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      const data = (await res.json()) as InfographicExtractResponseBody & FriendlyInfographicError;
+      if (data.requestId) setRequestId(data.requestId);
+      if (!res.ok) throw new Error(formatFriendlyInfographicError(data, `HTTP ${res.status}`));
       const mode = data.spec?.sourceMeta?.extractionMode;
       if (mode === 'degraded_fallback') {
         setSpec(null);
@@ -101,7 +127,10 @@ export function useInfographicGenerator() {
       setWarnings(data.warnings ?? []);
       return data.spec;
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : '인포그래픽 생성 실패';
+      const message = formatFriendlyInfographicError(
+        e instanceof Error ? { error: e.message } : undefined,
+        '인포그래픽 생성 실패',
+      );
       setError(message);
       throw e;
     } finally {
@@ -138,8 +167,9 @@ export function useInfographicGenerator() {
             body: JSON.stringify(payload),
           };
       const res = await fetch('/api/infographic/extract-source-text', requestInit);
-      const data = (await res.json()) as InfographicExtractSourceTextResponseBody & { error?: string };
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      const data = (await res.json()) as InfographicExtractSourceTextResponseBody & FriendlyInfographicError;
+      if (data.requestId) setRequestId(data.requestId);
+      if (!res.ok) throw new Error(formatFriendlyInfographicError(data, `HTTP ${res.status}`));
       setSourcePreviewText(data.cleanedText ?? '');
       setSourcePreviewRawText(data.rawText ?? '');
       setSourcePreviewMeta(data.sourceMeta);
@@ -147,7 +177,10 @@ export function useInfographicGenerator() {
       setPipelineStage('cleaned_preview_ready');
       return data;
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : '원문 추출 실패';
+      const message = formatFriendlyInfographicError(
+        e instanceof Error ? { error: e.message } : undefined,
+        '원문 추출 실패',
+      );
       setError(message);
       throw e;
     } finally {
@@ -166,6 +199,7 @@ export function useInfographicGenerator() {
     setSourcePreviewText,
     sourcePreviewMeta,
     degradedMeta,
+    requestId,
     pipelineStage,
     generate,
     extractSourceText,

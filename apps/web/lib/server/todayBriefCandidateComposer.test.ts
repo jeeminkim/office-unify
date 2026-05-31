@@ -82,7 +82,7 @@ describe("composeTodayBriefCandidates", () => {
     expect(out.deck.find((x) => x.briefDeckSlot === "sector_etf")).toBeTruthy();
     const dm = buildTodayCandidateDisplayMetrics(out.deck[0], { briefDeckSlot: "interest_stock" });
     expect(dm.observationScore).toBeGreaterThanOrEqual(0);
-    expect(dm.scoreExplanation).not.toMatch(/우선순위/);
+    expect(dm.scoreExplanation).toContain("관찰 우선순위");
     expect(dm.scoreExplanation).not.toMatch(/priority/i);
     expect(out.deck.length).toBeLessThanOrEqual(3);
     const deckJson = JSON.stringify(out.deck);
@@ -137,7 +137,7 @@ describe("composeTodayBriefCandidates", () => {
       usKrSignalDiagnostics: diag ?? null,
       usMarketKrCount: 0,
     });
-    expect(enriched[0]?.displayMetrics?.scoreExplanation).toMatch(/매수 권유가 아님|자동 주문이나 매수 권유/);
+    expect(enriched[0]?.displayMetrics?.scoreExplanation).toMatch(/자동 주문이나 매수 추천이 아닙니다|매수 권유가 아님/);
     expect(enriched[0]?.displayMetrics?.scoreExplanationDetail?.factors?.length).toBeGreaterThan(0);
     expect(enriched[0]?.displayMetrics?.scoreExplanationDetail?.finalScore).toBe(
       enriched[0]?.displayMetrics?.observationScore,
@@ -299,6 +299,24 @@ describe("composeTodayBriefCandidates", () => {
     });
     expect(out.deck).toHaveLength(3);
     expect(out.qualityMeta.fallbackReason).toBeDefined();
+  });
+
+  it("moves 7-day repeated symbols to monitoring diagnostics before final deck", () => {
+    const repeat = new Map([
+      ["a", { candidateRepeatCount7d: 7, lastShownAt: "2026-05-30T00:00:00.000Z", source: "exposed_event" as const }],
+    ]);
+    const out = composeTodayBriefCandidates({
+      userContextCandidates: [interest("a", 90), interest("b", 58), interest("c", 57), interest("d", 56)],
+      sectorRadarSummary: { ok: true, generatedAt: "", sectors: [], warnings: [], fearCandidatesTop3: [], greedCandidatesTop3: [] },
+      usMarketSummary: usSum(true),
+      usMarketKrCandidates: [],
+      repeatByCandidateId: repeat,
+    });
+
+    expect(out.deck.some((c) => c.candidateId === "a")).toBe(false);
+    expect(out.diagnosticCandidateCards.some((c) => c.candidateId === "a")).toBe(true);
+    expect(out.qualityMeta.droppedReasons).toContain("repeat_exposure_moved_to_monitoring");
+    expect(JSON.stringify(out)).not.toMatch(/매수 후보|자동 리밸런싱|주문 실행/);
   });
 });
 

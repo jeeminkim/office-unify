@@ -325,3 +325,10 @@
 - US Mapping Bridge diagnostics is an additive read-only layer over theme-connections and Today Brief qualityMeta. It checks Sector Radar, Watchlist sector/theme, and the US→KR registry after Google Finance anchors are healthy and the remaining issue is US signal / mapping / gating.
 - Exact scope: US Mapping Bridge diagnostics checks Sector Radar, Watchlist sector/theme, and the US→KR registry.
 - The bridge guardrails are 신규 SQL 없음, 관심종목 자동 등록 없음, 매수/매도 지시 아님, and 자동매매/자동주문/자동 리밸런싱 없음. Theme-connections degrades only the bridge diagnostic if it fails and keeps the existing theme map response.
+
+## EVO-046 Trust Repair Architecture
+
+- Action Items and Today Candidate card copy use explicit Korean label maps and tests so source labels, status labels, buttons, guardrails, and step summaries do not leak mojibake.
+- Today Candidate composition remains read-only: candidate pool -> risk gate -> suitability/concentration gate -> feedback suppression -> repeat exposure penalty -> diversity/final deck trace -> monitoring diagnostics.
+- Infographic URL handling separates source extraction from structured summary generation. URL fetch timeout, blocked pages, invalid URL, and AbortError return friendly degraded messages with requestId and fallback paths.
+- No URL body is auto-saved, no long raw body is placed in navigation URLs, and no automatic trading/order/rebalancing or buy/sell directive path is introduced.

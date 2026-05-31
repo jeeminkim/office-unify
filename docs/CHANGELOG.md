@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### 2026-05-31 EVO-046 Trust Repair
+
+- **Korean encoding guard:** `/action-items` user-facing labels, ActionItem tests, and Today Candidate display copy now render readable Korean and block mojibake from the checked paths.
+- **Candidate rotation trust:** repeated 7-day Today Candidate exposure is penalized harder and heavily repeated non-risk candidates move to monitoring diagnostics before the final deck. Risk review cards stay labeled as `리스크 점검`, not normal recommendations.
+- **Infographic URL fallback:** URL/PDF extraction normalizes Naver mobile blog URLs, follows redirects with a server User-Agent, hides raw AbortError copy, returns requestId/actionHint, and keeps paste/Research Center fallback available without automatic save.
+- **Guardrails:** no SQL, no GET write, no Google Sheets repair/write, explicit save only, no automatic trading/order/rebalancing, no buy/sell directive, and no forced candidate generation.
+
 ### 2026-05-31 EVO-044 US Mapping Bridge Hardening
 
 - **US Mapping Bridge diagnostics:** theme-connections now isolates US Mapping Bridge diagnostic failures as degraded/warning while preserving the existing theme connection response.

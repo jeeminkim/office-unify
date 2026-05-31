@@ -359,3 +359,9 @@ where user_key = :user_key
 - US Mapping Bridge diagnostics treats post-Google Finance-anchor gaps as US signal / mapping / gating diagnosis, not quote repair. It checks Sector Radar, Watchlist sector/theme, and the US→KR registry as read-only guidance.
 - Exact scope: US Mapping Bridge diagnostics checks Sector Radar, Watchlist sector/theme, and the US→KR registry.
 - 신규 SQL 없음, 관심종목 자동 등록 없음, 매수/매도 지시 아님, and 자동매매/자동주문/자동 리밸런싱 없음. Any Action Item or sector-match apply path remains user-confirmed only.
+
+## EVO-046 Trust Repair
+
+- Today Candidate is framed as `오늘의 관찰 큐`, not a recommendation list. Card types are 관찰 후보, 리스크 점검, 데이터 점검, 모니터링, or 낮은 우선순위.
+- Risk review + `mark_reviewed` leaves the main deck and remains available as reviewed-risk/monitoring context. Repeated 7-day exposure gets a stronger penalty and repeated non-risk items can move to diagnostic monitoring before final deck selection.
+- Decision trace should explain repeat exposure, insufficient alternatives, and risk gate behavior. No SQL, no forced candidate generation, no buy/sell directive, and no automatic trading/order/rebalancing.

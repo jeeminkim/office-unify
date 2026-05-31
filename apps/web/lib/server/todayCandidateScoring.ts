@@ -8,7 +8,7 @@ export function clampObservationScore(n: number): number {
   return Math.max(0, Math.min(100, Math.round(n)));
 }
 
-/** 데이터 희소 시 중립 고정(60) 대신 45~55 분산 */
+/** 데이터 희소 시 중립 고정(60) 대신 45~55로 분산 */
 export function sparseDataBaseScore(seed: string): number {
   let h = 0;
   for (let i = 0; i < seed.length; i += 1) {
@@ -19,9 +19,10 @@ export function sparseDataBaseScore(seed: string): number {
 
 export function repeatExposurePenaltyFromStat(stat?: TodayCandidateRepeatStat | null): number {
   const n = stat?.candidateRepeatCount7d ?? 0;
-  if (n >= 10) return 18;
-  if (n >= 6) return 12;
-  if (n >= 3) return 6;
+  if (n >= 10) return 26;
+  if (n >= 7) return 20;
+  if (n >= 5) return 14;
+  if (n >= 3) return 8;
   return 0;
 }
 

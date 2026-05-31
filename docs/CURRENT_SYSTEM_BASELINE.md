@@ -148,3 +148,10 @@
 - US Mapping Bridge diagnostics explains post-Google Finance-anchor US signal / mapping / gating gaps using Sector Radar, Watchlist sector/theme, and the US→KR registry.
 - Exact scope: US Mapping Bridge diagnostics checks Sector Radar, Watchlist sector/theme, and the US→KR registry.
 - It is read-only diagnosis with 신규 SQL 없음, 관심종목 자동 등록 없음, 매수/매도 지시 아님, and 자동매매/자동주문/자동 리밸런싱 없음. Theme-connections isolates US Mapping Bridge diagnostic failure as degraded/warning while preserving the existing theme map.
+
+## EVO-046 Trust Repair Baseline
+
+- User-facing Korean strings in Action Items and Today Candidate card copy must remain UTF-8 readable; mojibake in source labels, buttons, guardrails, and detail builders is treated as a release blocker.
+- Today Candidate is an observation/check queue. Repeated 7-day exposure is penalized, heavily repeated non-risk candidates move to monitoring diagnostics, and active corporate event risk stays labeled as `리스크 점검`.
+- Infographic URL analysis is a three-step pipeline: URL 원문 추출, 구조화 요약, infographic draft. AbortError/raw timeout text is not shown directly; requestId, paste fallback, and Research Center continuation are provided.
+- No SQL, no read-only write, no automatic trading/order/rebalancing, no buy/sell directive, no forced candidate generation, and explicit save only.

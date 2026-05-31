@@ -20,7 +20,7 @@ describe('todayCandidateUiCopy', () => {
 
   it('replaces misleading phrases with observation-first copy', () => {
     expect(normalizeObservationCopy('오늘 추천 종목 3개')).toContain('관찰 후보');
-    expect(normalizeObservationCopy('추천 후보 목록')).toContain('검토 후보');
+    expect(normalizeObservationCopy('추천 후보 목록')).toContain('점검 후보');
   });
 
   it('risk review headline uses verification tone, not buy recommendation', () => {

@@ -229,3 +229,10 @@ npm run pre-live-smoke --workspace=apps/web
 - [ ] Exact scope is Sector Radar, Watchlist sector/theme, and the US→KR registry.
 - [ ] It points to Sector Radar, Watchlist sector/theme, and the US→KR registry; 신규 SQL 없음, 관심종목 자동 등록 없음, 매수/매도 지시 아님, and 자동매매/자동주문/자동 리밸런싱 없음.
 - [ ] Theme-connections isolates US Mapping Bridge diagnostic failure as degraded/warning while preserving the existing theme map.
+
+## EVO-046 Trust Repair
+
+- [ ] `/action-items` mobile cards show readable Korean for source/status/detail/buttons and no mojibake in added lines.
+- [ ] Today Candidate header reads as an observation/check queue; risk cards are labeled `리스크 점검`, repeated exposure is visible, and reviewed risk candidates do not re-enter the main deck silently.
+- [ ] Infographic URL extraction never shows raw `This operation was aborted`; it shows timeout/degraded guidance, requestId, paste fallback, and Research Center continuation.
+- [ ] No SQL, no GET write, no Google Sheets repair/write, no automatic registration/trading/order/rebalancing, no buy/sell directive, and explicit save only.

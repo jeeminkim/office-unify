@@ -91,6 +91,7 @@ export default function InfographicClient() {
     sourcePreviewMeta,
     degradedMeta,
     pipelineStage,
+    requestId,
   } = useInfographicGenerator();
 
   const activeSpec = useMemo<InfographicSpec | null>(() => spec, [spec]);
@@ -453,7 +454,17 @@ export default function InfographicClient() {
             Research Center로 이동
           </Link>
         </div>
-        {error ? <p className="mt-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900">{error}</p> : null}
+        {error ? (
+          <div className="mt-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900">
+            <p>{error}</p>
+            {requestId ? <p className="mt-1 text-xs text-red-800">요청 ID: {requestId}</p> : null}
+            {sourceType !== 'text' ? (
+              <p className="mt-1 text-xs text-red-800">
+                URL 원문 추출이 실패하면 아래 미리보기 입력칸에 본문을 직접 붙여넣고 구조화 요약을 계속 만들 수 있습니다.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         {warnings.length > 0 ? (
           <ul className="mt-3 list-inside list-disc rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
             {warnings.map((w) => (

@@ -13,7 +13,7 @@ export function normalizeCandidateReasons(lines: string[]): string[] {
   const keyOf = (s: string) =>
     s
       .replace(/참고용입니다\.?/g, '')
-      .replace(/매수 권유가 아닌[^。]*/g, '')
+      .replace(/매수 추천이 아닙니다\.?/g, '')
       .replace(/\s+/g, ' ')
       .trim()
       .toLowerCase();
@@ -54,7 +54,7 @@ function dataQualityLabel(dq?: TodayCandidateDataQuality): string {
       ? '섹터 확인 필요'
       : dq.sectorConfidence === 'high' || dq.sectorConfidence === 'medium'
         ? '섹터 연결 양호'
-        : '섹터 불명';
+        : '섹터 불명확';
   return `${quote} · ${sec}`;
 }
 
@@ -63,10 +63,10 @@ function relationLabelFor(
   c: TodayStockCandidate,
 ): string {
   if (slot === 'sector_etf') return '섹터 대표 · Sector Radar ETF';
-  if (slot === 'us_signal_kr') return '미국 신호 · 한국 상장 관찰';
-  if (slot === 'us_market_check') return '미국 시장 점검 · 관심·보유';
+  if (slot === 'us_signal_kr') return '미국 신호 · 한국 연결 관찰';
+  if (slot === 'us_market_check') return '미국 시장 점검 · 관심 후보';
   if (slot === 'risk_review') return '리스크 점검 · 기업 이벤트';
-  return c.source === 'us_market_morning' ? '미국 신호 · 한국 상장 관찰' : '관심종목 · 관찰';
+  return c.source === 'us_market_morning' ? '미국 신호 · 한국 연결 관찰' : '관심종목 · 관찰';
 }
 
 function cardKindFromSlot(slot: NonNullable<TodayStockCandidate['briefDeckSlot']>): TodayCandidateCardKind {
@@ -109,16 +109,16 @@ function deductionLabelsFromBreakdown(c: TodayStockCandidate): string[] {
   const b = c.scoreBreakdown;
   if (!b) return [];
   const out: string[] = [];
-  if (b.quoteQualityPenalty > 0) out.push('시세·데이터 품질 감점');
+  if (b.quoteQualityPenalty > 0) out.push('시세·데이터 신뢰도 감점');
   if (b.repeatExposurePenalty > 0) out.push('최근 7일 반복 노출 감점');
   if (b.corporateActionPenalty > 0) out.push('기업 이벤트 리스크 감점');
-  if (b.riskPenalty > 0) out.push('신뢰도·섹터·리스크 감점');
+  if (b.riskPenalty > 0) out.push('적합성·집중도 리스크 감점');
   if (b.usSignalBoost === 0 && c.source === 'us_market_morning') out.push('미국 신호 반영 제한');
   return normalizeCandidateReasons(out);
 }
 
 /**
- * 사용자 카드용 표시 지표. 내부 `score`는 그대로 두고 해석만 노출한다.
+ * 사용자 카드에는 score를 "관찰 우선순위"로만 해석한다. 매수 점수나 추천 점수로 표시하지 않는다.
  */
 export function buildTodayCandidateDisplayMetrics(
   c: TodayStockCandidate,
@@ -139,11 +139,11 @@ export function buildTodayCandidateDisplayMetrics(
     c.briefDeckSlot === 'risk_review' ||
     (c.corporateActionRisk?.active && c.candidateAction === 'review_required');
   const neutralObservationCopy =
-    isRiskCard || !neutralBand ? undefined : '중립 관찰대 · 참고용 해석입니다.';
+    isRiskCard || !neutralBand ? undefined : '중립 관찰군 · 참고용 해석입니다.';
 
-  const caveatOnce = '관찰·복기용이며 자동 주문이나 매수 권유가 아닙니다.';
+  const caveatOnce = '관찰 근거용이며 자동 주문이나 매수 추천이 아닙니다.';
   const scoreExplanation = normalizeCandidateReasons([
-    `${scoreLabel} 관찰 점수(${observationScore}/100) · 신뢰도 ${confLab}. ${dqLab}.`,
+    `${scoreLabel} 관찰 우선순위(${observationScore}/100) · 신뢰도 ${confLab}. ${dqLab}.`,
     neutralObservationCopy ?? '',
     caveatOnce,
   ]).join(' ');

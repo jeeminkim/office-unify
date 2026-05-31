@@ -41,6 +41,14 @@
 - `POST /api/infographic/extract`
   - 최종 텍스트를 받아 `InfographicSpec` 생성
 
+## EVO-046 URL Pipeline Fallback
+
+- URL/PDF 입력은 `원문 추출` -> `구조화 요약` -> `infographic draft`로 분리한다.
+- Naver mobile blog URL은 서버에서 `m.blog.naver.com` -> `blog.naver.com`으로 정규화하고 redirect를 따른다.
+- AbortError/timeout은 raw `This operation was aborted`를 노출하지 않고 `URL 분석 시간이 초과되었습니다.`와 requestId/actionHint를 반환한다.
+- 원문 추출 실패 시 자동 저장하지 않으며, 본문 직접 붙여넣기와 Research Center 이동으로 이어갈 수 있게 한다.
+- no SQL, no automatic save/write, no automatic trading/order/rebalancing, no buy/sell directive.
+
 ## JSON 스키마 핵심
 
 `InfographicSpec` (shared-types):

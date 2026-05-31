@@ -165,11 +165,27 @@ function stripHtmlToText(html: string): { text: string; title?: string } {
   return { text: text.slice(0, MAX_EXTRACT_TEXT), title };
 }
 
+export function normalizeInfographicSourceUrl(rawUrl: string): string {
+  const url = new URL(rawUrl);
+  if (url.hostname === 'm.blog.naver.com') {
+    url.hostname = 'blog.naver.com';
+  }
+  return url.toString();
+}
+
 async function fetchWithTimeout(url: string): Promise<Response> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
   try {
-    return await fetch(url, { signal: ctrl.signal });
+    return await fetch(url, {
+      signal: ctrl.signal,
+      redirect: 'follow',
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (compatible; OfficeUnifyInfographic/1.0; +https://office-unifyv1.vercel.app/infographic)',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.5',
+      },
+    });
   } finally {
     clearTimeout(timer);
   }
@@ -236,8 +252,14 @@ export async function resolveInfographicSourceText(params: {
   }
 
   if (params.sourceType === 'url') {
-    const url = (params.sourceUrl ?? '').trim();
-    if (!url) throw new Error('sourceUrl_required');
+    const rawUrl = (params.sourceUrl ?? '').trim();
+    if (!rawUrl) throw new Error('sourceUrl_required');
+    let url: string;
+    try {
+      url = normalizeInfographicSourceUrl(rawUrl);
+    } catch {
+      throw new Error('invalid_url');
+    }
     const res = await fetchWithTimeout(url);
     if (!res.ok) throw new Error(`url_fetch_failed:${res.status}`);
     const html = await res.text();
@@ -264,8 +286,14 @@ export async function resolveInfographicSourceText(params: {
   }
 
   if (params.sourceType === 'pdf_url') {
-    const url = (params.pdfUrl ?? '').trim();
-    if (!url) throw new Error('pdfUrl_required');
+    const rawUrl = (params.pdfUrl ?? '').trim();
+    if (!rawUrl) throw new Error('pdfUrl_required');
+    let url: string;
+    try {
+      url = normalizeInfographicSourceUrl(rawUrl);
+    } catch {
+      throw new Error('invalid_url');
+    }
     const res = await fetchWithTimeout(url);
     if (!res.ok) throw new Error(`pdf_fetch_failed:${res.status}`);
     const arrayBuffer = await res.arrayBuffer();
