@@ -1,10 +1,11 @@
 import type { CommitteeDiscussionLineDto, PersonaStructuredOutput } from '@office-unify/shared-types';
+import { humanizeCommitteeItems, humanizeCommitteeText } from '@/lib/committeeHumanReadable';
 
 const JSON_FENCE = /```(?:json)?\s*[\s\S]*?```/gi;
 const LOOKS_JSON = /^\s*[\[{]/;
 
 function compactText(text: string, max = 160): string {
-  const cleaned = stripJsonFences(text).replace(/\s+/g, ' ').trim();
+  const cleaned = humanizeCommitteeText(stripJsonFences(text).replace(/\s+/g, ' ').trim());
   if (!cleaned) return '';
   if (cleaned.length <= max) return cleaned;
   return `${cleaned.slice(0, max - 1).trimEnd()}…`;
@@ -13,7 +14,7 @@ function compactText(text: string, max = 160): string {
 function compactItems(items: readonly string[], maxItems: number): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const raw of items) {
+  for (const raw of humanizeCommitteeItems(items)) {
     const item = compactText(String(raw ?? ''));
     if (!item || seen.has(item)) continue;
     seen.add(item);
@@ -38,6 +39,7 @@ export function buildReadableSummaryFromStructured(so: PersonaStructuredOutput):
   sections.push(`[결론]\n${summary}`);
   const rows: Array<[string, string[], number]> = [
     ['핵심 근거', so.keyReasons, 3],
+    ['기회 조건', so.opportunityDrivers, 3],
     ['리스크', so.riskFlags, 3],
     ['누락 근거', so.missingEvidence, 2],
     ['하지 말 것', so.doNotDo, 2],
@@ -71,12 +73,13 @@ export function resolveLineDisplayContent(line: CommitteeDiscussionLineDto): {
       hasStructured: false,
     };
   }
-  return { readable: stripJsonFences(raw), rawForDebug: null, hasStructured: false };
+  return { readable: humanizeCommitteeText(stripJsonFences(raw)), rawForDebug: null, hasStructured: false };
 }
 
 export const STRUCTURED_SECTION_LABELS: Record<string, string> = {
   stance: '입장',
   keyReasons: '핵심 근거',
+  opportunityDrivers: '기회 조건',
   riskFlags: '리스크',
   missingEvidence: '누락 근거',
   doNotDo: '하지 말 것',

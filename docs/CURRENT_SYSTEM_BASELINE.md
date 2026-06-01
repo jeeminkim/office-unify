@@ -1,5 +1,13 @@
 # Current System Baseline
 
+## EVO-049 Trust Usability Repair
+
+- Infographic URL/PDF pipeline is explicitly staged as source extraction, readable summary, structured analysis, and infographic draft. If source extraction succeeds, readable summary must remain visible even when later stages degrade.
+- Infographic primary UI hides raw extractor/debug codes by default and only exposes functional actions: retry, shorten source text, focus pattern controls, edit extracted text, copy summary, and send a compact Research Center seed.
+- Committee persona output uses a human-readable Korean formatter before primary display. Internal snake_case artifacts are converted to Korean sentences, raw/debug remains collapsed, and format warnings are secondary.
+- Committee guidance must balance risk, opportunity, conditional checks, and missed-opportunity learning without buy/sell directives, automatic trading, order execution, or automatic rebalancing.
+- No SQL, no GET write, no Google Sheets repair/write, and explicit save only.
+
 ## EVO-048 Google Finance Quote Pipeline Reliability
 
 - Google Finance anchor OK and actual portfolio quote usability are separate. `/api/portfolio/quotes/status` reports `quoteDiagnostics` with failed symbols, failed reasons, formula pending, invalid KR ticker, missing `google_ticker`, domestic/US row OK counts, and `quoteUsabilityStatus`.

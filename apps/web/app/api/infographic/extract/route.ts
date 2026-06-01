@@ -9,6 +9,7 @@ import {
 } from '@/lib/server/infographicValidation';
 import { normalizeInfographicForRender } from '@/lib/server/infographicNormalize';
 import { resolveInfographicSourceText } from '@/lib/server/infographicSourceExtract';
+import { buildReadableInfographicFallbackSpec } from '@/lib/server/infographicReadableFallback';
 
 function requestId(): string {
   return `info-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -103,9 +104,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: '입력값을 확인해 주세요.', code: 'invalid_request', requestId: id, warnings: parsed.errors }, { status: 400 });
   }
 
+  let sourceResolved:
+    | Awaited<ReturnType<typeof resolveInfographicSourceText>>
+    | null = null;
+
   try {
     const bodyRecord = body as Record<string, unknown>;
-    const sourceResolved = await resolveInfographicSourceText({
+    sourceResolved = await resolveInfographicSourceText({
       sourceType: parsed.value.sourceType,
       rawText: parsed.value.rawText,
       sourceUrl: parsed.value.sourceUrl,
@@ -141,9 +146,29 @@ export async function POST(req: Request) {
       spec: { ...normalized, warnings: [...normalized.warnings, ...validationErrors] },
       warnings,
     };
-    return NextResponse.json(response);
+    return NextResponse.json({ ...response, requestId: id });
   } catch (error: unknown) {
+    if (sourceResolved) {
+      const raw = error instanceof Error ? error.message : String(error ?? 'unknown');
+      const fallbackSpec = buildReadableInfographicFallbackSpec({
+        industryName: parsed.value.industryName,
+        rawText: sourceResolved.cleanedText || sourceResolved.rawText,
+        sourceUrl: sourceResolved.sourceUrl,
+        sourceTitle: sourceResolved.sourceTitle,
+        extractionWarnings: sourceResolved.extractionWarnings,
+        reason: raw.toLowerCase().includes('json') ? 'structured_analysis_parse_failed' : 'structured_analysis_failed',
+      });
+      const response: InfographicExtractResponseBody = {
+        ok: true,
+        spec: fallbackSpec,
+        warnings: [
+          '원문 추출은 성공했지만 infographic draft는 degraded 처리했습니다.',
+          '읽기 요약은 사용할 수 있습니다.',
+          ...sourceResolved.extractionWarnings,
+        ],
+      };
+      return NextResponse.json({ ...response, requestId: id });
+    }
     return NextResponse.json(friendlyInfographicError(error, id), { status: 500 });
   }
 }
-

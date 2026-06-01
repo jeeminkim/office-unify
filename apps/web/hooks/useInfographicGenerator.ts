@@ -5,7 +5,6 @@ import type {
   InfographicExtractSourceTextResponseBody,
   InfographicExtractRequestBody,
   InfographicExtractResponseBody,
-  InfographicInputSourceType,
   InfographicSpec,
 } from '@office-unify/shared-types';
 
@@ -37,6 +36,14 @@ export function formatFriendlyInfographicError(input: FriendlyInfographicError |
   return [safeBase, hint, request].filter(Boolean).join(' ');
 }
 
+export type InfographicPipelineStage =
+  | 'idle'
+  | 'source_extracted'
+  | 'cleaned_preview_ready'
+  | 'spec_generation_succeeded'
+  | 'spec_generation_fallback'
+  | 'spec_generation_degraded';
+
 export function useInfographicGenerator() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,79 +51,63 @@ export function useInfographicGenerator() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [sourcePreviewText, setSourcePreviewText] = useState('');
   const [sourcePreviewRawText, setSourcePreviewRawText] = useState('');
-  const [sourcePreviewMeta, setSourcePreviewMeta] = useState<{
-    sourceType: InfographicInputSourceType;
-    articlePattern?: string;
-    industryPattern?: string;
-    sourceTone?: string;
-    subjectivityLevel?: string;
-    structureDensity?: string;
-    sourceUrl?: string;
-    sourceTitle?: string;
-    extractionWarnings: string[];
-    extractedTextLength: number;
-    rawExtractedTextLength: number;
-    cleanedTextLength: number;
-    cleanupApplied: boolean;
-    cleanupNotes: string[];
-  } | null>(null);
+  const [sourcePreviewMeta, setSourcePreviewMeta] = useState<InfographicExtractSourceTextResponseBody['sourceMeta'] | null>(null);
   const [degradedMeta, setDegradedMeta] = useState<{
     degradedReasons?: string[];
     articlePattern?: string;
     industryPattern?: string;
   } | null>(null);
   const [requestId, setRequestId] = useState<string | null>(null);
-  const [pipelineStage, setPipelineStage] = useState<
-    'idle' | 'source_extracted' | 'cleaned_preview_ready' | 'spec_generation_succeeded' | 'spec_generation_fallback' | 'spec_generation_degraded'
-  >('idle');
+  const [pipelineStage, setPipelineStage] = useState<InfographicPipelineStage>('idle');
+
+  const buildRequestInit = useCallback((payload: InfographicExtractRequestBody, pdfFile?: File | null): RequestInit => {
+    const hasUpload = payload.sourceType === 'pdf_upload' && pdfFile instanceof File;
+    if (!hasUpload) {
+      return {
+        method: 'POST',
+        headers: jsonHeaders,
+        credentials: 'same-origin',
+        body: JSON.stringify(payload),
+      };
+    }
+    const form = new FormData();
+    form.set('industryName', payload.industryName);
+    form.set('sourceType', payload.sourceType);
+    if (payload.rawText) form.set('rawText', payload.rawText);
+    if (payload.sourceUrl) form.set('sourceUrl', payload.sourceUrl);
+    if (payload.pdfUrl) form.set('pdfUrl', payload.pdfUrl);
+    if (payload.articlePatternOverride) form.set('articlePatternOverride', payload.articlePatternOverride);
+    if (payload.industryPatternOverride) form.set('industryPatternOverride', payload.industryPatternOverride);
+    form.set('pdfFile', pdfFile);
+    return {
+      method: 'POST',
+      credentials: 'same-origin',
+      body: form,
+    };
+  }, []);
 
   const generate = useCallback(async (payload: InfographicExtractRequestBody, pdfFile?: File | null) => {
+    if (loading) return spec;
     setLoading(true);
     setError(null);
     setPipelineStage((prev) => (prev === 'cleaned_preview_ready' ? prev : 'source_extracted'));
     try {
-      const hasUpload = payload.sourceType === 'pdf_upload' && pdfFile instanceof File;
-      const requestInit: RequestInit = hasUpload
-        ? (() => {
-            const form = new FormData();
-            form.set('industryName', payload.industryName);
-            form.set('sourceType', payload.sourceType);
-            if (payload.rawText) form.set('rawText', payload.rawText);
-            if (payload.sourceUrl) form.set('sourceUrl', payload.sourceUrl);
-            if (payload.pdfUrl) form.set('pdfUrl', payload.pdfUrl);
-            if (payload.articlePatternOverride) form.set('articlePatternOverride', payload.articlePatternOverride);
-            if (payload.industryPatternOverride) form.set('industryPatternOverride', payload.industryPatternOverride);
-            form.set('pdfFile', pdfFile as File);
-            return {
-              method: 'POST',
-              credentials: 'same-origin',
-              body: form,
-            } as RequestInit;
-          })()
-        : {
-            method: 'POST',
-            headers: jsonHeaders,
-            credentials: 'same-origin',
-            body: JSON.stringify(payload),
-          };
-      const res = await fetch('/api/infographic/extract', {
-        ...requestInit,
-      });
+      const res = await fetch('/api/infographic/extract', buildRequestInit(payload, pdfFile));
       const data = (await res.json()) as InfographicExtractResponseBody & FriendlyInfographicError;
       if (data.requestId) setRequestId(data.requestId);
       if (!res.ok) throw new Error(formatFriendlyInfographicError(data, `HTTP ${res.status}`));
+
+      setSpec(data.spec);
+      setWarnings(data.warnings ?? []);
       const mode = data.spec?.sourceMeta?.extractionMode;
       if (mode === 'degraded_fallback') {
-        setSpec(null);
         setDegradedMeta({
           degradedReasons: data.spec?.sourceMeta?.degradedReasons?.map(String) ?? [],
           articlePattern: data.spec?.sourceMeta?.articlePattern,
           industryPattern: data.spec?.sourceMeta?.industryPattern,
         });
         setPipelineStage('spec_generation_degraded');
-        setError('원문 추출은 성공했지만 구조화 품질이 부족합니다. 추출 텍스트를 조금 더 정리해 다시 시도하세요.');
       } else {
-        setSpec(data.spec);
         setDegradedMeta(null);
         setPipelineStage(
           mode === 'semantic_fallback' || mode === 'llm_repaired'
@@ -124,7 +115,6 @@ export function useInfographicGenerator() {
             : 'spec_generation_succeeded',
         );
       }
-      setWarnings(data.warnings ?? []);
       return data.spec;
     } catch (e: unknown) {
       const message = formatFriendlyInfographicError(
@@ -136,37 +126,14 @@ export function useInfographicGenerator() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [buildRequestInit, loading, spec]);
 
   const extractSourceText = useCallback(async (payload: InfographicExtractRequestBody, pdfFile?: File | null) => {
+    if (loading) return null;
     setLoading(true);
     setError(null);
     try {
-      const hasUpload = payload.sourceType === 'pdf_upload' && pdfFile instanceof File;
-      const requestInit: RequestInit = hasUpload
-        ? (() => {
-            const form = new FormData();
-            form.set('industryName', payload.industryName);
-            form.set('sourceType', payload.sourceType);
-            if (payload.rawText) form.set('rawText', payload.rawText);
-            if (payload.sourceUrl) form.set('sourceUrl', payload.sourceUrl);
-            if (payload.pdfUrl) form.set('pdfUrl', payload.pdfUrl);
-            if (payload.articlePatternOverride) form.set('articlePatternOverride', payload.articlePatternOverride);
-            if (payload.industryPatternOverride) form.set('industryPatternOverride', payload.industryPatternOverride);
-            form.set('pdfFile', pdfFile as File);
-            return {
-              method: 'POST',
-              credentials: 'same-origin',
-              body: form,
-            } as RequestInit;
-          })()
-        : {
-            method: 'POST',
-            headers: jsonHeaders,
-            credentials: 'same-origin',
-            body: JSON.stringify(payload),
-          };
-      const res = await fetch('/api/infographic/extract-source-text', requestInit);
+      const res = await fetch('/api/infographic/extract-source-text', buildRequestInit(payload, pdfFile));
       const data = (await res.json()) as InfographicExtractSourceTextResponseBody & FriendlyInfographicError;
       if (data.requestId) setRequestId(data.requestId);
       if (!res.ok) throw new Error(formatFriendlyInfographicError(data, `HTTP ${res.status}`));
@@ -186,7 +153,7 @@ export function useInfographicGenerator() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [buildRequestInit, loading]);
 
   return {
     loading,
@@ -205,4 +172,3 @@ export function useInfographicGenerator() {
     extractSourceText,
   };
 }
-

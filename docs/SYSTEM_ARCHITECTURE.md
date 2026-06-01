@@ -1,5 +1,12 @@
 # System Architecture (Personal Investment Console)
 
+## EVO-049 Trust Usability Repair
+
+- **Infographic pipeline:** `/api/infographic/extract-source-text` handles source extraction; `/api/infographic/extract` returns a normal `InfographicSpec` when possible and a degraded readable-summary spec when source text is available but structured analysis fails. This keeps useful output visible without automatic save/write.
+- **Infographic UI contract:** `/infographic` separates source extraction, readable summary, structured analysis, and draft rendering. Failure actions are concrete UI operations or compact Research Center continuation; long raw text is not sent through URL query strings.
+- **Committee display contract:** `committeeHumanReadable` humanizes snake_case/internal artifacts before `committeeStructuredDisplay` and `CommitteeLineCard` render primary text. Raw JSON/debug remains behind collapsed controls.
+- **Committee balance:** regenerate prompts request risk, opportunity, conditional checks, and retrospective learning while explicitly blocking buy/sell/order/rebalancing directives.
+
 ## EVO-048 Quote Pipeline
 
 - Google Finance pipeline is tracked as: Sheets `portfolio_quotes` read-back -> app quote diagnostics/cache -> portfolio summary guard -> Today Brief US diagnostics and candidate queue.

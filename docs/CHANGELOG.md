@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### 2026-06-02 EVO-049 Trust Usability Repair
+
+- **Infographic readable fallback:** URL/PDF source extraction success now preserves a human-readable summary even when structured analysis or infographic draft generation degrades. The primary UI shows title, five-line summary, claims, evidence, implications, questions, and safe Research Center continuation instead of only a failure state.
+- **Infographic button contract:** visible failure actions now either perform a concrete action (retry, shorten source text, focus document/industry pattern controls, focus extracted text, copy summary, send compact Research seed) or stay out of the primary flow. Raw AbortError and extractor/debug codes stay hidden by default.
+- **Committee human-readable output:** Committee structured fields pass through a Korean formatter so snake_case artifacts such as `hindsight_bias` or `lack_of_predefined_exit_criteria` are not primary UI text. Warnings are secondary/collapsed and readable content comes first.
+- **Balanced committee perspective:** regenerate instructions and compact cards include opportunity conditions, risk conditions, conditional checks, and missed-opportunity learning without buy/sell directives.
+- **Guardrails:** no SQL, no GET write, no Google Sheets repair/write, explicit save only, no automatic trading/order/rebalancing, no forced candidates, and no buy/sell directive.
+
 ### 2026-06-01 EVO-048 Google Finance Quote Pipeline Reliability
 
 - **Quote usability diagnostics:** `/api/portfolio/quotes/status` now separates Google Finance anchor readiness from actual portfolio quote usability, including failed symbols, per-symbol reasons, formula pending, invalid ticker, missing `google_ticker`, and partial read-back counts.

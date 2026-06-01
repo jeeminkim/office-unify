@@ -34,6 +34,15 @@ import { buildLongResponseFallback } from '@/lib/longResponseFallback';
 const REGENERATE_TARGET_CHARS = 1200;
 const REGENERATE_HARD_MAX = 1400;
 
+const LINE_REGENERATE_APPEND_HUMAN_READABLE = `[위원회 발언 재생성 지침]
+- 반드시 ${REGENERATE_TARGET_CHARS}자 이내의 짧은 한국어 카드로 답합니다.
+- JSON, fenced code block, 원문 디버그 스니펫을 출력하지 않습니다.
+- 섹션은 [결론], [핵심 근거], [기회 조건], [리스크], [누락 근거], [하지 말 것], [다음 확인]을 사용합니다.
+- 각 섹션은 최대 3개 항목이며 [하지 말 것]은 최대 2개입니다.
+- 리스크만 말하지 말고 기회 조건, 조건부 관찰 기준, 놓친 기회에서 배울 점을 함께 제시합니다.
+- "그때 샀어야 했다", "지금 사라", "주문 실행", "자동 주문", "자동 리밸런싱"처럼 보이는 표현은 금지합니다.
+- 이전 발언이 잘렸더라도 JSON 복원이 아니라 같은 persona 관점의 읽을 수 있는 발언으로 다시 씁니다.`;
+
 const LINE_REGENERATE_APPEND = `[위원회 발언 재생성 지침]
 - 반드시 ${REGENERATE_TARGET_CHARS}자 이내의 짧은 한국어 카드로 답합니다.
 - JSON, fenced code block, 원문 디버그 덤프를 출력하지 않습니다.
@@ -42,6 +51,8 @@ const LINE_REGENERATE_APPEND = `[위원회 발언 재생성 지침]
 - portfolioContext, scoreAdjustmentSuggestion 같은 내부 필드는 길게 노출하지 않고 필요한 의미만 요약합니다.
 - 매수/매도 지시, 자동 주문, 자동 리밸런싱처럼 보이는 표현은 금지합니다.
 - 이전 발언이 잘렸다면 JSON 복원이 아니라 같은 persona 관점의 짧고 읽을 수 있는 발언으로 다시 씁니다.`;
+
+void LINE_REGENERATE_APPEND;
 
 function truncate(text: string, max: number): string {
   if (text.length <= max) return text;
@@ -186,7 +197,7 @@ export async function executeCommitteeLineRegenerate(params: {
   if (committeeLt) {
     systemInstruction += `\n\n[사용자 위원회 장기 기억]\n${committeeLt}`;
   }
-  systemInstruction += `\n\n${LINE_REGENERATE_APPEND}`;
+  systemInstruction += `\n\n${LINE_REGENERATE_APPEND_HUMAN_READABLE}`;
 
   const maxLen = Math.min(params.request.maxLength ?? REGENERATE_TARGET_CHARS, REGENERATE_HARD_MAX);
 

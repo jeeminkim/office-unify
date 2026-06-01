@@ -15,6 +15,7 @@ import type {
   PersonaStructuredOutputQualitySummary,
 } from '@office-unify/shared-types';
 import { PERSONA_FORBIDDEN_PHRASE_TEXTS } from '@/lib/personaPrinciples';
+import { humanizeCommitteeText } from '@/lib/committeeHumanReadable';
 
 export const PERSONA_STRUCTURED_BANNED_PHRASES: readonly string[] = PERSONA_FORBIDDEN_PHRASE_TEXTS;
 
@@ -138,7 +139,7 @@ function stripJsonFencesForSummary(text: string): string {
 }
 
 function compactText(text: string, max = COMMITTEE_COMPACT_ITEM_MAX): string {
-  const cleaned = stripJsonFencesForSummary(text).replace(/\s+/g, ' ').trim();
+  const cleaned = humanizeCommitteeText(stripJsonFencesForSummary(text).replace(/\s+/g, ' ').trim());
   if (!cleaned) return '';
   if (cleaned.length <= max) return cleaned;
   return `${cleaned.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
@@ -210,6 +211,7 @@ export function buildCommitteeCompactCard(output: PersonaStructuredOutput): stri
 
   const rows: Array<[string, string[]]> = [
     ['핵심 근거', compactItems(output.keyReasons)],
+    ['기회 조건', compactItems(output.opportunityDrivers)],
     ['리스크', compactItems(output.riskFlags)],
     ['누락 근거', compactItems(output.missingEvidence, 2)],
     ['하지 말 것', compactItems(output.doNotDo, 2)],

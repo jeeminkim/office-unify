@@ -1,5 +1,11 @@
 # 로드맵 백로그 (scratchpad)
 
+## EVO-049 Trust Usability Repair
+
+- Shipped readable fallback for Infographic URL/PDF flows: source extraction success must still produce a usable summary even when structured analysis or draft generation degrades.
+- Shipped Committee human-readable formatter: primary UI hides snake_case/internal artifacts and balances risk, opportunity, conditional checks, and retrospective learning without buy/sell directives.
+- Follow-up backlog: Watchlist Smart Resolve remains separate; no ticker/name auto-correction was added in this round.
+
 ## EVO-048 Google Finance Quote Pipeline Reliability
 
 - Completed reliability pass for quote usability diagnostics, KR/US ticker mapping diagnosis, refresh lifecycle copy, portfolio summary P&L guard, and US candidate suppression diagnostics.

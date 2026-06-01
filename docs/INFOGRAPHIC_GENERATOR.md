@@ -1,5 +1,13 @@
 # Infographic Generator (MVP)
 
+## EVO-049 readable summary fallback
+
+- Pipeline stages are source extraction, readable summary, structured analysis, and infographic draft.
+- If source extraction succeeds but structured analysis or draft generation fails, `/api/infographic/extract` returns a degraded `InfographicSpec` with title, five-line summary, key claims, evidence/examples, industry/investment implications, risks, and follow-up questions.
+- The primary UI must not show raw `This operation was aborted`, `extractor_fallback_used`, or `extractor_json_parse_failed` copy. Debug/source metadata is collapsed.
+- Visible failure actions must be real actions: retry generation, shorten source text, focus document/industry pattern controls, edit extracted text, copy summary, or send a compact Research Center seed. Long raw text must not be placed in URL query strings.
+- No automatic save/write, no SQL, no buy/sell directive, and no automatic trading/order/rebalancing.
+
 ## 개요
 
 `/infographic`은 블로그 분석 글, 증권사 리포트, 사용자가 붙여넣은 원문/URL/PDF를 바탕으로

@@ -5,6 +5,14 @@
 Hindenburg → James Simons → CIO → Peter Drucker 순으로 **한 라운드씩** 발언하고, 선택적으로 라운드를 이어 가거나 종료 시 CIO·Drucker **정리 발언**을 생성한다.  
 Supabase 웹 포트폴리오 원장은 해당 페르소나 시스템 프롬프트에 서버가 조회해 붙인다(조일현 제외).
 
+## EVO-049 human-readable committee output
+
+- Committee primary UI must show readable Korean cards, not raw snake_case artifacts or structured JSON.
+- `committeeHumanReadable` converts internal labels such as `hindsight_bias`, `causal_fallacy`, `emotional_trading_tendency`, and `lack_of_predefined_exit_criteria` into Korean sentences before display.
+- Format warnings are secondary/collapsed; readable content comes first and raw/debug remains behind explicit toggles.
+- Committee responses should balance risk, opportunity conditions, conditional checks, and missed-opportunity learning. They must not become buy/sell directives, order execution, automatic trading, or automatic rebalancing.
+- Action Item, Research, Journal, and Retrospective links remain explicit user actions only.
+
 ## Investment Assistant Output Contract 연계
 
 - `POST /api/committee-discussion/report` 결과는 `docs/investment-assistant-output-contract.md`의 섹션/후처리 규칙을 따른다.

@@ -47,4 +47,18 @@ describe('committeeStructuredDisplay', () => {
     expect(readable).not.toContain('"keyReasons"');
     expect(rawForDebug).toContain('"keyReasons"');
   });
+
+  it('humanizes snake_case artifacts in the primary body', () => {
+    const readable = buildReadableSummaryFromStructured({
+      ...sampleStructured,
+      keyReasons: ['hindsight_bias', 'systematic_model_enhancement'],
+      riskFlags: ['lack_of_predefined_exit_criteria'],
+      nextChecks: ['custom_internal_signal'],
+    });
+    expect(readable).toContain('결과를 보고 과거 판단을 과도하게 후회할 위험');
+    expect(readable).toContain('판단 기준을 더 체계화할 필요');
+    expect(readable).toContain('사전에 정한 종료 기준 부족');
+    expect(readable).toContain('추가 확인 필요: custom internal signal');
+    expect(readable).not.toContain('hindsight_bias');
+  });
 });

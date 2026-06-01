@@ -47,7 +47,7 @@ describe('personaStructuredOutput', () => {
     const layer = buildPersonaStructuredLayer('hindenburg', '그냥 자유문만');
     expect(layer.personaStructuredOutputSummary.parseFailedCount).toBe(1);
     expect(layer.personaStructuredOutput?.stance).toBe('insufficient_data');
-    expect(layer.personaStructuredOutput?.missingEvidence).toContain('structured_output_parse_failed');
+    expect(layer.personaStructuredOutput?.missingEvidence).toContain('일부 형식이 손상되어 핵심 요약만 확인 필요');
   });
 
   it('banned phrases scrubbed and stance lowered', () => {
@@ -163,7 +163,7 @@ describe('personaStructuredOutput', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.fallbackSummary).toContain('이 발언은 일부 손상되어 핵심 요약만 표시합니다.');
-      expect(r.fallbackSummary).toContain('structured_output_parse_failed');
+      expect(r.fallbackSummary).toContain('일부 형식이 손상되어 핵심 요약만 확인 필요');
       expect(r.fallbackSummary).not.toContain('{"displaySummary"');
     }
   });

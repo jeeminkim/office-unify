@@ -2,6 +2,15 @@
 
 배포·실사용 전에 아래를 순서에 맞게 확인합니다. 이 앱은 **관찰·복기·데이터 점검**용이며 **자동매매·자동 주문·자동 리밸런싱**은 없습니다.
 
+## EVO-049 Trust Usability Repair
+
+- [ ] Infographic URL/PDF source extraction success still leaves a readable summary when structured analysis or infographic draft generation degrades.
+- [ ] Raw `This operation was aborted`, `extractor_json_parse_failed`, and similar internal debug codes are hidden from the primary UI.
+- [ ] Infographic failure buttons either work or are not shown as primary actions: retry, shorten source text, pattern focus, extracted-text edit, summary copy, compact Research Center seed.
+- [ ] Committee persona lines do not show snake_case artifacts as primary text; raw/debug remains collapsed.
+- [ ] Committee output includes risk, opportunity, conditional checks, and missed-opportunity learning without buy/sell/order/rebalancing directives.
+- [ ] No SQL, no GET write, no Google Sheets repair/write, explicit save only.
+
 ## EVO-048 Google Finance quote pipeline
 
 - [ ] `/api/portfolio/quotes/status` shows `quoteDiagnostics.quoteUsabilityStatus`, failed symbols, and failed reasons without writing data.

@@ -8,6 +8,7 @@ import {
   resolveLineDisplayContent,
   STRUCTURED_SECTION_LABELS,
 } from "@/lib/committeeStructuredDisplay";
+import { humanizeCommitteeItems } from "@/lib/committeeHumanReadable";
 
 type Props = {
   lineIndex: number;
@@ -24,6 +25,7 @@ function StructuredSections({ line }: { line: CommitteeDiscussionLineDto }) {
   if (!so) return null;
   const sections: Array<{ key: keyof typeof STRUCTURED_SECTION_LABELS; items: string[] }> = [
     { key: "keyReasons", items: so.keyReasons },
+    { key: "opportunityDrivers", items: so.opportunityDrivers },
     { key: "riskFlags", items: so.riskFlags },
     { key: "missingEvidence", items: so.missingEvidence },
     { key: "doNotDo", items: so.doNotDo },
@@ -35,18 +37,19 @@ function StructuredSections({ line }: { line: CommitteeDiscussionLineDto }) {
         구조화 필드 보기 · {STRUCTURED_SECTION_LABELS.stance}: {so.stance} · 신뢰도 {so.confidence}
       </summary>
       <div className="mt-2 space-y-2">
-        {sections.map((sec) =>
-          sec.items.length > 0 ? (
+        {sections.map((sec) => {
+          const items = humanizeCommitteeItems(sec.items).slice(0, 3);
+          return items.length > 0 ? (
             <div key={sec.key}>
               <p className="font-medium text-slate-600">{STRUCTURED_SECTION_LABELS[sec.key]}</p>
               <ul className="mt-0.5 list-disc pl-4">
-                {sec.items.slice(0, 3).map((it) => (
+                {items.map((it) => (
                   <li key={it.slice(0, 40)}>{it}</li>
                 ))}
               </ul>
             </div>
-          ) : null,
-        )}
+          ) : null;
+        })}
       </div>
     </details>
   );
@@ -72,18 +75,21 @@ export function CommitteeLineCard({
         </span>
         {line.outputQuality?.status === "partial" ? (
           <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-950">
-            중간에 끊김
+            일부 발언 복구 필요
           </span>
         ) : line.outputQuality?.status === "format_warning" ? (
           <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-900">
-            일부 형식 보강
+            읽기 형식 보정
           </span>
         ) : line.outputQuality?.sanitizedPromptLeaks ? (
           <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">디버그 문구 정리됨</span>
         ) : null}
       </div>
       {line.outputQuality?.actionHint ? (
-        <p className="mt-1 text-[10px] text-amber-900">{line.outputQuality.actionHint}</p>
+        <details className="mt-1 text-[10px] text-amber-900">
+          <summary className="cursor-pointer">보정 안내</summary>
+          <p className="mt-1">{line.outputQuality.actionHint}</p>
+        </details>
       ) : null}
       <CommitteePartialRecoveryPanel
         lineIndex={lineIndex}
