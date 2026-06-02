@@ -128,15 +128,27 @@ export async function POST(req: Request) {
     });
 
     const reportRef = `trend-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    const longResponseFallback = buildLongResponseFallback(result.reportMarkdown, {
-      actionHint:
-        '응답이 길어 핵심만 표시합니다. 전문은 복사하거나 Research·PB·Action Item으로 넘길 수 있습니다.',
-    });
+    const protectiveFallbackNeeded = result.reportMarkdown.length > 12000;
+    const longResponseFallback = protectiveFallbackNeeded
+      ? buildLongResponseFallback(result.reportMarkdown, {
+          actionHint:
+            '보고서가 매우 길어 보호용 요약 카드를 함께 표시합니다. 화면 본문은 가능한 한 전체 보고서를 유지합니다.',
+        })
+      : undefined;
     const withLongFallback = {
       ...result,
       qualityMeta: {
         ...result.qualityMeta,
-        longResponseFallback,
+        ...(longResponseFallback ? { longResponseFallback } : {}),
+        reportDisplay: {
+          mode: 'long_report' as const,
+          targetChars: 8000,
+          previewChars: 2000,
+          fullReportAvailable: true,
+          longResponseFallbackUsed: Boolean(longResponseFallback?.exceededLimit),
+          actionHint:
+            'Trend Analysis는 6,000~8,000자 보고서 본문을 기본으로 유지하고, PB/위원회/Action Item 연결에는 compact summary를 사용합니다.',
+        },
       },
     };
 

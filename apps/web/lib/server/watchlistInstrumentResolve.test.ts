@@ -24,6 +24,8 @@ describe('resolveWatchlistInstrument', () => {
     ['고려아연', '010130', 'KRX:010130'],
     ['일진전기', '103590', 'KRX:103590'],
     ['LS', '006260', 'KRX:006260'],
+    ['리가켐바이오', '141080', 'KOSDAQ:141080'],
+    ['HL만도', '204320', 'KRX:204320'],
     ['파마리서치', '214450', 'KOSDAQ:214450'],
     ['메지온', '140410', 'KOSDAQ:140410'],
     ['알테오젠', '196170', 'KOSDAQ:196170'],
@@ -34,6 +36,7 @@ describe('resolveWatchlistInstrument', () => {
     expect(out.ambiguityStatus).toBe('single_high_confidence');
     expect(out.resolved?.symbol).toBe(symbol);
     expect(out.resolved?.stockCode).toBe(symbol);
+    expect(out.resolved?.code).toBe(symbol);
     expect(out.resolved?.googleTicker).toBe(googleTicker);
     expect(out.canAutoFillForm).toBe(true);
   });
@@ -55,16 +58,38 @@ describe('resolveWatchlistInstrument', () => {
     ['Netflix', 'NFLX', 'NASDAQ:NFLX'],
     ['ServiceNow', 'NOW', 'NYSE:NOW'],
     ['서비스나우', 'NOW', 'NYSE:NOW'],
+    ['NOW', 'NOW', 'NYSE:NOW'],
+    ['Palantir', 'PLTR', 'NYSE:PLTR'],
+    ['팔란티어', 'PLTR', 'NYSE:PLTR'],
     ['Coinbase', 'COIN', 'NASDAQ:COIN'],
+    ['코인베이스', 'COIN', 'NASDAQ:COIN'],
     ['SPY', 'SPY', 'NYSEARCA:SPY'],
     ['QQQ', 'QQQ', 'NASDAQ:QQQ'],
     ['SMH', 'SMH', 'NASDAQ:SMH'],
   ])('resolves US name/ticker %s to ticker and Google ticker', (query, symbol, googleTicker) => {
     const out = resolve(query, 'US');
     expect(out.ok).toBe(true);
+    expect(out.status).toBe('resolved');
+    expect(out.market).toBe(['SPY', 'QQQ', 'SMH'].includes(symbol) ? 'ETF' : 'US');
+    expect(out.selectedCandidate?.symbol).toBe(symbol);
     expect(out.resolved?.symbol).toBe(symbol);
     expect(out.resolved?.ticker).toBe(symbol);
     expect(out.resolved?.googleTicker).toBe(googleTicker);
+    expect(out.writeAction).toBe(false);
+  });
+
+  it.each([
+    'RISE 현대차고정피지컬AI ETF',
+    'Tiger 코리아AI전력기기 Top3플러스',
+    'Kodex AI반도체핵심장비',
+  ])('returns a degraded manual-review candidate for unresolved ETF name seed: %s', (query) => {
+    const out = resolve(query, 'AUTO');
+    expect(out.ok).toBe(false);
+    expect(out.status).toBe('degraded');
+    expect(out.ambiguityStatus).toBe('needs_manual_review');
+    expect(out.bestCandidate?.matchType).toBe('manual_review');
+    expect(out.bestCandidate?.warnings).toContain('manual_ticker_mapping_required');
+    expect(out.actionHint).toContain('신뢰도');
     expect(out.writeAction).toBe(false);
   });
 

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { SaveToActionInboxButton } from "@/components/SaveToActionInboxButton";
 import { LongResponseFallbackCard } from "@/components/LongResponseFallbackCard";
 import { buildGenericActionItemDetail } from "@/lib/actionItemDetailBuilders";
-import { buildLongResponseFallback } from "@/lib/longResponseFallback";
 import { buildLongResponseActionItemRequest } from "@/lib/longResponseFallbackSeeds";
 import { useSearchParams } from "next/navigation";
 import {
@@ -348,16 +347,15 @@ export function ResearchCenterClient() {
   const reportLongFallback = useMemo(() => {
     if (!result) return null;
     if (result.longResponseFallback) return result.longResponseFallback;
-    if (!combinedReportMarkdown.trim()) return null;
-    return buildLongResponseFallback(combinedReportMarkdown);
-  }, [result, combinedReportMarkdown]);
+    return null;
+  }, [result]);
 
   const reportActionItemRequest = useMemo(() => {
     if (!reportLongFallback?.exceededLimit || !result?.requestId) return undefined;
     return buildLongResponseActionItemRequest({
       sourceType: "research_report",
       fallback: reportLongFallback,
-      title: `[Research] ${name.trim() || symbol.trim()} 긴 리포트 요약`,
+      title: `[Research] ${name.trim() || symbol.trim()} 긴 보고서 요약`,
       symbol: symbol.trim() || undefined,
       name: name.trim() || undefined,
       market,
@@ -366,12 +364,11 @@ export function ResearchCenterClient() {
     });
   }, [reportLongFallback, result, name, symbol, market]);
 
-  const displayActiveBody =
-    reportLongFallback?.exceededLimit ? reportLongFallback.displayText : activeBody;
+  const displayActiveBody = activeBody;
 
   const extractFollowups = useCallback(async () => {
     if (!combinedReportMarkdown.trim()) {
-      setFollowupErr("추출할 본문이 없습니다.");
+      setFollowupErr("추출할 보고서 본문이 없습니다.");
       return;
     }
     setFollowupLoading(true);
@@ -992,7 +989,7 @@ export function ResearchCenterClient() {
                 title: name.trim() || symbol.trim(),
               }}
               actionItemRequest={reportActionItemRequest}
-              actionItemSaveLabel="리포트 → Action Item"
+              actionItemSaveLabel="보고서를 Action Item으로 저장"
               compact
             />
           ) : null}
@@ -1001,9 +998,9 @@ export function ResearchCenterClient() {
           </article>
 
           <div className="mt-6 rounded border border-slate-200 bg-white p-3 text-xs text-slate-800">
-            <p className="font-semibold text-slate-900">다음에 확인할 것 (추출 · PB 고찰)</p>
+            <p className="font-semibold text-slate-900">다음 확인할 것 추출 · PB 상담 연결</p>
             <p className="mt-1 text-slate-600">
-              Research Center 본문에서 &quot;다음에 확인할 것&quot; 섹션을 찾아 목록으로 만듭니다. 매수 권유가 아니라 후속 확인 항목입니다. PB 고찰은 판단 보조이며 자동 주문을 실행하지 않습니다.
+              Research Center 본문에서 다음 확인 항목을 추출합니다. 거래 지시가 아니라 후속 검토 체크리스트이며, PB 상담은 판단 보조만 하고 자동 주문은 실행하지 않습니다.
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
               <button
@@ -1012,7 +1009,7 @@ export function ResearchCenterClient() {
                 disabled={followupLoading || !combinedReportMarkdown.trim()}
                 onClick={() => void extractFollowups()}
               >
-                {followupLoading ? "처리 중…" : "섹션 추출"}
+                {followupLoading ? "처리 중..." : "후속 항목 추출"}
               </button>
               <Link href="/private-banker" className="rounded border border-violet-200 bg-violet-50 px-2 py-1 text-[11px] text-violet-900 underline-offset-2 hover:underline">
                 Private Banker 채팅

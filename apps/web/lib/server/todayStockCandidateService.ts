@@ -9,6 +9,10 @@ import { buildCandidateDataQuality } from '../todayCandidateDataQuality';
 import type { SectorRadarSummarySector } from '../sectorRadarContract';
 import { resolveCorporateActionRiskForStockCode } from '@/lib/server/corporateActionRiskRegistry';
 import { applyCorporateActionRiskGate, clampObservationScore, sparseDataBaseScore } from '@/lib/server/todayCandidateScoring';
+import {
+  buildTodayCandidateDiscoveryUniverse,
+  type DiscoveryUniverseDiagnostics,
+} from '@/lib/server/todayCandidateDiscoveryUniverse';
 
 function clampScore(n: number): number {
   return clampObservationScore(n);
@@ -86,6 +90,8 @@ export async function buildTodayStockCandidates(input: {
   usKrMappedRawCount: number;
   /** 미국 관심·보유 직접 관찰 후보(ETF seed·KR 매핑과 분리) */
   usDirectCandidates: TodayStockCandidate[];
+  discoveryCandidates: TodayStockCandidate[];
+  discoveryUniverse: DiscoveryUniverseDiagnostics;
   userUsWatchlistCount: number;
   userUsHoldingCount: number;
 }> {
@@ -112,6 +118,25 @@ export async function buildTodayStockCandidates(input: {
   const usSummary = await buildUsMarketMorningSummary({ extraQuoteSymbols: usWatchSymbols });
 
   const trendTopics = (trendSignalsRes.data ?? []).map((x) => `${x.topic_key ?? ''} ${x.signal_name ?? ''}`.toLowerCase());
+  const discoveryUniverse = buildTodayCandidateDiscoveryUniverse({
+    holdings: holdings.map((h) => ({
+      market: h.market,
+      symbol: h.symbol,
+      name: h.name,
+      sector: h.sector ?? null,
+      google_ticker: h.google_ticker ?? null,
+      quote_symbol: h.quote_symbol ?? null,
+    })),
+    watchlist: watchlist.map((w) => ({
+      market: w.market,
+      symbol: w.symbol,
+      name: w.name,
+      sector: w.sector ?? null,
+      google_ticker: w.google_ticker ?? null,
+      quote_symbol: w.quote_symbol ?? null,
+    })),
+    maxCandidates: limit + 5,
+  });
 
   const userContextCandidates: TodayStockCandidate[] = watchlist
     .filter((w) => w.market === 'KR')
@@ -365,7 +390,7 @@ export async function buildTodayStockCandidates(input: {
   usDirectCandidates.sort((a, b) => b.score - a.score);
 
   if (holdings.length === 0 && watchlist.length === 0) warnings.push('user_context_sparse');
-  const all = [...userContextCandidates, ...usMarketKrCandidates, ...usDirectCandidates];
+  const all = [...userContextCandidates, ...usMarketKrCandidates, ...usDirectCandidates, ...discoveryUniverse.candidates];
   const confidenceCounts = {
     high: all.filter((x) => x.confidence === 'high').length,
     medium: all.filter((x) => x.confidence === 'medium').length,
@@ -383,6 +408,8 @@ export async function buildTodayStockCandidates(input: {
     usKrRulesMatchedCount: usRules.length,
     usKrMappedRawCount,
     usDirectCandidates,
+    discoveryCandidates: discoveryUniverse.candidates,
+    discoveryUniverse: discoveryUniverse.diagnostics,
     userUsWatchlistCount,
     userUsHoldingCount,
   };

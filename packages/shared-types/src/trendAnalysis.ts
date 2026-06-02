@@ -414,6 +414,15 @@ export type TrendAnalysisGenerateResponseBody = {
     };
     /** additive: provider finalizer와 별도 — 긴 markdown UI 요약·후속 작업용 */
     longResponseFallback?: import('./longResponseFallback').LongResponseFallback;
+    /** additive: normal Trend reports may be long; fallback is only for protective degradation. */
+    reportDisplay?: {
+      mode: 'long_report';
+      targetChars: number;
+      previewChars: number;
+      fullReportAvailable: boolean;
+      longResponseFallbackUsed: boolean;
+      actionHint: string;
+    };
     sheets?: {
       requestLogAppendOk?: boolean;
       requestLogAppendSkipped?: boolean;

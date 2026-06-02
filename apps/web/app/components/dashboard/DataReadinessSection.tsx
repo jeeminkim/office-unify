@@ -37,14 +37,14 @@ export function DataReadinessSection({
     <section className="mb-5 rounded-xl border border-sky-200 bg-sky-50/40 p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h2 className="text-sm font-semibold text-sky-950">데이터·시스템 준비 상태</h2>
+          <h2 className="text-sm font-semibold text-sky-950">데이터 파이프라인 준비 상태</h2>
           <p className="mt-0.5 text-[11px] text-sky-900/90">
-            데이터 상태 문제입니다. 투자 판단이 아닙니다. 먼저 설정·시세를 확인한 뒤 Today Brief를 다시 실행하세요.
+            데이터 준비 상태를 먼저 확인합니다. Google Finance 설정 완료와 실제 시세 사용 가능 여부는 별도로 판단합니다.
           </p>
         </div>
         <div className="flex flex-wrap gap-2 text-[11px]">
-          <Link href="/ops/google-finance-setup" className="rounded border border-sky-300 bg-white px-2 py-1">
-            Google Finance 설정
+          <Link href="/portfolio" className="rounded border border-sky-300 bg-white px-2 py-1">
+            시세 상태 확인
           </Link>
           <Link href="/ops/sql-readiness" className="rounded border border-sky-300 bg-white px-2 py-1">
             SQL 준비 상태

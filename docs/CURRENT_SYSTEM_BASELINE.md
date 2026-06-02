@@ -2,6 +2,10 @@
 
 ## EVO-051 Project Reality Recovery
 
+- Real usability recovery extends this baseline with a `QuoteProviderRouter`: Google Sheets is fallback/ops read-back, while future external KR/US providers are explicit provider slots and currently report `provider_not_configured`.
+- Smart Ticker Resolve is a first-class read-only registration proposal layer. It may fill local form state, but watchlist persistence remains the explicit existing POST path.
+- Today Candidate can use a read-only Discovery Universe based on user interest themes. It is not watchlist registration and reports generated/resolved/unresolved counts.
+- Trend Analysis defaults to long report mode: 6,000-8,000 character body, 2,000 character preview, explicit full-report expand, and separate summary/full-copy actions.
 - Quote readiness is explicit about provider capability: Google Sheets `GOOGLEFINANCE` is formula read-back, not a real-time quote provider. Anchor OK does not guarantee actual portfolio or candidate quote usability.
 - Today Candidate must show the KR 2 + US 1 deck contract summary. If a US slot cannot be filled, a diagnostic fallback reason is visible and no candidate is forced.
 - Naver Blog extraction uses blogId/logNo parsing, PostView/mobile URL candidates, mainFrame follow, and SE body selectors. Title/source/URL-only output is `insufficient_source`, not success.

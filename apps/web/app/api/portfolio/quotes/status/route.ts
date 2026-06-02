@@ -16,6 +16,7 @@ import {
   normalizeKoreanGoogleTicker,
   normalizeUsGoogleTicker,
 } from '@/lib/server/quotePipelineDiagnostics';
+import { buildQuoteProviderRouterSummary } from '@/lib/server/quoteProviderRouter';
 import { logOpsEvent } from '@/lib/server/opsEventLogger';
 
 export async function GET() {
@@ -28,11 +29,17 @@ export async function GET() {
   const configured = isGoogleFinanceQuoteConfigured();
   const holdings = await listWebPortfolioHoldingsForUser(supabase, auth.userKey).catch(() => []);
   const providerCapability = buildGoogleFinanceProviderCapability();
+  const emptyRouterSummary = buildQuoteProviderRouterSummary({
+    googleFinanceConfigured: configured,
+    matchedQuoteCount: 0,
+    missingSymbols: holdings.map((holding) => `${holding.market}:${holding.symbol}`),
+  });
   if (!configured) {
     return NextResponse.json({
       ok: false,
       generatedAt: new Date().toISOString(),
       providerCapability,
+      quoteProviderRouter: emptyRouterSummary,
       sheet: {
         spreadsheetIdConfigured: Boolean(process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim()),
         sheetName: process.env.PORTFOLIO_QUOTES_SHEET_NAME?.trim() || 'portfolio_quotes',
@@ -113,6 +120,12 @@ export async function GET() {
       };
     });
     const quoteDiagnostics = buildPortfolioQuoteReadbackDiagnostics({ holdings, rows: data.rows });
+    const quoteProviderRouter = buildQuoteProviderRouterSummary({
+      googleFinanceConfigured: configured,
+      matchedQuoteCount: quoteDiagnostics.rowsWithPrice,
+      missingSymbols: quoteDiagnostics.failedSymbols,
+      formulaPendingCount: quoteDiagnostics.rowsFormulaPending,
+    });
     const rowsWithReasons = rows.map((row) => {
       const failedReasons = quoteDiagnostics.failedReasonsBySymbol[normalizeQuoteKey(row.market, row.symbol)];
       return {
@@ -140,11 +153,12 @@ export async function GET() {
     const fxFormulaAlternatives = portfolioQuotesFxAlternativePriceFormulas();
     const fxFormulaCheckHint =
       fxStatus !== 'ok'
-        ? `FX 행 G열에 ${PORTFOLIO_QUOTES_FX_PRICE_RESULT_FORMULA_EXPECTED} 수식 결과가 있어야 합니다.`
+        ? `FX 행에 ${PORTFOLIO_QUOTES_FX_PRICE_RESULT_FORMULA_EXPECTED} 수식 결과가 있어야 합니다.`
         : undefined;
     return NextResponse.json({
       ok: true,
       generatedAt: new Date().toISOString(),
+      quoteProviderRouter,
       sheet: {
         spreadsheetIdConfigured: data.spreadsheetIdConfigured,
         sheetName: data.sheetName,

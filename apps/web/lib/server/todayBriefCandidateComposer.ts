@@ -369,7 +369,18 @@ export type CandidateDeckContractDiagnostics = {
   targetUsSlots: 1;
   filledUsSlots: number;
   usDiagnosticSlotPresent: boolean;
-  usSlotFallbackReason?: 'quote_quality_low' | 'low_confidence_mapping' | 'us_signal_mapping_empty' | 'queue_policy_suppressed' | 'no_us_pool';
+  usSlotFallbackReason?:
+    | 'quote_quality_low'
+    | 'low_confidence_mapping'
+    | 'us_signal_mapping_empty'
+    | 'queue_policy_suppressed'
+    | 'no_us_pool'
+    | 'us_quote_provider_not_configured'
+    | 'us_symbol_resolve_failed'
+    | 'us_quote_quality_low'
+    | 'insufficient_us_candidates'
+    | 'risk_queue_dominates'
+    | 'repeat_suppression';
   krSlotFallbackReason?: 'insufficient_kr_candidates';
   deckContractStatus: 'ok' | 'partial' | 'degraded';
   actionHint: string;
@@ -384,12 +395,16 @@ function inferUsFallbackReason(input: {
     .flatMap((c) => [c.reasonSummary, ...(c.reasonDetails ?? []), ...(c.cautionNotes ?? []), c.queueActionHint ?? ''])
     .join(' ')
     .toLowerCase();
+  if (joined.includes('provider_not_configured')) return 'us_quote_provider_not_configured';
+  if (joined.includes('resolve_failed') || joined.includes('symbol_resolve')) return 'us_symbol_resolve_failed';
+  if (joined.includes('repeat_exposure') || joined.includes('repeat')) return 'repeat_suppression';
+  if (joined.includes('risk_review') || joined.includes('corporate_event_risk')) return 'risk_queue_dominates';
   if (joined.includes('quote_quality_low') || joined.includes('quote quality') || joined.includes('시세')) return 'quote_quality_low';
   if (joined.includes('low_confidence_mapping') || joined.includes('mapping confidence')) return 'low_confidence_mapping';
   if (joined.includes('us_signal_mapping_empty') || joined.includes('mapping')) return 'us_signal_mapping_empty';
   if (joined.includes('queue') || joined.includes('suppressed') || joined.includes('monitoring')) return 'queue_policy_suppressed';
-  if (input.usPoolCount === 0 && input.usSignalCandidateCount === 0) return 'no_us_pool';
-  return input.diagnosticCandidateCards.length > 0 ? 'queue_policy_suppressed' : 'no_us_pool';
+  if (input.usPoolCount === 0 && input.usSignalCandidateCount === 0) return 'insufficient_us_candidates';
+  return input.diagnosticCandidateCards.length > 0 ? 'queue_policy_suppressed' : 'insufficient_us_candidates';
 }
 
 export function buildCandidateDeckContractDiagnostics(input: {

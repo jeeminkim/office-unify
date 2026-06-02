@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### 2026-06-02 EVO-051 Real Usability Recovery
+
+- **Quote Provider Router:** Google Sheets GOOGLEFINANCE is now modeled as a formula read-back fallback/ops layer, not the primary real-time quote provider. Quote diagnostics separate provider-not-configured, formula pending, mapping, and read-back failure reasons.
+- **Smart Ticker Resolve:** watchlist resolve now exposes `status`, `selectedCandidate`, market, match reason, and read-only candidates for Palantir/PLTR plus degraded manual-review ETF name seeds. Resolve never writes or auto-registers watchlist rows.
+- **Discovery Universe:** Today Candidate can add read-only interest-based KR/US discovery candidates before deck composition. The universe is not a watchlist and reports generated/resolved/unresolved counts with `writeAction: false`.
+- **Deck contract reasons:** KR 2 + US 1 remains a deck contract, not forced candidate generation. Missing US slots can now report provider, resolve, quote-quality, insufficient-candidate, risk, or repeat-suppression reasons.
+- **Trend long report mode:** Trend Analysis keeps a long report body by default, separates summary copy from full report copy, and uses long-response fallback only as a protective degradation path.
+- **Guardrails:** no SQL, no GET write, no automatic watchlist registration, no forced candidate, no Google Sheets repair/write automation, no automatic trading/order/rebalancing, and no buy/sell directive.
+
 ### 2026-06-02 EVO-051 Project Reality Recovery
 
 - **Quote provider reality:** quote status and US diagnostics now expose Google Sheets GOOGLEFINANCE as formula read-back, not a real-time quote API. Anchor OK is shown separately from actual quote usable status.

@@ -207,6 +207,14 @@ export type ResearchCenterGenerateResponseBody = {
   generationFailedButFallbackUsed?: boolean;
   qualityMeta?: {
     researchCenter?: ResearchCenterQualityMeta;
+    reportDisplay?: {
+      mode: 'long_report';
+      targetChars: number;
+      previewChars: number;
+      fullReportAvailable: boolean;
+      longResponseFallbackUsed: boolean;
+      actionHint: string;
+    };
   };
   /** additive: 긴 리포트 본문 UI 요약·복사·후속 작업용 */
   longResponseFallback?: import('./longResponseFallback').LongResponseFallback;

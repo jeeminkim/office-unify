@@ -181,6 +181,24 @@ export function PortfolioDashboardClient() {
       quoteUsabilityStatus?: string;
       actionHint?: string;
     };
+    quoteProviderRouter?: {
+      primaryProvider?: string;
+      fallbackProvider?: string;
+      googleFinanceIsPrimaryRealtimeProvider?: boolean;
+      actionHint?: string;
+      writeAction?: false;
+      results?: Array<{
+        provider: string;
+        providerType: string;
+        priority: number;
+        configured: boolean;
+        used: boolean;
+        status?: string;
+        freshnessStatus: string;
+        failureReasons?: string[];
+        actionHint?: string;
+      }>;
+    };
     warnings?: string[];
     fx?: {
       ticker?: string;
@@ -749,6 +767,35 @@ export function PortfolioDashboardClient() {
           </p>
           {quoteStatus.quoteDiagnostics?.actionHint ? (
             <p className="mt-1 rounded border border-blue-200 bg-blue-50 px-2 py-1 text-blue-950">{quoteStatus.quoteDiagnostics.actionHint}</p>
+          ) : null}
+          {quoteStatus.quoteProviderRouter ? (
+            <div className="mt-2 rounded border border-indigo-200 bg-indigo-50 px-2 py-2 text-indigo-950">
+              <p className="font-semibold">Quote Provider Router</p>
+              <p className="mt-1">
+                primary {quoteStatus.quoteProviderRouter.primaryProvider ?? "unknown"} · fallback{" "}
+                {quoteStatus.quoteProviderRouter.fallbackProvider ?? "unknown"} · Google Sheets realtime{" "}
+                {quoteStatus.quoteProviderRouter.googleFinanceIsPrimaryRealtimeProvider ? "yes" : "no"}
+              </p>
+              {quoteStatus.quoteProviderRouter.actionHint ? (
+                <p className="mt-1">{quoteStatus.quoteProviderRouter.actionHint}</p>
+              ) : null}
+              <div className="mt-2 grid gap-1 md:grid-cols-2">
+                {(quoteStatus.quoteProviderRouter.results ?? []).map((provider) => (
+                  <div key={provider.provider} className="rounded border border-indigo-100 bg-white px-2 py-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium">{provider.provider}</span>
+                      <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px]">
+                        {provider.used ? "used" : provider.status ?? (provider.configured ? provider.freshnessStatus : "not_configured")}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-[11px] text-indigo-800">
+                      {provider.providerType} · priority {provider.priority}
+                      {(provider.failureReasons ?? []).length > 0 ? ` · ${(provider.failureReasons ?? []).join(", ")}` : ""}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
           ) : null}
           <p className="mt-1 text-slate-600">
             FX {quoteStatus.fx?.ticker ?? "CURRENCY:USDKRW"} · status {quoteStatus.fx?.status ?? "missing"} · raw {quoteStatus.fx?.rawPrice ?? "-"} · parsed{" "}

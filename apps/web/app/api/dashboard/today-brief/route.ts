@@ -370,10 +370,12 @@ export async function GET(req?: Request) {
         ...todayCandidates.userContextCandidates,
         ...todayCandidates.usMarketKrCandidates,
         ...todayCandidates.usDirectCandidates,
+        ...todayCandidates.discoveryCandidates,
       ],
     });
     const userContextWithSnapshot = [
       ...todayCandidates.userContextCandidates,
+      ...todayCandidates.discoveryCandidates,
       ...snapshotSeed.candidates,
     ];
 
@@ -1029,6 +1031,7 @@ export async function GET(req?: Request) {
           incompleteHoldingCount,
           userContextCount: userContextWithSnapshot.length,
           sectorSnapshotSeedCount: snapshotSeed.candidates.length,
+          discoveryUniverse: todayCandidates.discoveryUniverse,
           usMarketKrCount: todayCandidates.usMarketKrCandidates.length,
           usMarketDataAvailable: todayCandidates.usMarketSummary.available,
           highConfidenceCount: todayCandidates.confidenceCounts.high,

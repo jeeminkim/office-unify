@@ -8,6 +8,12 @@ DDL 적용 순서: `docs/sql/APPLY_ORDER.md`
 
 # Today Candidates (아침 관찰 후보)
 
+## EVO-051 Real Usability Recovery
+
+- `qualityMeta.todayCandidates.discoveryUniverse` is a read-only interest-based candidate universe. It is not a watchlist, never auto-registers symbols, and only resolved KR/US candidates enter the observation pool.
+- The KR 2 + US 1 deck contract remains diagnostic, not forced candidate generation. Missing US slots may report `us_quote_provider_not_configured`, `us_symbol_resolve_failed`, `us_quote_quality_low`, `insufficient_us_candidates`, `risk_queue_dominates`, or `repeat_suppression`.
+- Candidate copy should say observation/check/data/monitoring, not recommendation or buy/sell language.
+
 ## EVO-050 Candidate Deck Contract
 
 - Primary deck target is KR 2 + US 1. This is a display/composition contract, not forced candidate generation.

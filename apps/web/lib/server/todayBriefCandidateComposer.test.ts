@@ -102,7 +102,24 @@ describe("composeTodayBriefCandidates", () => {
       usSignalCandidateCount: 0,
     });
     expect(contract.krSlotFallbackReason).toBe("insufficient_kr_candidates");
+    expect(contract.usSlotFallbackReason).toBe("insufficient_us_candidates");
     expect(contract.deckContractStatus).toBe("degraded");
+  });
+
+  it("surfaces provider-not-configured as the US slot fallback reason", () => {
+    const diagnostic = {
+      ...usCandidate("us-provider"),
+      reasonDetails: ["provider_not_configured"],
+      displayMetrics: { candidateCardKind: "us_data_check" },
+    } as TodayStockCandidate;
+    const contract = buildCandidateDeckContractDiagnostics({
+      primaryDeck: [interest("kr1", 80), interest("kr2", 70)],
+      diagnosticCandidateCards: [diagnostic],
+      usPoolCount: 1,
+      usSignalCandidateCount: 0,
+    });
+    expect(contract.usSlotFallbackReason).toBe("us_quote_provider_not_configured");
+    expect(contract.usDiagnosticSlotPresent).toBe(true);
   });
 
   it("picks top2 interest and one sector ETF with display metrics", () => {

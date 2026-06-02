@@ -1,0 +1,158 @@
+import 'server-only';
+
+export type QuoteProviderName =
+  | 'google_sheets_googlefinance'
+  | 'manual_cache'
+  | 'external_us_quote_provider_stub'
+  | 'external_kr_quote_provider_stub'
+  | 'unavailable';
+
+export type QuoteFreshnessStatus = 'fresh' | 'delayed' | 'stale' | 'unknown' | 'unavailable';
+export type QuoteProviderStatus =
+  | 'ok'
+  | 'stale'
+  | 'delayed'
+  | 'partial'
+  | 'pending'
+  | 'failed'
+  | 'not_configured'
+  | 'unsupported';
+
+export type QuoteProviderRouterFailureReason =
+  | 'missing_symbol'
+  | 'invalid_symbol'
+  | 'missing_google_ticker'
+  | 'provider_not_configured'
+  | 'provider_timeout'
+  | 'formula_pending'
+  | 'readback_partial'
+  | 'quote_not_returned'
+  | 'quote_quality_low'
+  | 'stale_cache'
+  | 'market_closed'
+  | 'unsupported_exchange'
+  | 'mapping_missing'
+  | 'unknown';
+
+export type QuoteProviderResult = {
+  provider: QuoteProviderName;
+  providerType: 'cache' | 'external_stub' | 'formula_readback' | 'unavailable';
+  priority: number;
+  configured: boolean;
+  used: boolean;
+  status: QuoteProviderStatus;
+  freshnessStatus: QuoteFreshnessStatus;
+  failureReasons: QuoteProviderRouterFailureReason[];
+  actionHint: string;
+};
+
+export type QuoteProviderRouterSummary = {
+  primaryProvider: QuoteProviderName;
+  fallbackProvider: QuoteProviderName;
+  googleFinanceIsPrimaryRealtimeProvider: false;
+  results: QuoteProviderResult[];
+  actionHint: string;
+  writeAction: false;
+};
+
+function googleFinanceReasons(input: {
+  googleFinanceConfigured: boolean;
+  matchedQuoteCount?: number;
+  missingSymbols?: string[];
+  formulaPendingCount?: number;
+}): QuoteProviderRouterFailureReason[] {
+  const reasons: QuoteProviderRouterFailureReason[] = [];
+  if (!input.googleFinanceConfigured) reasons.push('provider_not_configured');
+  if ((input.formulaPendingCount ?? 0) > 0) reasons.push('formula_pending');
+  if ((input.missingSymbols?.length ?? 0) > 0) reasons.push('quote_not_returned', 'readback_partial');
+  if (input.googleFinanceConfigured && (input.matchedQuoteCount ?? 0) === 0) reasons.push('quote_not_returned');
+  return Array.from(new Set(reasons));
+}
+
+export function buildQuoteProviderRouterSummary(input: {
+  googleFinanceConfigured: boolean;
+  matchedQuoteCount?: number;
+  missingSymbols?: string[];
+  formulaPendingCount?: number;
+  manualCacheFresh?: boolean;
+}): QuoteProviderRouterSummary {
+  const manualCacheFresh = input.manualCacheFresh === true;
+  const googleReasons = googleFinanceReasons(input);
+  const googleUsed = input.googleFinanceConfigured && (input.matchedQuoteCount ?? 0) > 0;
+  const googlePartial = input.googleFinanceConfigured && (input.missingSymbols?.length ?? 0) > 0;
+  const primaryProvider: QuoteProviderName = manualCacheFresh ? 'manual_cache' : 'google_sheets_googlefinance';
+
+  const results: QuoteProviderResult[] = [
+    {
+      provider: 'manual_cache',
+      providerType: 'cache',
+      priority: 1,
+      configured: manualCacheFresh,
+      used: manualCacheFresh,
+      status: manualCacheFresh ? 'ok' : 'not_configured',
+      freshnessStatus: manualCacheFresh ? 'fresh' : 'unavailable',
+      failureReasons: manualCacheFresh ? [] : ['provider_not_configured'],
+      actionHint: manualCacheFresh
+        ? 'Fresh server cache is available for quote read-back.'
+        : 'No fresh server quote cache is configured in this release.',
+    },
+    {
+      provider: 'external_us_quote_provider_stub',
+      providerType: 'external_stub',
+      priority: 2,
+      configured: false,
+      used: false,
+      status: 'not_configured',
+      freshnessStatus: 'unavailable',
+      failureReasons: ['provider_not_configured'],
+      actionHint: 'US realtime provider is not configured yet; candidates must show this as a quote-provider limitation.',
+    },
+    {
+      provider: 'external_kr_quote_provider_stub',
+      providerType: 'external_stub',
+      priority: 3,
+      configured: false,
+      used: false,
+      status: 'not_configured',
+      freshnessStatus: 'unavailable',
+      failureReasons: ['provider_not_configured'],
+      actionHint: 'KR realtime provider is not configured yet; Google Sheets remains an ops read-back fallback.',
+    },
+    {
+      provider: 'google_sheets_googlefinance',
+      providerType: 'formula_readback',
+      priority: 4,
+      configured: input.googleFinanceConfigured,
+      used: !manualCacheFresh && googleUsed,
+      status: !input.googleFinanceConfigured
+        ? 'not_configured'
+        : (input.formulaPendingCount ?? 0) > 0
+          ? 'pending'
+          : googlePartial
+            ? 'partial'
+            : googleUsed
+              ? 'delayed'
+              : 'failed',
+      freshnessStatus: googleUsed ? 'delayed' : input.googleFinanceConfigured ? 'unknown' : 'unavailable',
+      failureReasons: googleReasons,
+      actionHint: input.googleFinanceConfigured
+        ? 'Google Sheets GOOGLEFINANCE is formula read-back fallback, not a realtime primary quote provider.'
+        : 'Google Sheets GOOGLEFINANCE is not configured.',
+    },
+  ];
+
+  const actionHint = manualCacheFresh
+    ? 'Quotes are using fresh cache first; Google Sheets is only a fallback.'
+    : googleUsed
+      ? 'Google Sheets read-back supplied usable quotes, but it is still delayed formula read-back.'
+      : 'No primary realtime quote provider is configured. Show provider_not_configured, mapping, and read-back reasons separately.';
+
+  return {
+    primaryProvider,
+    fallbackProvider: 'google_sheets_googlefinance',
+    googleFinanceIsPrimaryRealtimeProvider: false,
+    results,
+    actionHint,
+    writeAction: false,
+  };
+}

@@ -1,5 +1,11 @@
 # Google Finance / Sheets 설정
 
+## EVO-051 Quote Provider Router
+
+- Google Sheets GOOGLEFINANCE is a formula read-back fallback/ops layer, not the primary real-time quote provider.
+- `/api/portfolio/quotes/status` may expose `quoteProviderRouter` so UI can separate `provider_not_configured`, ticker mapping, formula pending, and read-back partial states.
+- If Google Finance anchors are OK but US candidates are missing, the next check is quote provider/router, ticker mapping, US discovery universe, and candidate queue policy, not repeated Sheets repair.
+
 ## 인증
 
 - **권장:** `GOOGLE_SERVICE_ACCOUNT_JSON` + `GOOGLE_SHEETS_SPREADSHEET_ID`

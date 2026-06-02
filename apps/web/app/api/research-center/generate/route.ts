@@ -649,10 +649,10 @@ export async function POST(req: Request) {
         editor: result.editor,
         deskIds: RESEARCH_DESK_IDS,
       });
-      const longResponseFallback = buildLongResponseFallback(combinedMarkdown, {
+      const longResponseFallback = combinedMarkdown.length > 12000 ? buildLongResponseFallback(combinedMarkdown, {
         actionHint:
           "응답이 길어 핵심만 표시합니다. 전문은 복사하거나 PB·위원회·Action Item 후속 작업으로 넘길 수 있습니다.",
-      });
+      }) : undefined;
       return NextResponse.json({
         ...result,
         ok: true,
@@ -664,7 +664,17 @@ export async function POST(req: Request) {
         ],
         reportHistory: reportHistoryOut,
         reportDiff: reportDiffOut,
-        qualityMeta: { researchCenter: qualityMeta },
+        qualityMeta: {
+          researchCenter: qualityMeta,
+          reportDisplay: {
+            mode: "long_report",
+            targetChars: 8000,
+            previewChars: 2000,
+            fullReportAvailable: Boolean(combinedMarkdown.trim()),
+            longResponseFallbackUsed: Boolean(longResponseFallback?.exceededLimit),
+            actionHint: "정상 보고서는 6,000~8,000자까지 본문을 보존합니다. 모바일에서는 preview 후 펼쳐볼 수 있습니다.",
+          },
+        },
         longResponseFallback,
         meta: buildGenerateMeta({
           body,
@@ -690,17 +700,27 @@ export async function POST(req: Request) {
       editor: result.editor,
       deskIds: RESEARCH_DESK_IDS,
     });
-    const longResponseFallback = buildLongResponseFallback(combinedMarkdown, {
+    const longResponseFallback = combinedMarkdown.length > 12000 ? buildLongResponseFallback(combinedMarkdown, {
       actionHint:
         "응답이 길어 핵심만 표시합니다. 전문은 복사하거나 PB·위원회·Action Item 후속 작업으로 넘길 수 있습니다.",
-    });
+    }) : undefined;
     return NextResponse.json({
       ...result,
       ok: true,
       requestId: qualityMeta.requestId,
       reportHistory: reportHistoryOut,
       reportDiff: reportDiffOut,
-      qualityMeta: { researchCenter: qualityMeta },
+      qualityMeta: {
+        researchCenter: qualityMeta,
+        reportDisplay: {
+          mode: "long_report",
+          targetChars: 8000,
+          previewChars: 2000,
+          fullReportAvailable: Boolean(combinedMarkdown.trim()),
+          longResponseFallbackUsed: Boolean(longResponseFallback?.exceededLimit),
+          actionHint: "정상 보고서는 6,000~8,000자까지 본문을 보존합니다. 모바일에서는 preview 후 펼쳐볼 수 있습니다.",
+        },
+      },
       longResponseFallback,
       meta: buildGenerateMeta({
         body,

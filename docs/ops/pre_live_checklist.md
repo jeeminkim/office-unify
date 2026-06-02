@@ -4,6 +4,10 @@
 
 ## EVO-051 Project Reality Recovery
 
+- [ ] Quote Provider Router shows Google Sheets as fallback formula read-back and separates provider_not_configured from mapping/read-back failures.
+- [ ] Smart Ticker Resolve returns read-only candidates with `writeAction: false`; filling a candidate is local-only until explicit watchlist add.
+- [ ] Discovery Universe diagnostics show generated/resolved/unresolved counts and do not auto-register watchlist rows.
+- [ ] Trend Analysis shows long report mode, full report expand, summary copy, and full-copy actions; normal responses are not forced into longResponseFallback.
 - [ ] Quote status explains Google Sheets `GOOGLEFINANCE` as formula read-back, not a real-time quote API.
 - [ ] Today Candidate shows the KR 2 + US 1 deck contract summary and visible diagnostic fallback when a slot is missing.
 - [ ] Naver Blog title/source-only extraction is `insufficient_source`; usable body extraction still produces a readable summary.

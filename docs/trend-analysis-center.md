@@ -1,5 +1,13 @@
 # 트렌드 분석 센터 (Trend Analysis Center)
 
+## EVO-051 Long Report Mode
+
+- Trend Analysis 기본 화면은 6,000~8,000자 내외의 읽을 만한 보고서 본문을 유지한다.
+- 모바일/초기 화면은 2,000자 preview를 먼저 보여주고 `전체 보고서 펼치기`로 전체 본문을 확인한다.
+- 복사 버튼은 `핵심 요약 복사`와 `전체 원문 복사`를 분리한다.
+- PB/위원회/Action Item 연결에는 compact summary를 쓰되, 정상 응답 본문을 longResponseFallback으로 강제 축약하지 않는다.
+- `longResponseFallback`은 과도 응답/보호용 degradation 상황에서만 사용한다.
+
 `/trend` 전용 기능입니다. 일반 페르소나 채팅 레지스트리·`routePolicy`의 legacy `trend_*` 토픽과 **별도**이며, API는 `POST /api/trend/generate` 로 고정합니다.
 
 ## 목적

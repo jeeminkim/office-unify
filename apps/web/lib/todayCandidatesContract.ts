@@ -354,7 +354,13 @@ export interface TodayBriefWithCandidatesResponse {
           | 'low_confidence_mapping'
           | 'us_signal_mapping_empty'
           | 'queue_policy_suppressed'
-          | 'no_us_pool';
+          | 'no_us_pool'
+          | 'us_quote_provider_not_configured'
+          | 'us_symbol_resolve_failed'
+          | 'us_quote_quality_low'
+          | 'insufficient_us_candidates'
+          | 'risk_queue_dominates'
+          | 'repeat_suppression';
         krSlotFallbackReason?: 'insufficient_kr_candidates';
         deckContractStatus: 'ok' | 'partial' | 'degraded';
         actionHint: string;
@@ -399,6 +405,19 @@ export interface TodayBriefWithCandidatesResponse {
         suppressedCount: number;
         primarySuppressedCount: number;
         policyVersion: string;
+      };
+      /** additive: read-only interest-based candidate universe; never auto-registers watchlist rows. */
+      discoveryUniverse?: {
+        status: 'ok' | 'partial' | 'empty' | 'degraded';
+        generatedCount: number;
+        resolvedCount: number;
+        unresolvedCount: number;
+        krCount: number;
+        usCount: number;
+        topThemes: string[];
+        unresolvedNames: string[];
+        actionHint: string;
+        writeAction: false;
       };
       /** additive: read-only 개인화 맥락 요약(점수·추천 강도 변경 없음) */
       personalization?: import('@office-unify/shared-types').PersonalizationContextSummary;

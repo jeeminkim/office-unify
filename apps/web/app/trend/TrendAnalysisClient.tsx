@@ -166,6 +166,7 @@ export function TrendAnalysisClient() {
   const [loadingStepIdx, setLoadingStepIdx] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<TrendAnalysisGenerateResponseBody | null>(null);
+  const [showFullReport, setShowFullReport] = useState(false);
 
   useEffect(() => {
     if (!loading) {
@@ -182,6 +183,12 @@ export function TrendAnalysisClient() {
     if (!result) return { markdown: "", blocked: false };
     return trendSanitizeReportMarkdownForUi(result.reportMarkdown);
   }, [result]);
+  const reportDisplayMeta = result?.qualityMeta?.reportDisplay;
+  const previewChars = reportDisplayMeta?.previewChars ?? 2000;
+  const previewMarkdown =
+    !showFullReport && reportDisplay.markdown.length > previewChars
+      ? `${reportDisplay.markdown.slice(0, previewChars).trimEnd()}\n\n...`
+      : reportDisplay.markdown;
 
   const trendLongFallback = result?.qualityMeta?.longResponseFallback ?? null;
 
@@ -240,6 +247,7 @@ export function TrendAnalysisClient() {
       const data = (await res.json()) as TrendAnalysisGenerateResponseBody & { error?: string };
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
       setResult(data);
+      setShowFullReport(false);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "생성 실패");
     } finally {
@@ -266,6 +274,10 @@ export function TrendAnalysisClient() {
   const copyMarkdown = async () => {
     if (!result?.reportMarkdown) return;
     await navigator.clipboard.writeText(result.reportMarkdown);
+  };
+  const copySummary = async () => {
+    if (!result?.summary) return;
+    await navigator.clipboard.writeText(result.summary);
   };
 
   return (
@@ -493,13 +505,22 @@ export function TrendAnalysisClient() {
                 ) : null}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={copyMarkdown}
-              className="rounded border border-slate-300 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
-            >
-              마크다운 복사
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={copySummary}
+                className="rounded border border-slate-300 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
+              >
+                핵심 요약 복사
+              </button>
+              <button
+                type="button"
+                onClick={copyMarkdown}
+                className="rounded border border-slate-300 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
+              >
+                전체 원문 복사
+              </button>
+            </div>
           </div>
 
           {result.qualityMeta?.finalizer?.degraded ? (
@@ -744,6 +765,31 @@ export function TrendAnalysisClient() {
               본문에 API/Gemini 원문 오류 패턴이 감지되어 화면에는 안전한 요약만 표시합니다. 전체 원문은 운영 로그를 참고하세요.
             </div>
           ) : null}
+          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-800">Trend Report 본문</h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  기본은 긴 보고서 모드입니다. 처음에는 {previewChars.toLocaleString("ko-KR")}자 preview를 보여주고 전체 본문을 펼칠 수 있습니다.
+                </p>
+              </div>
+              {reportDisplay.markdown.length > previewChars ? (
+                <button
+                  type="button"
+                  onClick={() => setShowFullReport((v) => !v)}
+                  className="rounded border border-slate-300 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
+                >
+                  {showFullReport ? "preview로 접기" : "전체 보고서 펼치기"}
+                </button>
+              ) : null}
+            </div>
+            {reportDisplayMeta?.actionHint ? (
+              <p className="mt-2 text-[11px] text-slate-500">{reportDisplayMeta.actionHint}</p>
+            ) : null}
+            <pre className="mt-3 max-h-[720px] overflow-auto whitespace-pre-wrap text-xs leading-relaxed text-slate-700">
+              {previewMarkdown}
+            </pre>
+          </div>
           <details className="rounded-lg border border-slate-200 bg-white p-4">
             <summary className="cursor-pointer text-sm font-semibold text-slate-800">원문 마크다운</summary>
             <pre className="mt-3 max-h-[480px] overflow-auto whitespace-pre-wrap text-xs text-slate-700">
