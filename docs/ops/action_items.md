@@ -113,3 +113,9 @@ US diagnostics bridge contract:
 
 - `ActionStepRunner`, `SaveToActionInboxButton`, and Action Item cards expose intent badges for user-visible actions. Reason-backed action steps should use the central action-step view model when a typed reason is available.
 - Disabled/manual-review states are terminal UI states until the user provides more information; they must not silently fill symbols, register watchlist rows, or create trading instructions.
+
+## EVO-061-3 Screen Copy Cleanup
+
+- Action step labels, copy/done states, and navigation labels must remain readable and intent-badged.
+- Selecting an action step is local-only; completion is saved only when the explicit completion control is used.
+- Copy, navigation, Action Inbox save, feedback update, and confirmed write states should remain visually distinct.

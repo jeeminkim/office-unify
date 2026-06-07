@@ -1,5 +1,11 @@
 # 투자위원회 턴제 토론 (committee-discussion)
 
+## EVO-061-3 Primary report and recovery cleanup
+
+- The six-section committee report remains the primary reading surface.
+- `structured_output_parse_failed`, `partial_recovery`, and `manual_review_required` should use central reason copy when shown to users.
+- Raw/debug/structured fields and partial recovery controls stay collapsed or secondary. They may support repair, copy, Action Inbox save, or navigation, but must not imply buy/sell or automatic portfolio action.
+
 ## EVO-061-2 Central recovery reasons
 
 - Committee warnings such as `structured_output_parse_failed`, `structured_output_partial`, `partial_recovery`, and `manual_review_required` should use `actionReasonContract` for user-facing labels and next actions.

@@ -1,5 +1,11 @@
 # Infographic Generator (MVP)
 
+## EVO-061-3 Insufficient-source UX cleanup
+
+- The primary insufficient-source UI should show central `sourceMeta.actionReason` copy before route-local failure text.
+- URL/title/metadata-only extraction should explain what was read, why it is insufficient, and the next available action: retry, edit extracted text, paste body, copy summary, or move a compact seed to Research Center.
+- Raw extractor codes and long source text remain debug/editor details; long text must not be sent through URL query strings or saved automatically.
+
 ## EVO-061-2 Central source-action reason
 
 - Source extraction responses may include `sourceMeta.actionReason`, derived from `actionReasonContract`, for `title_only`, `metadata_only`, `blocked_or_empty`, `too_short`, and `insufficient_source` states.

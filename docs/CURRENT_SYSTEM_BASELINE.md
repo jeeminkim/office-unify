@@ -1,5 +1,14 @@
 # Current System Baseline
 
+## EVO-061-3 Screen Contract Regression and Legacy Copy Cleanup
+
+- EVO-061-3 is a stabilization pass, not a new feature pass. It restores readable screen copy and contract-level regressions after central reason wide adoption.
+- Central reason/view-model copy should take precedence over local fallback copy whenever a typed `reasonCode` or `actionReason` exists.
+- Today Candidate must render the three `displaySlots` contract in a user-readable way: missing market slots are diagnostic/data-check/insufficient slots, not forced trade candidates.
+- Google Finance setup remains primary only for anchor, formula-pending, and read-back partial reasons. Provider, US feed, ticker, theme, queue, and shortage issues route elsewhere.
+- Committee keeps the six-section/report reading surface primary; recovery/debug details stay collapsed or secondary.
+- Major buttons must expose intent boundaries such as navigate-only, read-only, local-only, copy, disabled, save-to-inbox, or confirmed write.
+
 ## EVO-061-2 Central Reason Contract Wide Adoption
 
 - `actionReasonContract` now provides view-model helpers for user reason copy, primary action, diagnostic display slots, action steps, legacy string normalization, action hrefs, button intent badges, disabled reasons, and after-click expectations.

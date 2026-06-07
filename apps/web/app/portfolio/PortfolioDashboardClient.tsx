@@ -143,7 +143,7 @@ const QUOTE_REASON_COPY: Record<string, string> = {
 
 function quoteReasonLabel(reason: string): string {
   const code = resolveReasonCodeFromLegacyString(reason, "quote");
-  if (code === "unknown") return QUOTE_REASON_COPY[reason] ?? buildReasonViewModel(code, { fallbackLabelKo: reason }).shortLabelKo;
+  if (code === "unknown") return buildReasonViewModel(code, { fallbackLabelKo: reason }).shortLabelKo;
   return buildReasonViewModel(code).shortLabelKo;
 }
 

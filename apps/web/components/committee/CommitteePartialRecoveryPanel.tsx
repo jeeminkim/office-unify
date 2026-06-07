@@ -41,8 +41,27 @@ const jsonHeaders: HeadersInit = { "Content-Type": "application/json" };
 const FALLBACK_HINTS: Array<{ label: string; actionKey: CommitteeLineRegenerateActionKey }> = [
   { label: "복사", actionKey: "copy" },
   { label: "Action Item으로 저장", actionKey: "save_action_item" },
-  { label: "Research로 확인", actionKey: "open_research" },
+  { label: "Research에서 확인", actionKey: "open_research" },
 ];
+
+function cleanHintLabel(label: string, actionKey: CommitteeLineRegenerateActionKey): string {
+  switch (actionKey) {
+    case "apply_to_line":
+      return "화면 발언 교체";
+    case "copy":
+      return "복사";
+    case "save_action_item":
+      return "Action Item으로 저장";
+    case "open_research":
+      return "Research에서 확인";
+    case "open_journal":
+      return "Journal 열기";
+    case "open_retrospective":
+      return "복기 열기";
+    default:
+      return label;
+  }
+}
 
 export function CommitteePartialRecoveryPanel({
   lineIndex,
@@ -60,8 +79,7 @@ export function CommitteePartialRecoveryPanel({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [duplicateMessage, setDuplicateMessage] = useState<string | null>(null);
 
-  const isPartial =
-    line.outputQuality?.status === "partial" || line.outputQuality?.truncated === true;
+  const isPartial = line.outputQuality?.status === "partial" || line.outputQuality?.truncated === true;
 
   const pushLog = useCallback((actionKey: string, actionLabel: string, p: ActionPhase, nextHint?: string) => {
     setLogs((prev) =>
@@ -78,17 +96,18 @@ export function CommitteePartialRecoveryPanel({
   const runRegenerate = useCallback(
     async (mode: "repair_partial" | "short_retry" | "structured_only") => {
       const key = `regen-${line.slug}-${mode}`;
+      const actionLabel = mode === "structured_only" ? "핵심만 복구" : "이 발언 다시 생성";
       if (!lock.tryAcquire(key)) {
-        setDuplicateMessage("이미 재생성 요청이 처리 중입니다.");
+        setDuplicateMessage("이미 재생성 요청을 처리 중입니다.");
         return;
       }
       setDuplicateMessage(null);
       setPhase("clicked");
-      pushLog(key, mode === "structured_only" ? "핵심만 복구" : "이 발언 다시 생성", "clicked");
+      pushLog(key, actionLabel, "clicked");
       onStatusMessage?.("요청을 받았습니다.");
       setStatusMessage("요청을 받았습니다.");
       setPhase("running");
-      pushLog(key, "재생성", "running", "LLM 응답 대기 중");
+      pushLog(key, actionLabel, "running", "LLM 응답 대기 중");
       setStatusMessage("재생성 중입니다.");
       try {
         const res = await fetch("/api/committee-discussion/line/regenerate", {
@@ -111,13 +130,13 @@ export function CommitteePartialRecoveryPanel({
         }
         setPreview(data);
         setPhase("success");
-        pushLog(key, "재생성", "success", "미리보기 CTA를 확인하세요.");
+        pushLog(key, actionLabel, "success", "미리보기 CTA를 확인하세요.");
         setStatusMessage("재생성 미리보기가 준비되었습니다.");
         onStatusMessage?.(null);
       } catch (e: unknown) {
         setPhase("error");
         const msg = e instanceof Error ? e.message : "재생성 실패";
-        pushLog(key, "재생성", "error", msg);
+        pushLog(key, actionLabel, "error", msg);
         setStatusMessage(msg);
         onStatusMessage?.(msg);
       } finally {
@@ -135,7 +154,7 @@ export function CommitteePartialRecoveryPanel({
         <>
           <p className="font-semibold">중간에 끊긴 발언입니다.</p>
           <p className="mt-0.5 text-[11px]">
-            이 발언만 다시 생성하거나, 핵심 요약으로 복구할 수 있습니다. 적용 전까지 기존 발언은 유지됩니다.
+            이 발언만 다시 생성하거나 핵심 요약으로 복구할 수 있습니다. 적용 전까지 기존 발언은 유지됩니다.
           </p>
         </>
       ) : null}
@@ -146,7 +165,7 @@ export function CommitteePartialRecoveryPanel({
           disabled={phase === "running"}
           onClick={() => void runRegenerate("repair_partial")}
         >
-          {phase === "running" ? "재생성 중…" : "이 발언 다시 생성"}
+          {phase === "running" ? "재생성 중" : "이 발언 다시 생성"}
         </button>
         <button
           type="button"
@@ -162,7 +181,7 @@ export function CommitteePartialRecoveryPanel({
           onClick={async () => {
             try {
               await navigator.clipboard.writeText(line.content);
-              setStatusMessage("복사되었습니다.");
+              setStatusMessage("복사했습니다.");
             } catch {
               setStatusMessage("복사에 실패했습니다.");
             }
@@ -191,7 +210,7 @@ export function CommitteePartialRecoveryPanel({
           }}
           onApplied={() => {
             setPreview(null);
-            setStatusMessage("화면 발언을 교체했습니다. (DB 자동 저장 없음)");
+            setStatusMessage("화면 발언을 교체했습니다. DB 자동 저장은 없습니다.");
           }}
           onStatusMessage={setStatusMessage}
         />
@@ -260,12 +279,7 @@ function CommitteeRegeneratePreviewActions({
         content: preview.displayText,
         structuredOutput: preview.structuredOutput,
         outputQuality: {
-          status:
-            oq.status === "fallback"
-              ? "format_warning"
-              : oq.status === "partial"
-                ? "partial"
-                : "ok",
+          status: oq.status === "fallback" ? "format_warning" : oq.status === "partial" ? "partial" : "ok",
           truncated: oq.truncated,
           actionHint: undefined,
         },
@@ -276,7 +290,7 @@ function CommitteeRegeneratePreviewActions({
     if (actionKey === "copy") {
       try {
         await navigator.clipboard.writeText(preview.displayText);
-        onStatusMessage("복사되었습니다.");
+        onStatusMessage("복사했습니다.");
       } catch {
         onStatusMessage("복사에 실패했습니다.");
       }
@@ -285,11 +299,11 @@ function CommitteeRegeneratePreviewActions({
 
   return (
     <div className="mt-3 rounded border border-violet-200 bg-white p-2 text-slate-800">
-      <p className="text-[11px] font-semibold text-violet-900">재생성 미리보기 (저장 안 됨)</p>
+      <p className="text-[11px] font-semibold text-violet-900">재생성 미리보기 (저장 전)</p>
       <p className="mt-1 whitespace-pre-wrap text-[11px]">{previewDisplay.readable}</p>
       {previewDisplay.rawForDebug ? (
         <details className="mt-2 rounded border border-slate-200 bg-slate-50 p-2">
-          <summary className="cursor-pointer text-[10px] text-slate-600">원문/디버그 보기</summary>
+          <summary className="cursor-pointer text-[10px] text-slate-600">원문/debug 보기</summary>
           <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap text-[10px] text-slate-600">
             {previewDisplay.rawForDebug}
           </pre>
@@ -302,12 +316,13 @@ function CommitteeRegeneratePreviewActions({
       ) : null}
       <div className="mt-2 flex flex-wrap gap-2">
         {hints.map((h) => {
+          const label = cleanHintLabel(h.label, h.actionKey);
           if (h.actionKey === "save_action_item") {
             return (
               <SaveToActionInboxButton
                 key={h.actionKey}
                 compact
-                label={h.label}
+                label={label}
                 savedHint="Action Inbox에 저장됨"
                 request={{
                   title: `[위원회 복구] ${line.slug}: ${topic.slice(0, 60)}`,
@@ -324,21 +339,21 @@ function CommitteeRegeneratePreviewActions({
           if (h.actionKey === "open_research") {
             return (
               <Link key={h.actionKey} href={researchHref} className="rounded border border-slate-300 bg-white px-2 py-1 text-[11px]">
-                {h.label}
+                {label}
               </Link>
             );
           }
           if (h.actionKey === "open_journal") {
             return (
               <Link key={h.actionKey} href={journalHref} className="rounded border border-slate-300 bg-white px-2 py-1 text-[11px]">
-                {h.label}
+                {label}
               </Link>
             );
           }
           if (h.actionKey === "open_retrospective") {
             return (
               <Link key={h.actionKey} href={retroHref} className="rounded border border-slate-300 bg-white px-2 py-1 text-[11px]">
-                {h.label}
+                {label}
               </Link>
             );
           }
@@ -353,7 +368,7 @@ function CommitteeRegeneratePreviewActions({
               }
               onClick={() => void handleHint(h.actionKey)}
             >
-              {h.label}
+              {label}
             </button>
           );
         })}
@@ -361,7 +376,9 @@ function CommitteeRegeneratePreviewActions({
           취소
         </button>
       </div>
-      <p className="mt-1 text-[9px] text-slate-500">적용·복사는 클라이언트만. Action Item 저장은 명시 버튼만.</p>
+      <p className="mt-1 text-[9px] text-slate-500">
+        적용, 복사, 이동은 화면 동작입니다. Action Item 저장은 명시 버튼에서만 실행됩니다.
+      </p>
     </div>
   );
 }

@@ -1,5 +1,11 @@
 # Google Finance / Sheets 설정
 
+## EVO-061-3 Screen Copy Cleanup
+
+- Google Finance setup copy should come from the central reason contract when a typed reason exists.
+- Screen copy must not collapse provider, US feed, ticker, theme, queue, or insufficient-candidate issues into Google Finance setup.
+- Legacy/mojibake local copy is considered a regression on setup/status surfaces.
+
 ## EVO-061-2 Central Action Boundary
 
 - Quote, Today, Command Center, Portfolio, and Quote Provider UI should obtain Google Finance CTAs from `actionReasonContract`, not local string checks.

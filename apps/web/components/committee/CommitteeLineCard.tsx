@@ -6,6 +6,7 @@ import { LongResponseFallbackCard } from "@/components/LongResponseFallbackCard"
 import { CommitteePartialRecoveryPanel } from "@/components/committee/CommitteePartialRecoveryPanel";
 import { resolveLineDisplayContent, STRUCTURED_SECTION_LABELS } from "@/lib/committeeStructuredDisplay";
 import { humanizeCommitteeItems } from "@/lib/committeeHumanReadable";
+import { resolveActionReasonFromCommitteeWarning } from "@/lib/actionReasonContract";
 
 type Props = {
   lineIndex: number;
@@ -63,6 +64,17 @@ export function CommitteeLineCard({
 }: Props) {
   const [showRaw, setShowRaw] = useState(false);
   const { readable, rawForDebug, hasStructured } = resolveLineDisplayContent(line);
+  const outputQualityReasonCode =
+    line.outputQuality && "reasonCode" in line.outputQuality
+      ? String((line.outputQuality as { reasonCode?: unknown }).reasonCode ?? "")
+      : undefined;
+  const outputReason = line.outputQuality
+    ? resolveActionReasonFromCommitteeWarning({
+        code: outputQualityReasonCode,
+        status: line.outputQuality.status,
+        parseFailed: outputQualityReasonCode === "structured_output_parse_failed",
+      })
+    : null;
 
   return (
     <div className="border-b border-slate-100 pb-3 last:border-0">
@@ -72,20 +84,20 @@ export function CommitteeLineCard({
         </span>
         {line.outputQuality?.status === "partial" ? (
           <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-950">
-            일부 항목을 읽기 쉽게 보정했습니다
+            {outputReason?.userTitleKo ?? "일부 발언 복구 필요"}
           </span>
         ) : line.outputQuality?.status === "format_warning" ? (
           <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-900">
-            읽기 형식 보정
+            {outputReason?.userTitleKo ?? "출력 형식 보정"}
           </span>
         ) : line.outputQuality?.sanitizedPromptLeaks ? (
-          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">디버그 문구 정리됨</span>
+          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">debug 문구 정리됨</span>
         ) : null}
       </div>
-      {line.outputQuality?.actionHint ? (
+      {line.outputQuality?.actionHint || outputReason ? (
         <details className="mt-1 text-[10px] text-amber-900">
           <summary className="cursor-pointer">보정 안내</summary>
-          <p className="mt-1">{line.outputQuality.actionHint}</p>
+          <p className="mt-1">{outputReason?.actionHintKo ?? line.outputQuality?.actionHint}</p>
         </details>
       ) : null}
       <CommitteePartialRecoveryPanel
@@ -110,7 +122,7 @@ export function CommitteeLineCard({
             className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[10px] text-slate-600"
             onClick={() => setShowRaw((v) => !v)}
           >
-            {showRaw ? "원문/디버그 숨기기" : "원문/디버그 보기"}
+            {showRaw ? "원문/debug 숨기기" : "원문/debug 보기"}
           </button>
           {showRaw ? (
             <pre className="mt-1 max-h-48 overflow-auto rounded border border-slate-200 bg-slate-900 p-2 text-[10px] text-slate-100">

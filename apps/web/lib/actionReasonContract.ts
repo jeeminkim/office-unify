@@ -72,6 +72,196 @@ export const BUTTON_INTENT_LABELS: Record<ActionReasonIntent, string> = {
   disabled: '현재 조건에서는 사용할 수 없습니다.',
 };
 
+const CLEAN_NO_TRADE_GUARDRAIL =
+  '이 항목은 관찰 또는 진단입니다. 자동 매매, 자동 주문, 자동 리밸런싱은 실행하지 않습니다.';
+
+const CLEAN_BUTTON_INTENT_LABELS: Record<ActionReasonIntent, string> = {
+  navigate: '화면 이동만 합니다. 저장은 실행하지 않습니다.',
+  read_only_check: '상태만 확인합니다. 데이터는 변경하지 않습니다.',
+  confirmed_post: '확인 후 명시적 POST로만 실행합니다.',
+  action_inbox_save: 'Action Inbox에 작업으로 저장합니다.',
+  local_only: '현재 화면에서만 반영합니다.',
+  external_manual_check: '외부 화면에서 직접 확인합니다.',
+  copy: '내용을 복사합니다.',
+  disabled: '현재 조건에서는 사용할 수 없습니다.',
+};
+
+const CLEAN_REASON_COPY: Partial<
+  Record<
+    ActionReasonCode,
+    Pick<
+      ActionReasonContract,
+      'userTitleKo' | 'userMessageKo' | 'actionHintKo' | 'primaryActionLabelKo' | 'disabledReasonKo' | 'noTradeGuardrailKo'
+    >
+  >
+> = {
+  provider_not_configured: {
+    userTitleKo: '시세 provider 상태 확인 필요',
+    userMessageKo: '실시간 또는 준실시간 시세 provider가 설정되지 않았습니다. Google Sheets는 지연 read-back 보조 경로입니다.',
+    actionHintKo: '시세 provider 상태를 확인하고, Google Finance 설정 문제로 단정하지 마세요.',
+    primaryActionLabelKo: '시세 provider 상태 확인',
+    noTradeGuardrailKo: CLEAN_NO_TRADE_GUARDRAIL,
+  },
+  google_finance_anchor_missing: {
+    userTitleKo: 'Google Finance anchor 누락',
+    userMessageKo: 'Google Finance anchor 행이 없거나 설정되지 않았습니다. 이 경우에만 Google Finance 설정이 primary action입니다.',
+    actionHintKo: 'Google Finance 설정 화면에서 anchor와 formula 상태를 확인하세요.',
+    primaryActionLabelKo: 'Google Finance 설정',
+    noTradeGuardrailKo: CLEAN_NO_TRADE_GUARDRAIL,
+  },
+  google_finance_formula_pending: {
+    userTitleKo: 'Google Finance formula 계산 대기',
+    userMessageKo: 'Google Sheets 수식이 아직 계산 중입니다. 잠시 후 read-back 상태를 다시 확인하세요.',
+    actionHintKo: '후보를 강제로 만들지 말고 formula read-back을 재확인하세요.',
+    primaryActionLabelKo: '수식 read-back 확인',
+    noTradeGuardrailKo: CLEAN_NO_TRADE_GUARDRAIL,
+  },
+  google_finance_readback_partial: {
+    userTitleKo: 'Google Finance read-back 일부 누락',
+    userMessageKo: '일부 행은 read-back 되었지만 사용할 수 있는 시세 커버리지가 부족합니다.',
+    actionHintKo: 'Google Finance read-back과 ticker mapping을 함께 확인하세요.',
+    primaryActionLabelKo: 'read-back 상태 확인',
+    noTradeGuardrailKo: CLEAN_NO_TRADE_GUARDRAIL,
+  },
+  quote_rows_missing: {
+    userTitleKo: '시세 행 누락',
+    userMessageKo: 'portfolio quote 행이 부족합니다. 이미 사용할 수 있는 값은 유지하고 누락 또는 부분 행만 복구 대상으로 봅니다.',
+    actionHintKo: 'Quote Recovery에서 시세 상태를 확인하고 필요한 경우에만 명시적으로 refresh하세요.',
+    primaryActionLabelKo: '시세 상태 확인',
+    noTradeGuardrailKo: CLEAN_NO_TRADE_GUARDRAIL,
+  },
+  ticker_mapping_required: {
+    userTitleKo: 'ticker mapping 확인 필요',
+    userMessageKo: '종목 코드, US ticker, Google Finance ticker 중 일부가 없거나 모호합니다.',
+    actionHintKo: 'Ticker resolver에서 코드와 googleTicker를 확인하세요.',
+    primaryActionLabelKo: 'ticker resolver 확인',
+    noTradeGuardrailKo: CLEAN_NO_TRADE_GUARDRAIL,
+  },
+  invalid_symbol: {
+    userTitleKo: '잘못된 symbol',
+    userMessageKo: 'symbol 형식이 유효하지 않습니다. refresh 전에 종목 코드나 US ticker를 확인하세요.',
+    actionHintKo: '6자리 국내 코드 또는 올바른 US ticker를 입력하세요.',
+    primaryActionLabelKo: 'symbol 수정',
+    noTradeGuardrailKo: CLEAN_NO_TRADE_GUARDRAIL,
+  },
+  missing_google_ticker: {
+    userTitleKo: 'Google ticker 누락',
+    userMessageKo: 'Google Finance ticker가 없어 quote read-back이 불완전할 수 있습니다.',
+    actionHintKo: 'Smart resolve 또는 ticker resolver로 googleTicker를 채우세요.',
+    primaryActionLabelKo: 'ticker 채우기',
+    noTradeGuardrailKo: CLEAN_NO_TRADE_GUARDRAIL,
+  },
+  us_market_feed_missing: {
+    userTitleKo: 'US market feed 없음',
+    userMessageKo: '미국 시장 feed가 비어 있어 US 후보를 만들 수 없습니다. Google Finance 설정 문제가 아닐 수 있습니다.',
+    actionHintKo: 'US market feed 상태를 먼저 확인하세요.',
+    primaryActionLabelKo: 'US market feed 확인',
+    noTradeGuardrailKo: CLEAN_NO_TRADE_GUARDRAIL,
+  },
+  us_signal_mapping_empty: {
+    userTitleKo: 'US signal mapping 비어 있음',
+    userMessageKo: 'US 신호는 있지만 국내 후보나 관심종목 후보로 연결되지 않았습니다.',
+    actionHintKo: 'Watchlist sector/theme, Sector Radar mapping, US-KR theme registry를 확인하세요.',
+    primaryActionLabelKo: 'US mapping 진단',
+    noTradeGuardrailKo: CLEAN_NO_TRADE_GUARDRAIL,
+  },
+  theme_mapping_required: {
+    userTitleKo: '관심종목 theme mapping 필요',
+    userMessageKo: '관심종목 sector/theme mapping이 없거나 약해 후보 연결을 제한합니다.',
+    actionHintKo: '관심종목의 sector/theme 태그를 확인하세요.',
+    primaryActionLabelKo: 'theme mapping 확인',
+    noTradeGuardrailKo: CLEAN_NO_TRADE_GUARDRAIL,
+  },
+  queue_policy_suppressed: {
+    userTitleKo: '후보 운영 정책으로 보류',
+    userMessageKo: '후보가 있었지만 반복 노출, 리스크 리뷰, 데이터 품질 이유로 primary deck에서 보류되었습니다.',
+    actionHintKo: '후보 운영 상태와 diagnostic slot을 확인하세요.',
+    primaryActionLabelKo: '후보 운영 상태 보기',
+    noTradeGuardrailKo: CLEAN_NO_TRADE_GUARDRAIL,
+  },
+  discovery_universe_empty: {
+    userTitleKo: 'Discovery universe 부족',
+    userMessageKo: 'read-only discovery에서 충분히 resolve된 후보를 찾지 못했습니다.',
+    actionHintKo: '관심 theme와 resolver coverage를 확인하세요.',
+    primaryActionLabelKo: 'discovery 상태 확인',
+    noTradeGuardrailKo: CLEAN_NO_TRADE_GUARDRAIL,
+  },
+  insufficient_candidates: {
+    userTitleKo: '후보 부족',
+    userMessageKo: '현재 관찰 기준을 통과한 후보가 부족합니다. 후보를 강제로 만들지 않습니다.',
+    actionHintKo: '부족 사유를 data-check slot에서 확인하세요.',
+    primaryActionLabelKo: '후보 부족 사유 보기',
+    noTradeGuardrailKo: CLEAN_NO_TRADE_GUARDRAIL,
+  },
+  insufficient_source: {
+    userTitleKo: '본문 부족',
+    userMessageKo: 'URL에서 infographic draft를 만들 만큼 충분한 본문을 읽지 못했습니다.',
+    actionHintKo: '본문을 붙여넣거나 추출된 텍스트를 편집한 뒤 다시 생성하세요.',
+    primaryActionLabelKo: '본문 붙여넣기',
+  },
+  source_title_only: {
+    userTitleKo: '제목만 추출됨',
+    userMessageKo: 'URL에서 제목 또는 최소 정보만 확인했습니다. 성공한 본문 추출로 보지 않습니다.',
+    actionHintKo: '본문을 직접 붙여넣거나 다른 URL로 시도하세요.',
+    primaryActionLabelKo: '본문 붙여넣기',
+  },
+  source_metadata_only: {
+    userTitleKo: '메타데이터만 추출됨',
+    userMessageKo: 'URL에서 source, title, metadata만 확인했습니다.',
+    actionHintKo: '본문 텍스트를 붙여넣어 summary-first fallback을 사용하세요.',
+    primaryActionLabelKo: '본문 붙여넣기',
+  },
+  source_blocked_or_empty: {
+    userTitleKo: '소스 차단 또는 빈 본문',
+    userMessageKo: 'URL 접근이 차단되었거나 본문이 비어 있습니다.',
+    actionHintKo: '외부 페이지에서 본문을 직접 확인한 뒤 붙여넣으세요.',
+    primaryActionLabelKo: '외부에서 본문 확인',
+  },
+  structured_output_partial: {
+    userTitleKo: '일부 발언 복구 필요',
+    userMessageKo: '위원 발언 일부가 손상되어 핵심만 복구해 표시합니다.',
+    actionHintKo: '부분 복구 또는 지금 재생성을 사용하세요. 저장은 명시 버튼에서만 실행합니다.',
+    primaryActionLabelKo: '부분 복구',
+    noTradeGuardrailKo: CLEAN_NO_TRADE_GUARDRAIL,
+  },
+  structured_output_parse_failed: {
+    userTitleKo: '구조화 출력 해석 실패',
+    userMessageKo: '모델 출력 형식이 손상되어 읽을 수 있는 요약을 표시합니다.',
+    actionHintKo: '핵심 요약을 확인하고 필요하면 발언을 다시 생성하세요.',
+    primaryActionLabelKo: '핵심 요약 확인',
+    noTradeGuardrailKo: CLEAN_NO_TRADE_GUARDRAIL,
+  },
+  partial_recovery: {
+    userTitleKo: '부분 복구',
+    userMessageKo: '일부 출력만 복구했습니다. 기본 UI에는 snake_case나 raw JSON을 직접 노출하지 않습니다.',
+    actionHintKo: '복구 preview를 확인하고 필요한 경우에만 Action Inbox에 저장하세요.',
+    primaryActionLabelKo: '복구 preview 보기',
+    noTradeGuardrailKo: CLEAN_NO_TRADE_GUARDRAIL,
+  },
+  manual_review_required: {
+    userTitleKo: '수동 확인 필요',
+    userMessageKo: '자동으로 확정하기에는 근거가 부족합니다. 코드를 직접 확인해야 합니다.',
+    actionHintKo: 'UNKNOWN/manual_review 후보는 폼 자동 채우기를 비활성화합니다.',
+    primaryActionLabelKo: '수동 확인 필요',
+    disabledReasonKo: '수동 확인 전에는 local fill을 사용할 수 없습니다.',
+    noTradeGuardrailKo: CLEAN_NO_TRADE_GUARDRAIL,
+  },
+  ambiguous_name: {
+    userTitleKo: '여러 후보가 있습니다',
+    userMessageKo: '입력한 이름이 여러 종목과 매칭됩니다.',
+    actionHintKo: '시장, 6자리 코드, US ticker 중 하나를 확인해 후보를 좁히세요.',
+    primaryActionLabelKo: '후보 직접 선택',
+    noTradeGuardrailKo: CLEAN_NO_TRADE_GUARDRAIL,
+  },
+  unknown: {
+    userTitleKo: '원인 분류 필요',
+    userMessageKo: '아직 이 문제의 원인을 분류하지 못했습니다.',
+    actionHintKo: '관련 진단 화면에서 상태를 다시 확인하세요.',
+    primaryActionLabelKo: '진단 확인',
+    noTradeGuardrailKo: CLEAN_NO_TRADE_GUARDRAIL,
+  },
+};
+
 const CONTRACTS: Record<ActionReasonCode, ActionReasonContract> = {
   provider_not_configured: {
     code: 'provider_not_configured',
@@ -488,7 +678,12 @@ export function getActionReasonContract(
   overrides: Partial<ActionReasonContract> = {},
 ): ActionReasonContract {
   const key = isActionReasonCode(code) ? code : 'unknown';
-  return { ...CONTRACTS[key], ...overrides, code: overrides.code ?? CONTRACTS[key].code };
+  return {
+    ...CONTRACTS[key],
+    ...CLEAN_REASON_COPY[key],
+    ...overrides,
+    code: overrides.code ?? CONTRACTS[key].code,
+  };
 }
 
 export function isActionReasonCode(code: unknown): code is ActionReasonCode {
@@ -589,7 +784,7 @@ export function getPrimaryActionForReason(code: ActionReasonCode | string | unde
 }
 
 export function getButtonIntentLabel(intent: ActionReasonIntent): string {
-  return BUTTON_INTENT_LABELS[intent];
+  return CLEAN_BUTTON_INTENT_LABELS[intent];
 }
 
 export function assertReasonHasUsableAction(reason: ActionReasonContract): boolean {
@@ -712,7 +907,9 @@ export function resolveReasonCodeFromLegacyString(
     v.includes('googlefinance_no_data') ||
     v.includes('price_not_numeric') ||
     v.includes('row_empty') ||
-    v.includes('parse_failed')
+    v.includes('parse_failed') ||
+    v.includes('quote_quality_low') ||
+    v.includes('stale_cache')
   ) {
     return 'quote_rows_missing';
   }

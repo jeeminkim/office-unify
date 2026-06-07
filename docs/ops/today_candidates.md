@@ -8,6 +8,12 @@ DDL 적용 순서: `docs/sql/APPLY_ORDER.md`
 
 # Today Candidates (아침 관찰 후보)
 
+## EVO-061-3 Screen contract cleanup
+
+- Dashboard rendering should prefer `displaySlots` over the raw candidate deck when slot diagnostics are present.
+- If a slot has `reasonCode`, central reason/view-model title, action hint, primary action label, and intent badge take precedence over local copy.
+- Missing US/KR slots must explain the reason and show `isTradeCandidate: false`; they must not imply buy/sell, order, rebalance, watchlist registration, or forced candidate creation.
+
 ## EVO-061-2 Central reason adoption
 
 - `displaySlots[].reasonCode` should be interpreted through `apps/web/lib/actionReasonContract.ts` before rendering slot intent or next-action copy.

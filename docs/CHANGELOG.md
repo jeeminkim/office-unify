@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### 2026-06-08 EVO-061-3 Screen Contract Regression and Legacy Copy Cleanup
+
+- **Screen contract cleanup:** cleaned central reason copy and high-risk screen labels so typed reason/view-model output wins over legacy local copy.
+- **Today 3-slot UI:** preserved the KR 2 + US 1 screen contract, shows missing slots as diagnostic/data-check slots, and keeps `isTradeCandidate: false` visible.
+- **Committee and action buttons:** restored readable partial-recovery, debug, copy, save, done, and navigation labels while keeping recovery/debug secondary to the primary report.
+- **Verification:** targeted contract tests and `npm.cmd run typecheck --workspace=apps/web` are the intended verification scope. Full test, lint, build, and pre-live smoke are intentionally out of scope.
+- **Guardrails:** no SQL, no schema change, no GET write, no auto Sheets repair/write, no auto watchlist registration, no forced trade candidate, no trading/order/rebalancing, and no buy/sell directive.
+
 ### 2026-06-08 EVO-061-2 Central Reason Contract Wide Adoption
 
 - **View-model helpers:** `actionReasonContract` now exports reusable reason, primary-action, diagnostic-slot, action-step, legacy-string normalization, href, button-intent, disabled-state, and after-click expectation helpers.

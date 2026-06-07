@@ -80,7 +80,7 @@ function StepActions({
             void Promise.resolve(onStepDone(step.stepId)).finally(() => onBusy(null));
           }}
         >
-          {busy ? "저장 중…" : done ? "완료됨" : "완료"}
+          {busy ? "저장 중" : done ? "완료됨" : "완료"}
         </button>
       ) : null}
     </div>
@@ -117,7 +117,7 @@ function StepRow({
   return (
     <li className={`rounded border bg-white p-2 text-[10px] ${done ? "opacity-70" : ""}`}>
       <button type="button" className="w-full text-left font-medium text-slate-800" onClick={onSelect}>
-        {done ? "✓ " : ""}
+        {done ? "완료 · " : ""}
         {step.label}
       </button>
       {selected ? (
@@ -159,7 +159,7 @@ export function ActionStepRunner({ actionItemId, detail, onStepDone, compact, ti
     const text = buildActionStepCopyText({ symbol: detail.symbol, name: detail.name, step, detail });
     try {
       await navigator.clipboard.writeText(text);
-      setCopyHint(`「${step.label}」복사됨`);
+      setCopyHint(`"${step.label}" 내용을 복사했습니다.`);
     } catch {
       setCopyHint("복사 실패");
     }
@@ -182,7 +182,7 @@ export function ActionStepRunner({ actionItemId, detail, onStepDone, compact, ti
         {onStepDone ? <ActionIntentBadge intent="feedback_update" compact /> : null}
       </div>
       <p className="text-[9px] text-slate-500">
-        가장 궁금한 항목부터 선택하세요. 선택만으로 저장되지 않습니다. 완료를 누를 때만 상태가 저장됩니다.
+        가능한 근거 확인 항목을 선택하세요. 선택만으로 저장되지 않습니다. 완료를 누를 때만 상태가 저장됩니다.
       </p>
       <ul className="mt-2 space-y-2">
         {visibleRunnable.map((step) => (
@@ -220,7 +220,7 @@ export function ActionStepRunner({ actionItemId, detail, onStepDone, compact, ti
           </ul>
         </div>
       ) : null}
-      {copyHint ? <p className="mt-1 text-[9px] text-slate-600">{copyHint}</p> : null}
+      {copyHint ? <p className="mt-2 text-[10px] text-slate-600">{copyHint}</p> : null}
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import type { CandidateDisplaySlot } from "@office-unify/shared-types";
 import { ActionIntentBadge } from "@/app/components/ActionIntentBadge";
-import { buildDiagnosticDisplaySlotFromReason } from "@/lib/actionReasonContract";
+import { buildDiagnosticDisplaySlotFromReason, type DiagnosticDisplaySlotViewModel } from "@/lib/actionReasonContract";
 
 type Props = {
   children: ReactNode;
@@ -46,9 +46,17 @@ function kindLabel(kind: CandidateDisplaySlot["kind"]): string {
   }
 }
 
-function slotActionIntent(slot: CandidateDisplaySlot): "local_only" | "read_only_check" | "navigate_only" | "disabled" | "external_manual_check" | "copy_only" | "confirmed_write" | "feedback_update" | "save_to_inbox" | "save_note" {
+function centralSlotView(slot: CandidateDisplaySlot): DiagnosticDisplaySlotViewModel | null {
+  return slot.reasonCode
+    ? buildDiagnosticDisplaySlotFromReason(slot.reasonCode, { title: slot.title, subtitle: slot.subtitle })
+    : null;
+}
+
+function slotActionIntent(
+  slot: CandidateDisplaySlot,
+): "local_only" | "read_only_check" | "navigate_only" | "disabled" | "external_manual_check" | "copy_only" | "confirmed_write" | "feedback_update" | "save_to_inbox" | "save_note" {
   if (!slot.reasonCode) return slot.primaryAction === "none" ? "local_only" : "read_only_check";
-  return buildDiagnosticDisplaySlotFromReason(slot.reasonCode, { title: slot.title, subtitle: slot.subtitle }).actionIntent;
+  return centralSlotView(slot)?.actionIntent ?? "read_only_check";
 }
 
 /** Dashboard section framing only; candidate/diagnostic slots are computed on the server. */
@@ -80,36 +88,44 @@ export function TodayCandidatesSection({ children, deckContract, displaySlots }:
           </p>
           {filledUs < targetUs ? (
             <p className="mt-1 text-[10px] text-violet-900">
-              미국 후보 슬롯을 채우지 못했습니다. 후보를 강제로 만들지 않고 typed diagnostic slot으로 원인과 다음 버튼을 표시합니다.
+              미국 후보 슬롯을 채우지 못했습니다. 후보를 강제로 만들지 않고 typed diagnostic slot으로 원인과 다음 행동을 표시합니다.
             </p>
           ) : null}
           {filledKr < targetKr ? (
             <p className="mt-1 text-[10px] text-violet-900">
-              국내 후보 슬롯도 목표보다 적습니다. 후보를 강제로 만들지 않고 data-check slot으로 대체합니다.
+              국내 후보 슬롯이 목표보다 적으면 후보를 강제로 만들지 않고 data-check slot으로 대체합니다.
             </p>
           ) : null}
           {slots.length > 0 ? (
             <div className="mt-2 grid gap-1 md:grid-cols-3">
-              {slots.map((slot) => (
-                <div key={slot.slotId} className="rounded border border-violet-100 bg-violet-50/70 px-2 py-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-medium">{slot.title}</p>
-                    <span className="shrink-0 rounded bg-white px-1.5 py-0.5 text-[9px] text-violet-800">
-                      {kindLabel(slot.kind)}
-                    </span>
+              {slots.map((slot) => {
+                const central = centralSlotView(slot);
+                const title = central?.title ?? slot.title;
+                const subtitle = central?.subtitle ?? slot.subtitle;
+                const reasonLabel = central?.reasonLabelKo ?? slot.reasonLabelKo;
+                const actionHint = central?.actionHintKo ?? slot.actionHintKo;
+                const actionLabel = central?.primaryActionLabelKo ?? slot.primaryActionLabelKo;
+                return (
+                  <div key={slot.slotId} className="rounded border border-violet-100 bg-violet-50/70 px-2 py-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-medium">{title}</p>
+                      <span className="shrink-0 rounded bg-white px-1.5 py-0.5 text-[9px] text-violet-800">
+                        {kindLabel(slot.kind)}
+                      </span>
+                    </div>
+                    {subtitle ? <p className="mt-0.5 text-[10px] text-violet-900">{subtitle}</p> : null}
+                    <p className="mt-1 text-[10px] text-violet-800">
+                      {reasonLabel} · {actionHint}
+                    </p>
+                    <p className="mt-0.5 text-[9px] text-violet-700">
+                      action: {actionLabel} · trade candidate: {String(slot.isTradeCandidate)}
+                    </p>
+                    <div className="mt-1">
+                      <ActionIntentBadge intent={slotActionIntent(slot)} compact />
+                    </div>
                   </div>
-                  {slot.subtitle ? <p className="mt-0.5 text-[10px] text-violet-900">{slot.subtitle}</p> : null}
-                  <p className="mt-1 text-[10px] text-violet-800">
-                    {slot.reasonLabelKo} · {slot.actionHintKo}
-                  </p>
-                  <p className="mt-0.5 text-[9px] text-violet-700">
-                    action: {slot.primaryActionLabelKo} · trade candidate: {String(slot.isTradeCandidate)}
-                  </p>
-                  <div className="mt-1">
-                    <ActionIntentBadge intent={slotActionIntent(slot)} compact />
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : null}
         </div>

@@ -34,6 +34,16 @@ export function isAbortLikeInfographicError(message: string): boolean {
 export function formatFriendlyInfographicError(input: FriendlyInfographicError | undefined, fallback: string): string {
   const reason = input?.sourceMeta?.actionReason;
   const base = reason?.userMessageKo || input?.error || fallback;
+  if (!reason && isAbortLikeInfographicError(base)) {
+    const request = input?.requestId ? ` 요청 ID: ${input.requestId}` : '';
+    return [
+      'URL 분석 시간이 초과되었습니다.',
+      '본문 추출은 실패했지만 URL을 Research Center로 보내거나 본문을 직접 붙여넣어 계속할 수 있습니다.',
+      request,
+    ]
+      .filter(Boolean)
+      .join(' ');
+  }
   const safeBase = isAbortLikeInfographicError(base) ? 'URL 분석 시간이 초과되었습니다.' : base;
   const hint =
     reason?.actionHintKo ??

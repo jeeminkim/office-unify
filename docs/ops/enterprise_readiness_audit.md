@@ -8,6 +8,8 @@ Follow-up note: EVO-061 starts the first-pass implementation of the audit recomm
 
 EVO-061-2 follow-up: central reason/action mapping now includes reusable UI view models for hrefs, intent badges, diagnostic slots, action steps, disabled states, after-click expectations, and legacy-string normalization. Command Center, Portfolio quote labels, Quote Provider action copy, and Today slot intent badges are early wide-adoption paths.
 
+EVO-061-3 follow-up: stabilization focused on screen contracts and legacy copy cleanup. The central reason copy is now the preferred user-facing source, Today 3-slot diagnostics remain readable, Committee recovery/debug stays secondary, and intent badges remain visible on high-risk buttons.
+
 ## 1. Executive Summary
 
 The current office-unify system is no longer a toy dashboard. It sits between Level 2 and Level 3:

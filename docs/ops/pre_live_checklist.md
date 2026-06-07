@@ -2,6 +2,14 @@
 
 배포·실사용 전에 아래를 순서에 맞게 확인합니다. 이 앱은 **관찰·복기·데이터 점검**용이며 **자동매매·자동 주문·자동 리밸런싱**은 없습니다.
 
+## EVO-061-3 Screen Contract Regression and Legacy Copy Cleanup
+
+- [ ] Central reason copy renders readable user-facing Korean for quote, Today, infographic, committee, and smart resolve reasons.
+- [ ] Today section shows the KR 2 + US 1 contract, missing-slot reason/action hint, intent badge, and `isTradeCandidate: false`.
+- [ ] Infographic insufficient source states prefer `sourceMeta.actionReason` and show paste/edit/retry/copy/research paths only when the action exists.
+- [ ] Committee primary report remains the reading surface; partial recovery, raw/debug, and structured fields stay secondary.
+- [ ] Major buttons show intent boundaries and do not imply auto Sheets repair, auto watchlist write, trade, order, rebalance, or buy/sell direction.
+
 ## EVO-061-2 Central Reason Contract Wide Adoption
 
 - [ ] `actionReasonContract` helper tests pass for reason, primary action, diagnostic slot, action step, legacy-string normalization, and unknown snake_case formatting.
