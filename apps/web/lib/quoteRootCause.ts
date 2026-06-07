@@ -1,4 +1,5 @@
 import type { QuoteRootCauseCode } from '@office-unify/shared-types';
+import { getActionReasonContract } from '@/lib/actionReasonContract';
 
 export type QuoteRootCausePrimaryAction =
   | 'quote_recovery'
@@ -225,7 +226,55 @@ const ROOT_CAUSES: Record<QuoteRootCauseCode, QuoteRootCause> = {
 };
 
 export function quoteRootCauseByCode(code: QuoteRootCauseCode | undefined): QuoteRootCause {
-  return ROOT_CAUSES[code ?? 'unknown'] ?? ROOT_CAUSES.unknown;
+  const fallback = ROOT_CAUSES[code ?? 'unknown'] ?? ROOT_CAUSES.unknown;
+  const contract = getActionReasonContract(code);
+  return {
+    ...fallback,
+    userTitleKo: contract.userTitleKo,
+    userMessageKo: contract.userMessageKo,
+    primaryAction: quotePrimaryActionFromContract(contract.primaryActionKey, fallback.primaryAction),
+    primaryActionLabelKo: contract.primaryActionLabelKo,
+    secondaryActions: contract.secondaryActionKeys
+      .map((key) => quotePrimaryActionFromContract(key, undefined))
+      .filter((action): action is QuoteRootCausePrimaryAction => Boolean(action)),
+    isGoogleFinanceProblem: Boolean(contract.isGoogleFinanceProblem),
+    isQuoteUsabilityProblem: Boolean(contract.isQuoteUsabilityProblem),
+    isMappingProblem: Boolean(contract.isMappingProblem),
+    isCandidateProblem: contract.domain === 'today_candidate' || contract.domain === 'us_diagnostics',
+    severity: contract.severity,
+  };
+}
+
+function quotePrimaryActionFromContract(
+  actionKey: string,
+  fallback: QuoteRootCausePrimaryAction | undefined,
+): QuoteRootCausePrimaryAction {
+  switch (actionKey) {
+    case 'quote_recovery':
+      return 'quote_recovery';
+    case 'quote_provider_status':
+    case 'quote_status_check':
+    case 'us_market_feed_check':
+      return actionKey === 'us_market_feed_check' ? 'quote_recovery' : 'quote_status_check';
+    case 'google_finance_setup':
+    case 'google_finance_readback_check':
+      return 'google_finance_setup';
+    case 'ticker_resolver':
+    case 'fix_symbol':
+      return 'ticker_resolver';
+    case 'us_mapping_diagnosis':
+      return 'us_mapping_diagnosis';
+    case 'theme_mapping_check':
+      return 'theme_mapping_check';
+    case 'discovery_universe_check':
+      return 'discovery_universe_check';
+    case 'candidate_queue_review':
+    case 'candidate_shortage_review':
+    case 'diagnostic_review':
+      return 'none';
+    default:
+      return fallback ?? 'none';
+  }
 }
 
 export function selectQuoteRootCause(input: {
@@ -243,23 +292,23 @@ export function selectQuoteRootCause(input: {
   discoveryUniverseEmpty?: boolean;
   insufficientCandidates?: boolean;
 }): QuoteRootCause {
-  if (input.usMarketDataMissing) return ROOT_CAUSES.us_market_feed_missing;
-  if (input.usSignalMappingEmpty) return ROOT_CAUSES.us_signal_mapping_empty;
-  if (input.themeMappingRequired) return ROOT_CAUSES.theme_mapping_required;
-  if (input.quoteUsabilityStatus === 'failed') return ROOT_CAUSES.quote_rows_missing;
-  if ((input.rowsInvalidTicker ?? 0) > 0) return ROOT_CAUSES.invalid_symbol;
-  if ((input.rowsMissingGoogleTicker ?? 0) > 0) return ROOT_CAUSES.missing_google_ticker;
-  if (input.quoteUsabilityStatus === 'mapping_required') return ROOT_CAUSES.ticker_mapping_required;
-  if (input.googleFinanceConfigured === false) return ROOT_CAUSES.google_finance_anchor_missing;
+  if (input.usMarketDataMissing) return quoteRootCauseByCode('us_market_feed_missing');
+  if (input.usSignalMappingEmpty) return quoteRootCauseByCode('us_signal_mapping_empty');
+  if (input.themeMappingRequired) return quoteRootCauseByCode('theme_mapping_required');
+  if (input.quoteUsabilityStatus === 'failed') return quoteRootCauseByCode('quote_rows_missing');
+  if ((input.rowsInvalidTicker ?? 0) > 0) return quoteRootCauseByCode('invalid_symbol');
+  if ((input.rowsMissingGoogleTicker ?? 0) > 0) return quoteRootCauseByCode('missing_google_ticker');
+  if (input.quoteUsabilityStatus === 'mapping_required') return quoteRootCauseByCode('ticker_mapping_required');
+  if (input.googleFinanceConfigured === false) return quoteRootCauseByCode('google_finance_anchor_missing');
   if ((input.formulaPendingCount ?? 0) > 0 || input.quoteUsabilityStatus === 'formula_pending') {
-    return ROOT_CAUSES.google_finance_formula_pending;
+    return quoteRootCauseByCode('google_finance_formula_pending');
   }
   if (input.quoteUsabilityStatus === 'partial' || (input.missingSymbolCount ?? 0) > 0) {
-    return ROOT_CAUSES.google_finance_readback_partial;
+    return quoteRootCauseByCode('google_finance_readback_partial');
   }
-  if ((input.matchedQuoteCount ?? 0) === 0) return ROOT_CAUSES.quote_rows_missing;
-  if (input.queuePolicySuppressed) return ROOT_CAUSES.queue_policy_suppressed;
-  if (input.discoveryUniverseEmpty) return ROOT_CAUSES.discovery_universe_empty;
-  if (input.insufficientCandidates) return ROOT_CAUSES.insufficient_candidates;
-  return ROOT_CAUSES.unknown;
+  if ((input.matchedQuoteCount ?? 0) === 0) return quoteRootCauseByCode('quote_rows_missing');
+  if (input.queuePolicySuppressed) return quoteRootCauseByCode('queue_policy_suppressed');
+  if (input.discoveryUniverseEmpty) return quoteRootCauseByCode('discovery_universe_empty');
+  if (input.insufficientCandidates) return quoteRootCauseByCode('insufficient_candidates');
+  return quoteRootCauseByCode('unknown');
 }

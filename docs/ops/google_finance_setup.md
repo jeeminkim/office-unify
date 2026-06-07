@@ -1,5 +1,10 @@
 # Google Finance / Sheets 설정
 
+## EVO-061-2 Central Action Boundary
+
+- Quote, Today, Command Center, Portfolio, and Quote Provider UI should obtain Google Finance CTAs from `actionReasonContract`, not local string checks.
+- Central action mapping preserves the boundary: only anchor missing, formula pending, and read-back partial states should navigate to Google Finance setup as primary. US feed, provider, ticker, theme, queue, and insufficient-candidate reasons must point elsewhere.
+
 ## EVO-055 Root-Cause CTA Boundary
 
 - Google Finance setup is primary only for `google_finance_anchor_missing`, `google_finance_formula_pending`, and `google_finance_readback_partial`.
@@ -129,3 +134,9 @@ npm run google-finance-repair --workspace=apps/web -- --confirm --wait
 - Google Sheets `GOOGLEFINANCE` is a formula read-back provider, not a real-time quote API. Calculation delay, empty cells, mapping gaps, and cache staleness are expected failure modes.
 - `/api/portfolio/quotes/status` exposes provider capability separately from quote usability. Anchor OK does not guarantee actual portfolio or Today Candidate quote usability.
 - Repair/write remains limited to existing explicit confirmation paths. Status checks and diagnostics are read-only.
+# EVO-061 Central Reason & Action Contract
+
+- Google Finance setup is primary only for anchor missing, formula pending, or read-back partial states.
+- Provider not configured, US market feed missing, US signal mapping empty, ticker mapping required, theme mapping required, queue suppression, and insufficient candidates must not default to Google Finance setup.
+- Quote/Today/Command Center surfaces should use the central reason/action contract so the same root cause shows the same message and primary action.
+- No automatic Sheets repair/write runs from diagnostics; confirmed repair paths remain separate.

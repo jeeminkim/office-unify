@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { ActionItemDetailJson, ActionItemStep } from "@office-unify/shared-types";
+import { ActionIntentBadge } from "@/app/components/ActionIntentBadge";
 import { buildActionStepsFromDetail } from "@/lib/actionSteps";
 import { buildActionStepCopyText, buildActionStepSeedLinks, persistActionStepSeedForNavigation } from "@/lib/actionStepLinks";
 
@@ -174,6 +175,12 @@ export function ActionStepRunner({ actionItemId, detail, onStepDone, compact, ti
   return (
     <div className={compact ? "mt-2" : "mt-3 rounded border border-violet-100 bg-violet-50/40 p-2"}>
       <p className="text-[10px] font-semibold text-violet-900">{title ?? "다음 실행 단계"}</p>
+      <div className="mt-1 flex flex-wrap gap-1">
+        <ActionIntentBadge intent="navigate_only" compact />
+        <ActionIntentBadge intent="local_only" compact />
+        <ActionIntentBadge intent="copy_only" compact />
+        {onStepDone ? <ActionIntentBadge intent="feedback_update" compact /> : null}
+      </div>
       <p className="text-[9px] text-slate-500">
         가장 궁금한 항목부터 선택하세요. 선택만으로 저장되지 않습니다. 완료를 누를 때만 상태가 저장됩니다.
       </p>

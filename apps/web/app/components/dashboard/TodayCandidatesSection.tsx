@@ -2,6 +2,8 @@
 
 import type { ReactNode } from "react";
 import type { CandidateDisplaySlot } from "@office-unify/shared-types";
+import { ActionIntentBadge } from "@/app/components/ActionIntentBadge";
+import { buildDiagnosticDisplaySlotFromReason } from "@/lib/actionReasonContract";
 
 type Props = {
   children: ReactNode;
@@ -42,6 +44,11 @@ function kindLabel(kind: CandidateDisplaySlot["kind"]): string {
     default:
       return "Slot";
   }
+}
+
+function slotActionIntent(slot: CandidateDisplaySlot): "local_only" | "read_only_check" | "navigate_only" | "disabled" | "external_manual_check" | "copy_only" | "confirmed_write" | "feedback_update" | "save_to_inbox" | "save_note" {
+  if (!slot.reasonCode) return slot.primaryAction === "none" ? "local_only" : "read_only_check";
+  return buildDiagnosticDisplaySlotFromReason(slot.reasonCode, { title: slot.title, subtitle: slot.subtitle }).actionIntent;
 }
 
 /** Dashboard section framing only; candidate/diagnostic slots are computed on the server. */
@@ -98,6 +105,9 @@ export function TodayCandidatesSection({ children, deckContract, displaySlots }:
                   <p className="mt-0.5 text-[9px] text-violet-700">
                     action: {slot.primaryActionLabelKo} · trade candidate: {String(slot.isTradeCandidate)}
                   </p>
+                  <div className="mt-1">
+                    <ActionIntentBadge intent={slotActionIntent(slot)} compact />
+                  </div>
                 </div>
               ))}
             </div>

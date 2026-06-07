@@ -1,5 +1,10 @@
 # Infographic Generator (MVP)
 
+## EVO-061-2 Central source-action reason
+
+- Source extraction responses may include `sourceMeta.actionReason`, derived from `actionReasonContract`, for `title_only`, `metadata_only`, `blocked_or_empty`, `too_short`, and `insufficient_source` states.
+- The client should prefer central `userMessageKo`, `actionHintKo`, and `primaryActionLabelKo` over route-local failure copy. These actions remain local paste/edit/retry/copy/manual-check flows, not automatic save/write.
+
 ## EVO-051 Source Extraction Contract
 
 - URL extraction is not successful when the result is only a title, source label, or URL metadata. That state is `insufficient_source` and asks for pasted body text.
@@ -274,3 +279,9 @@
 - 빈 차트/`데이터 없음` 박스가 기본 화면에 노출되지 않는지 확인
 - PNG 저장 결과가 export 레이아웃 기준으로 정상 저장되는지 확인
 
+# EVO-061 Central Reason & Action Contract
+
+- Source extraction reasons map into the central contract: `title_only` -> `source_title_only`, `metadata_only` -> `source_metadata_only`, `blocked_or_empty` -> `source_blocked_or_empty`, and short/manual-paste states -> `insufficient_source`.
+- Primary UI should show user-safe title/message/action hint from the central contract. Raw codes stay in debug/details only.
+- Valid primary actions are retry extraction, edit extracted text, paste body text, copy readable summary, or send a compact Research Center seed.
+- A title/source-only extraction is not a successful infographic draft.

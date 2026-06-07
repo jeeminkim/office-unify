@@ -9,6 +9,11 @@ import { analyzeActionItemDetailCompleteness } from '@/lib/actionItemDetailCompl
 import type { TodayStockCandidate } from '@/lib/todayCandidatesContract';
 import { isRiskReviewCandidateClient } from '@/lib/todayCandidateUiCopy';
 import type { ActionIntent } from '@/lib/actionIntentContract';
+import {
+  buildPrimaryActionViewModel,
+  buildReasonViewModel,
+  resolveReasonCodeFromLegacyString,
+} from '@/lib/actionReasonContract';
 import { quoteRootCauseByCode } from '@/lib/quoteRootCause';
 import type { QuoteRootCauseCode } from '@office-unify/shared-types';
 
@@ -103,6 +108,15 @@ function quoteRootCauseCta(message?: string): {
   reason: string;
   expectation: string;
 } {
+  const centralCode = resolveReasonCodeFromLegacyString(message, 'quote');
+  const centralReason = buildReasonViewModel(centralCode, { fallbackLabelKo: message });
+  const centralAction = buildPrimaryActionViewModel(centralCode);
+  return {
+    label: centralAction.labelKo,
+    href: centralAction.href ?? '/portfolio',
+    reason: centralReason.messageKo,
+    expectation: centralAction.afterClickExpectationKo,
+  };
   const m = (message ?? '').toLowerCase();
   const code: QuoteRootCauseCode =
     m.includes('sheets_anchor_zero') || m.includes('anchor 0') || m.includes('google finance anchor')

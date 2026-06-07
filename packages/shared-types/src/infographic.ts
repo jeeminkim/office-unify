@@ -149,6 +149,17 @@ export type InfographicSourceMeta = {
   sourceExtractionStatus?: 'usable' | 'insufficient_source';
   sourceQualityReason?: string;
   extractedTextLength?: number;
+  actionReason?: InfographicActionReasonSummary;
+};
+
+export type InfographicActionReasonSummary = {
+  code: string;
+  userTitleKo: string;
+  userMessageKo: string;
+  actionHintKo: string;
+  primaryActionKey: string;
+  primaryActionLabelKo: string;
+  primaryIntent: string;
 };
 
 export type InfographicSpec = {
@@ -201,6 +212,7 @@ export type InfographicExtractSourceTextResponseBody = {
     sourceExtractionQuality?: SourceExtractionQuality;
     sourceExtractionStatus?: 'usable' | 'insufficient_source';
     sourceQualityReason?: string;
+    actionReason?: InfographicActionReasonSummary;
     extractedTextLength: number;
     rawExtractedTextLength: number;
     cleanedTextLength: number;

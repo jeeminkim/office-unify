@@ -1,5 +1,7 @@
 import 'server-only';
 
+import type { ActionReasonCode } from '@/lib/actionReasonContract';
+import { buildReasonViewModel, getActionReasonContract } from '@/lib/actionReasonContract';
 import { selectQuoteRootCause, type QuoteRootCause } from '@/lib/quoteRootCause';
 
 export type QuoteProviderName =
@@ -47,6 +49,16 @@ export type QuoteProviderPrimaryAction =
   | 'quote_provider_status_check'
   | 'ticker_mapping_check'
   | 'wait_for_formula_readback';
+
+const QUOTE_PROVIDER_ACTION_REASON: Record<QuoteProviderPrimaryAction, ActionReasonCode> = {
+  google_finance_setup: 'google_finance_anchor_missing',
+  quote_status_check: 'quote_rows_missing',
+  us_market_feed_check: 'us_market_feed_missing',
+  theme_mapping_check: 'theme_mapping_required',
+  quote_provider_status_check: 'provider_not_configured',
+  ticker_mapping_check: 'ticker_mapping_required',
+  wait_for_formula_readback: 'google_finance_formula_pending',
+};
 
 export type QuoteProviderResult = {
   provider: QuoteProviderName;
@@ -238,6 +250,8 @@ function selectPrimaryAction(input: {
 }
 
 function normalizedPrimaryActionCopy(action: QuoteProviderPrimaryAction): { label: string; message: string } {
+  const reason = getActionReasonContract(QUOTE_PROVIDER_ACTION_REASON[action]);
+  return { label: reason.primaryActionLabelKo, message: reason.userMessageKo };
   switch (action) {
     case 'google_finance_setup':
       return {
@@ -279,6 +293,8 @@ function normalizedPrimaryActionCopy(action: QuoteProviderPrimaryAction): { labe
 }
 
 export function primaryActionCopy(action: QuoteProviderPrimaryAction): { label: string; message: string } {
+  const reason = buildReasonViewModel(QUOTE_PROVIDER_ACTION_REASON[action]);
+  return { label: getActionReasonContract(reason.code).primaryActionLabelKo, message: reason.messageKo };
   switch (action) {
     case 'google_finance_setup':
       return {

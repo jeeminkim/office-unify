@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### 2026-06-08 EVO-061-2 Central Reason Contract Wide Adoption
+
+- **View-model helpers:** `actionReasonContract` now exports reusable reason, primary-action, diagnostic-slot, action-step, legacy-string normalization, href, button-intent, disabled-state, and after-click expectation helpers.
+- **Quote/Command Center/Portfolio adoption:** Command Center degraded data blockers and Portfolio quote failure labels now resolve legacy/root-cause strings through the central contract instead of local CTA/copy maps.
+- **Today/Quote provider adoption:** Today diagnostic slot button intent and Quote Provider primary action copy now derive from central reason actions, keeping US feed, mapping, provider, and Google Finance issues separated.
+- **Targeted verification:** `npm.cmd run test --workspace=apps/web -- --run actionReason actionIntent quoteRootCause todayCandidate infographic committee smartResolve actionItem` passed with 32 files / 150 tests.
+- **Guardrails:** no commit, no SQL, no schema change, no GET write, no `.env`/secret read, no `.next-dev*` staging, no full lint/build/typecheck, no Sheets repair/write auto-run, no forced candidate, no watchlist auto-registration, no trading/order/rebalancing, and no buy/sell directive.
+
+### 2026-06-08 EVO-061 Central Reason & Action Contract Mapper
+
+- **Central reason/action contract:** added `apps/web/lib/actionReasonContract.ts` so quote, Today/US diagnostics, infographic source extraction, committee recovery, smart resolve, and button intent copy can begin sharing one user message and one primary action per reason.
+- **Google Finance CTA truth:** Google Finance setup remains primary only for anchor missing, formula pending, and read-back partial states. Provider, US feed, mapping, queue, and insufficient-candidate issues route to their own diagnostics.
+- **Source and committee reason copy:** infographic insufficient-source states now carry central user-facing action reason metadata, and committee snake_case/internal artifacts are humanized before default UI display.
+- **Button intent truth:** expanded action intents with copy/disabled states and surfaced intent badges on key Action and Today slot surfaces.
+- **Guardrails:** no SQL, no GET write, no forced candidate generation, no watchlist auto-registration, no Google Sheets repair/write auto-run, no trading/order/rebalancing, and no buy/sell directive.
+
 ### 2026-06-05 EVO-055 Quote and Today Truth Consolidation
 
 - **Quote root-cause truth:** added a shared typed root-cause mapper so quote status, Google Finance setup, Today diagnostics, and Command Center can separate Google Finance anchor/formula/read-back problems from provider, ticker mapping, US feed, theme mapping, queue, and insufficient-candidate causes.

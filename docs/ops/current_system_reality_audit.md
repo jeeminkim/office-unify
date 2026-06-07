@@ -4,6 +4,10 @@ Date: 2026-06-05
 Scope: EVO-054 audit only.
 Mode: Documentation-only. No code edits, no tests, no commits, no Sheets writes.
 
+EVO-061 follow-up: the highest-friction issue from this audit, fragmented reason/action truth, now has a first-pass central mapper in `apps/web/lib/actionReasonContract.ts`. Quote, Today/US diagnostics, infographic source extraction, committee recovery, smart resolve, action item, and button intent surfaces should gradually converge on this contract.
+
+EVO-061-2 follow-up: the mapper now includes UI view models for primary actions, diagnostic slots, action steps, hrefs, intent badges, disabled states, after-click expectations, and legacy-string normalization. Command Center, Portfolio quote reason labels, Quote Provider primary action copy, and Today slot intent badges have begun using those helpers.
+
 ## 1. Executive Summary
 
 The current system has moved in the right direction: most risky flows now expose `writeAction`, read-only diagnostics, no-trade caveats, degraded states, and explicit recovery routes. The problem is no longer "there is no contract." The problem is that the contracts are split across many files, pages, runbooks, UI copy blocks, and docs. That split makes the user experience feel less reliable than the underlying implementation.

@@ -1,5 +1,11 @@
 # 로드맵 백로그 (scratchpad)
 
+## EVO-061-2 Central Reason Contract Wide Adoption
+
+- Shipped central reason view-model helpers for primary actions, diagnostic slots, action steps, legacy-string normalization, hrefs, intent badges, and after-click expectations.
+- Extended adoption into Command Center, Portfolio quote reason labels, Quote Provider primary action copy, and Today slot intent badges.
+- Remaining backlog: continue replacing route-local/user-copy fallbacks where typed reason metadata is unavailable, without changing write boundaries.
+
 ## EVO-055 Quote and Today Truth Consolidation
 
 - Shipped a typed quote root-cause contract used by quote provider routing and Command Center CTA selection.
@@ -155,3 +161,9 @@
 - US Mapping Bridge diagnostics links Google Finance anchor healthy US signal / mapping / gating gaps to Sector Radar, Watchlist sector/theme, and the US→KR registry.
 - Exact scope: after Google Finance is healthy, US Mapping Bridge diagnostics checks Sector Radar, Watchlist sector/theme, and the US→KR registry.
 - Read-only diagnosis only: 신규 SQL 없음, 관심종목 자동 등록 없음, 매수/매도 지시 아님, 자동매매/자동주문/자동 리밸런싱 없음. Theme-connections bridge failures degrade as warnings without removing the core theme map.
+# EVO-061 Central Reason & Action Contract Mapper
+
+- Status: first-pass implemented.
+- Purpose: same reason -> same user message -> same primary action across Quote, Today Candidate, US diagnostics, Infographic, Committee, Smart Resolve, Action Items, Dashboard, and Portfolio surfaces.
+- Follow-up backlog: expand adoption to every high-risk button, remove remaining local copy maps, add golden tests for screen-level button truth, and migrate Action Item detail builders into smaller source-specific modules.
+- Guardrails: no SQL, no GET write, no forced candidates, no auto watchlist registration, no trading/order/rebalance.

@@ -10,6 +10,7 @@ import {
 import { normalizeInfographicForRender } from '@/lib/server/infographicNormalize';
 import { resolveInfographicSourceText } from '@/lib/server/infographicSourceExtract';
 import { buildReadableInfographicFallbackSpec } from '@/lib/server/infographicReadableFallback';
+import { resolveActionReasonFromSourceExtraction } from '@/lib/actionReasonContract';
 
 function requestId(): string {
   return `info-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -117,6 +118,20 @@ export async function POST(req: Request) {
       pdfUrl: parsed.value.pdfUrl,
       pdfFile: bodyRecord.pdfFile instanceof File ? bodyRecord.pdfFile : undefined,
     });
+    const sourceActionReason = resolveActionReasonFromSourceExtraction({
+      sourceQualityReason: sourceResolved.sourceQualityReason,
+      sourceExtractionQuality: sourceResolved.sourceExtractionQuality,
+      sourceExtractionStatus: sourceResolved.sourceExtractionStatus,
+    });
+    const sourceActionReasonSummary = {
+      code: sourceActionReason.code,
+      userTitleKo: sourceActionReason.userTitleKo,
+      userMessageKo: sourceActionReason.userMessageKo,
+      actionHintKo: sourceActionReason.actionHintKo,
+      primaryActionKey: sourceActionReason.primaryActionKey,
+      primaryActionLabelKo: sourceActionReason.primaryActionLabelKo,
+      primaryIntent: sourceActionReason.primaryIntent,
+    };
     if (sourceResolved.sourceExtractionStatus !== 'usable') {
       return NextResponse.json(
         {
@@ -134,6 +149,7 @@ export async function POST(req: Request) {
             sourceExtractionQuality: sourceResolved.sourceExtractionQuality,
             sourceExtractionStatus: sourceResolved.sourceExtractionStatus,
             sourceQualityReason: sourceResolved.sourceQualityReason,
+            actionReason: sourceActionReasonSummary,
             extractedTextLength: sourceResolved.cleanedTextLength,
           },
         },
@@ -164,6 +180,7 @@ export async function POST(req: Request) {
       sourceExtractionQuality: sourceResolved.sourceExtractionQuality,
       sourceExtractionStatus: sourceResolved.sourceExtractionStatus,
       sourceQualityReason: sourceResolved.sourceQualityReason,
+      actionReason: sourceActionReasonSummary,
     };
     const validationErrors = validateInfographicSpec(normalized);
     const warnings = [...(extracted.warnings ?? []), ...validationErrors, ...sourceResolved.extractionWarnings];

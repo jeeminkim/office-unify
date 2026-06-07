@@ -102,3 +102,14 @@ US diagnostics bridge contract:
 | `us_diagnostics` | high | yes | yes | yes | yes | n/a | yes | yes |
 | `judgment_review` | medium | bridge-ready | yes | yes | yes | yes | yes | fallback |
 | `long_response_fallback` | high | yes | yes | yes | yes | partial | yes | yes |
+# EVO-061 Central Reason & Action Contract
+
+- Action Item surfaces should prefer central reason/action copy for repeated guardrails and next actions.
+- Button intent truth is explicit: navigation, read-only check, confirmed write/POST, Action Inbox save, local-only state, external manual check, copy, or disabled.
+- Action Item detail enrichment must keep existing `detail_json` fields and avoid raw full-text persistence.
+- Guardrail copy remains non-executable: no buy/sell directive, no automatic order, no automatic rebalancing.
+
+## EVO-061-2 Wide Adoption Note
+
+- `ActionStepRunner`, `SaveToActionInboxButton`, and Action Item cards expose intent badges for user-visible actions. Reason-backed action steps should use the central action-step view model when a typed reason is available.
+- Disabled/manual-review states are terminal UI states until the user provides more information; they must not silently fill symbols, register watchlist rows, or create trading instructions.

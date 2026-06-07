@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { resolveActionReasonFromSmartResolve } from '@/lib/actionReasonContract';
 import { normalizeKoreanGoogleTicker, normalizeUsGoogleTicker } from '@/lib/server/quotePipelineDiagnostics';
 
 export type WatchlistResolveFailureCode =
@@ -51,6 +52,8 @@ export type WatchlistResolveCandidate = {
   }>;
   warnings?: string[];
   actionHint?: string;
+  disabledReasonKo?: string;
+  actionReasonCode?: string;
 };
 
 export type WatchlistResolveAmbiguityStatus =
@@ -238,6 +241,11 @@ function toCandidate(
   label: string,
 ): WatchlistResolveCandidate {
   const manual = item.symbol === 'UNKNOWN';
+  const actionReason = resolveActionReasonFromSmartResolve({
+    symbol: item.symbol,
+    matchType,
+    confidence,
+  });
   return {
     symbol: item.symbol,
     name: item.name,
@@ -259,6 +267,8 @@ function toCandidate(
     matchType,
     sourceRefs: [{ source, label }],
     warnings: manual ? ['manual_ticker_mapping_required', 'no_auto_watchlist_registration'] : undefined,
+    disabledReasonKo: actionReason.primaryIntent === 'disabled' ? actionReason.disabledReasonKo : undefined,
+    actionReasonCode: actionReason.code,
     actionHint: manual
       ? '등록 후보입니다. 정확한 6자리 코드 또는 ticker를 확인한 뒤 사용자가 명시 버튼으로만 등록하세요.'
       : '등록 후보입니다. 폼 채우기는 local state만 바꾸며, 관심종목 추가는 사용자가 명시 버튼을 눌렀을 때만 진행됩니다.',

@@ -2,6 +2,14 @@
 
 배포·실사용 전에 아래를 순서에 맞게 확인합니다. 이 앱은 **관찰·복기·데이터 점검**용이며 **자동매매·자동 주문·자동 리밸런싱**은 없습니다.
 
+## EVO-061-2 Central Reason Contract Wide Adoption
+
+- [ ] `actionReasonContract` helper tests pass for reason, primary action, diagnostic slot, action step, legacy-string normalization, and unknown snake_case formatting.
+- [ ] Command Center and Portfolio quote views do not use local reason labels when a typed/legacy reason can be resolved centrally.
+- [ ] Quote Provider Router primary action copy separates Google Finance setup from provider, US feed, ticker, and theme issues.
+- [ ] Today diagnostic slot intent badges come from central reason action where `reasonCode` exists.
+- [ ] No full lint/build/typecheck is required for this targeted check; no commit should be created by EVO-061-2.
+
 ## EVO-055 Quote and Today Truth Consolidation
 
 - [ ] Quote root-cause mapper returns typed reasons and does not treat every degraded state as Google Finance setup.
@@ -321,3 +329,11 @@ npm run pre-live-smoke --workspace=apps/web
 - [ ] Today Candidate header reads as an observation/check queue; risk cards are labeled `리스크 점검`, repeated exposure is visible, and reviewed risk candidates do not re-enter the main deck silently.
 - [ ] Infographic URL extraction never shows raw `This operation was aborted`; it shows timeout/degraded guidance, requestId, paste fallback, and Research Center continuation.
 - [ ] No SQL, no GET write, no Google Sheets repair/write, no automatic registration/trading/order/rebalancing, no buy/sell directive, and explicit save only.
+# EVO-061 Reason/Action Contract Checks
+
+- Confirm quote degraded states do not all route to Google Finance setup.
+- Confirm Today display slots show typed reason, action hint, and `isTradeCandidate: false`.
+- Confirm infographic insufficient-source cards show central user message/action hint and keep raw codes in debug/details only.
+- Confirm committee primary UI humanizes snake_case/internal artifacts.
+- Confirm high-risk buttons expose one of: navigate, read-only check, confirmed write/POST, Action Inbox save, local-only, external manual check, copy, or disabled.
+- Confirm no SQL, GET write, forced candidate generation, automatic watchlist registration, automatic trading/order/rebalance, or buy/sell directive was introduced.

@@ -8,6 +8,12 @@ DDL 적용 순서: `docs/sql/APPLY_ORDER.md`
 
 # Today Candidates (아침 관찰 후보)
 
+## EVO-061-2 Central reason adoption
+
+- `displaySlots[].reasonCode` should be interpreted through `apps/web/lib/actionReasonContract.ts` before rendering slot intent or next-action copy.
+- Missing US/KR diagnostic slots remain observation/data-check cards only. The central action model may link to system status, sector radar, portfolio ledger, portfolio quote status, or Google Finance setup depending on the exact reason.
+- Google Finance setup is not the default for all US shortages; only anchor, formula-pending, or read-back partial reasons should use it as the primary action.
+
 ## EVO-055 Typed 3-Slot Display Contract
 
 - `qualityMeta.todayCandidates.displaySlots` is the screen contract: exactly three slots are returned for Dashboard display.
@@ -413,3 +419,9 @@ where user_key = :user_key
 - The Today Candidate UI must show the KR 2 + US 1 target, filled slot counts, and `ok | partial | degraded` deck contract status.
 - If no US candidate is selected, a US diagnostic slot must explain the reason (`quote_quality_low`, `low_confidence_mapping`, `us_signal_mapping_empty`, `queue_policy_suppressed`, or `no_us_pool`) without forcing a candidate.
 - Queue diagnostics are explanation and triage only: no buy/sell directive, no forced candidate generation, no automatic trading/order/rebalancing, and no GET write.
+# EVO-061 Central Reason & Action Contract
+
+- Today Candidate missing slots should use typed reason codes first: `displaySlot.reasonCode`, `deckContract.usSlotFallbackReason`, US diagnostics gating reason, or quote root cause.
+- Display slots use the central reason/action contract for title, message, action hint, primary action key, and primary label.
+- Diagnostic, data-check, and insufficient slots remain `isTradeCandidate: false`; they are observation/data-check slots, not recommendations.
+- US missing reasons should distinguish feed, mapping, ticker, queue, discovery, and insufficient-candidate causes rather than routing everything to Google Finance setup.

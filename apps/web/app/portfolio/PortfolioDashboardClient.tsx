@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { QuoteRecoveryRunbookResponse } from "@office-unify/shared-types";
 import { OpsFeedbackButton } from "@/components/OpsFeedbackButton";
 import { PortfolioRoleBanner } from "@/components/PortfolioRoleBanner";
+import { buildReasonViewModel, resolveReasonCodeFromLegacyString } from "@/lib/actionReasonContract";
 
 type SummaryResponse = {
   ok: boolean;
@@ -141,7 +142,9 @@ const QUOTE_REASON_COPY: Record<string, string> = {
 };
 
 function quoteReasonLabel(reason: string): string {
-  return QUOTE_REASON_COPY[reason] ?? reason;
+  const code = resolveReasonCodeFromLegacyString(reason, "quote");
+  if (code === "unknown") return QUOTE_REASON_COPY[reason] ?? buildReasonViewModel(code, { fallbackLabelKo: reason }).shortLabelKo;
+  return buildReasonViewModel(code).shortLabelKo;
 }
 
 function quoteReasonList(reasons?: string[]): string {

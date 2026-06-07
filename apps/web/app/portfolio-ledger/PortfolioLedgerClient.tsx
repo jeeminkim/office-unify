@@ -113,6 +113,8 @@ type WatchlistResolveCandidateView = {
   matchType?: string;
   warnings?: string[];
   actionHint?: string;
+  disabledReasonKo?: string;
+  actionReasonCode?: string;
   sourceRefs?: Array<{ source: string; label: string }>;
 };
 type GoalRow = {
@@ -1753,6 +1755,11 @@ export function PortfolioLedgerClient() {
                   </button>
                 </div>
                 {candidate.symbol === "UNKNOWN" || candidate.matchType === "manual_review" ? (
+                  <p className="mt-1 text-[11px] text-amber-800">
+                    {candidate.disabledReasonKo ?? "수동 확인 전에는 local fill을 사용할 수 없습니다."}
+                  </p>
+                ) : null}
+                {false && (candidate.symbol === "UNKNOWN" || candidate.matchType === "manual_review") ? (
                   <p className="mt-1 text-[11px] text-amber-800">
                     6자리 코드 또는 US ticker를 먼저 확인해야 저장할 수 있습니다. 이름/섹터 힌트만 유지합니다.
                   </p>

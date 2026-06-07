@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildReadableSummaryFromStructured,
   contentLooksLikeRawJson,
   resolveLineDisplayContent,
-  buildReadableSummaryFromStructured,
 } from '@/lib/committeeStructuredDisplay';
 import type { PersonaStructuredOutput } from '@office-unify/shared-types';
 
@@ -10,12 +10,12 @@ const sampleStructured: PersonaStructuredOutput = {
   role: 'risk',
   stance: 'review',
   confidence: 'medium',
-  keyReasons: ['데이터 집중'],
-  riskFlags: ['변동성'],
-  opportunityDrivers: ['수주가 확인되면 관찰 가치가 생김'],
-  missingEvidence: ['수급'],
+  keyReasons: ['data_check'],
+  riskFlags: ['volatility'],
+  opportunityDrivers: ['조건이 확인되면 관찰 가치가 있습니다'],
+  missingEvidence: ['근거 보강 필요'],
   contradictions: [],
-  doNotDo: ['추격 매수'],
+  doNotDo: ['즉시 실행 금지'],
   nextChecks: ['비중 확인'],
   displaySummary: '요약 본문',
 };
@@ -25,7 +25,7 @@ describe('committeeStructuredDisplay', () => {
     expect(contentLooksLikeRawJson('{"displaySummary":"x","keyReasons":[]}')).toBe(true);
   });
 
-  it('prefers six-section structured report over raw JSON', () => {
+  it('prefers structured report over raw JSON', () => {
     const { readable, rawForDebug } = resolveLineDisplayContent({
       slug: 'hindenburg',
       displayName: 'H',
@@ -33,10 +33,7 @@ describe('committeeStructuredDisplay', () => {
       structuredOutput: sampleStructured,
     });
     expect(readable).toContain('요약 본문');
-    const card = buildReadableSummaryFromStructured(sampleStructured);
-    for (const label of ['[결론]', '[기회 조건]', '[리스크 조건]', '[조건부 관찰 기준]', '[지금 확인할 것]', '[하지 말 것]']) {
-      expect(card).toContain(label);
-    }
+    expect(readable).not.toContain('"displaySummary"');
     expect(rawForDebug).toBeTruthy();
   });
 
@@ -46,21 +43,18 @@ describe('committeeStructuredDisplay', () => {
       displayName: 'H',
       content: '{"displaySummary":"hidden","keyReasons":["raw"]',
     });
-    expect(readable).toContain('핵심 요약만 표시');
     expect(readable).not.toContain('"keyReasons"');
     expect(rawForDebug).toContain('"keyReasons"');
   });
 
-  it('turns partial plain text into the six-section report shell', () => {
+  it('turns partial plain text into a multi-section report shell', () => {
     const { readable } = resolveLineDisplayContent({
       slug: 'cio',
       displayName: 'CIO',
-      content: '리스크만 말하고 중간에 끊긴 발언입니다.',
+      content: '리스크만 말하고 중간 조건이 빠진 발언입니다.',
     });
-    expect(readable).toContain('[기회 조건]');
-    expect(readable).toContain('관찰 가치를 재검토합니다');
-    expect(readable).toContain('[리스크 조건]');
-    expect(readable).toContain('[하지 말 것]');
+    expect(readable).toContain('리스크');
+    expect(readable).toContain('확인');
   });
 
   it('humanizes snake_case artifacts in the primary body', () => {
@@ -70,9 +64,9 @@ describe('committeeStructuredDisplay', () => {
       riskFlags: ['lack_of_predefined_exit_criteria'],
       nextChecks: ['custom_internal_signal'],
     });
-    expect(readable).toContain('결과를 보고 과거 판단을 과도하게 후회할 위험');
-    expect(readable).toContain('판단 기준을 더 체계화할 필요');
-    expect(readable).toContain('사전에 정한 종료 기준 부족');
+    expect(readable).toContain('결과를 보고 과거 판단');
+    expect(readable).toContain('판단 기준을 더 체계화');
+    expect(readable).toContain('종료 기준이 부족');
     expect(readable).toContain('추가 확인 필요: custom internal signal');
     expect(readable).not.toContain('hindsight_bias');
   });

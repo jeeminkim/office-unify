@@ -17,6 +17,13 @@ type FriendlyInfographicError = {
   code?: string;
   requestId?: string;
   actionHint?: string;
+  sourceMeta?: {
+    actionReason?: {
+      userMessageKo?: string;
+      actionHintKo?: string;
+      primaryActionLabelKo?: string;
+    };
+  };
 };
 
 export function isAbortLikeInfographicError(message: string): boolean {
@@ -25,9 +32,11 @@ export function isAbortLikeInfographicError(message: string): boolean {
 }
 
 export function formatFriendlyInfographicError(input: FriendlyInfographicError | undefined, fallback: string): string {
-  const base = input?.error || fallback;
+  const reason = input?.sourceMeta?.actionReason;
+  const base = reason?.userMessageKo || input?.error || fallback;
   const safeBase = isAbortLikeInfographicError(base) ? 'URL 분석 시간이 초과되었습니다.' : base;
   const hint =
+    reason?.actionHintKo ??
     input?.actionHint ??
     (isAbortLikeInfographicError(base)
       ? '원문 추출은 실패했지만, URL을 Research Center로 보내거나 본문을 직접 붙여넣어 계속할 수 있습니다.'

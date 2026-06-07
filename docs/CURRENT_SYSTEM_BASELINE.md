@@ -1,5 +1,23 @@
 # Current System Baseline
 
+## EVO-061-2 Central Reason Contract Wide Adoption
+
+- `actionReasonContract` now provides view-model helpers for user reason copy, primary action, diagnostic display slots, action steps, legacy string normalization, action hrefs, button intent badges, disabled reasons, and after-click expectations.
+- Command Center quote/US degraded blockers and Portfolio quote failure lists should resolve legacy strings through the central reason contract before rendering labels or CTAs.
+- Quote Provider primary action copy should be derived from central reason actions so `us_market_feed_missing`, `ticker_mapping_required`, `provider_not_configured`, and Google Finance setup states do not collapse into one Google Finance CTA.
+- Today display slot intent badges may use the central diagnostic slot model; diagnostic slots remain `isTradeCandidate: false`.
+- Targeted EVO-061-2 verification passed: 32 targeted files and 150 tests. Full build/lint/typecheck were intentionally not run for this prompt.
+
+## EVO-061 Central Reason & Action Contract Mapper
+
+- `apps/web/lib/actionReasonContract.ts` is the first central reason/action contract for quote, Today Candidate, US diagnostics, infographic source extraction, committee recovery, smart resolve, action item, and system reasons.
+- Same typed reason should resolve to the same user title, user message, action hint, primary action key, primary label, button intent, write/confirm metadata, and no-trade guardrail.
+- Google Finance setup is primary only for `google_finance_anchor_missing`, `google_finance_formula_pending`, and `google_finance_readback_partial`. Other quote/candidate blockers route to provider status, US feed, ticker resolver, theme mapping, queue review, or shortage review.
+- Infographic source extraction now exposes central action reason metadata for insufficient source states. Raw source/debug codes remain for details/debug, not primary user copy.
+- Committee human-readable output maps common snake_case/internal artifacts before default display. Unknown snake_case becomes a readable "추가 확인 필요" sentence.
+- Button truth covers navigate-only, read-only check, confirmed write/POST, Action Inbox save, note save, feedback update, local-only, external manual check, copy, and disabled states.
+- No SQL, no GET write, no forced candidates, no automatic watchlist registration, no automatic trading/order/rebalancing, and no buy/sell directive.
+
 ## EVO-055 Quote and Today Truth Consolidation
 
 - Quote blockers now flow through a typed root-cause contract that separates Google Finance anchor/formula/read-back issues from quote rows, ticker mapping, US feed, US signal mapping, queue suppression, discovery, and insufficient-candidate causes.

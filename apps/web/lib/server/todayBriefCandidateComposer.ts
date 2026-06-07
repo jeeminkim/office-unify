@@ -4,6 +4,7 @@ import type {
   SectorRadarSummarySector,
 } from '@/lib/sectorRadarContract';
 import type { CandidateDisplaySlot, QuoteRootCauseCode } from '@office-unify/shared-types';
+import { getActionReasonContract, resolveActionReasonFromUsDiagnostics } from '@/lib/actionReasonContract';
 import type { TodayStockCandidate, UsMarketMorningSummary } from '@/lib/todayCandidatesContract';
 import { buildTodayCandidateDisplayMetrics } from '@/lib/server/todayBriefCandidateDisplay';
 import type { TodayCandidateRepeatStat } from '@/lib/server/todayCandidateRepeatExposure';
@@ -430,69 +431,16 @@ function slotCopy(code: QuoteRootCauseCode): Pick<
   CandidateDisplaySlot,
   'reasonLabelKo' | 'actionHintKo' | 'primaryAction' | 'primaryActionLabelKo'
 > {
-  switch (code) {
-    case 'us_market_feed_missing':
-      return {
-        reasonLabelKo: 'US market feed missing',
-        actionHintKo: 'US market feed is empty. This may not be a Google Finance setup issue.',
-        primaryAction: 'quote_recovery',
-        primaryActionLabelKo: 'Run Quote Recovery',
-      };
-    case 'us_signal_mapping_empty':
-      return {
-        reasonLabelKo: 'US signal mapping empty',
-        actionHintKo: 'US signals exist but are not connected to KR/watchlist candidates. Check theme mapping.',
-        primaryAction: 'us_mapping_diagnosis',
-        primaryActionLabelKo: 'Check US mapping',
-      };
-    case 'ticker_mapping_required':
-    case 'missing_google_ticker':
-    case 'invalid_symbol':
-      return {
-        reasonLabelKo: 'Ticker mapping required',
-        actionHintKo: 'Check stock code, US ticker, and Google Finance ticker before treating this as a quote outage.',
-        primaryAction: 'ticker_resolver',
-        primaryActionLabelKo: 'Check ticker',
-      };
-    case 'queue_policy_suppressed':
-      return {
-        reasonLabelKo: 'Queue policy suppressed',
-        actionHintKo: 'A candidate existed, but repeat exposure, risk review, or data quality moved it to diagnostics.',
-        primaryAction: 'none',
-        primaryActionLabelKo: 'Review diagnostics',
-      };
-    case 'quote_rows_missing':
-    case 'google_finance_readback_partial':
-      return {
-        reasonLabelKo: 'Quote read-back incomplete',
-        actionHintKo: 'Run quote recovery and refresh only missing or partial quote rows.',
-        primaryAction: 'quote_recovery',
-        primaryActionLabelKo: 'Run Quote Recovery',
-      };
-    case 'google_finance_anchor_missing':
-    case 'google_finance_formula_pending':
-      return {
-        reasonLabelKo: 'Google Finance setup/read-back',
-        actionHintKo: 'Google Finance setup is primary only for anchor, formula, or read-back issues.',
-        primaryAction: 'google_finance_setup',
-        primaryActionLabelKo: 'Google Finance setup',
-      };
-    case 'discovery_universe_empty':
-      return {
-        reasonLabelKo: 'Discovery universe empty',
-        actionHintKo: 'Discovery did not find enough resolved candidates. No watchlist rows are auto-registered.',
-        primaryAction: 'discovery_universe_check',
-        primaryActionLabelKo: 'Check discovery',
-      };
-    case 'insufficient_candidates':
-    default:
-      return {
-        reasonLabelKo: 'Insufficient candidates',
-        actionHintKo: 'Not enough candidates passed observation criteria; this slot is a data-check placeholder.',
-        primaryAction: 'none',
-        primaryActionLabelKo: 'Review data',
-      };
-  }
+  const reason =
+    code === 'us_market_feed_missing' || code === 'us_signal_mapping_empty'
+      ? resolveActionReasonFromUsDiagnostics({ reasonCode: code })
+      : getActionReasonContract(code);
+  return {
+    reasonLabelKo: reason.userTitleKo,
+    actionHintKo: reason.actionHintKo,
+    primaryAction: reason.primaryActionKey,
+    primaryActionLabelKo: reason.primaryActionLabelKo,
+  };
 }
 
 function buildCandidateDisplaySlots(input: {

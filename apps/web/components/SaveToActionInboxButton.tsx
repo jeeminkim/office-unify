@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { ActionItemCreateRequest } from "@office-unify/shared-types";
+import { ActionIntentBadge } from "@/app/components/ActionIntentBadge";
 import { createActionItem } from "@/lib/actionItemsClient";
 import {
   mergeActionItemDetailWithBridge,
@@ -73,6 +74,7 @@ export function SaveToActionInboxButton({
       <button type="button" className={base} disabled={busy} onClick={() => void save()}>
         {busy ? "저장 중…" : label}
       </button>
+      <ActionIntentBadge intent="save_to_inbox" compact />
       {hint ? (
         <span className="text-[9px] text-slate-600">
           {hint}{" "}

@@ -3,6 +3,7 @@ import type { InfographicExtractSourceTextResponseBody } from '@office-unify/sha
 import { requirePersonaChatAuth } from '@/lib/server/persona-chat-auth';
 import { parseInfographicExtractRequest } from '@/lib/server/infographicValidation';
 import { resolveInfographicSourceText } from '@/lib/server/infographicSourceExtract';
+import { resolveActionReasonFromSourceExtraction } from '@/lib/actionReasonContract';
 
 function requestId(): string {
   return `info-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -101,6 +102,20 @@ export async function POST(req: Request) {
       pdfUrl: parsed.value.pdfUrl,
       pdfFile: bodyRecord.pdfFile instanceof File ? bodyRecord.pdfFile : undefined,
     });
+    const actionReason = resolveActionReasonFromSourceExtraction({
+      sourceQualityReason: sourceResolved.sourceQualityReason,
+      sourceExtractionQuality: sourceResolved.sourceExtractionQuality,
+      sourceExtractionStatus: sourceResolved.sourceExtractionStatus,
+    });
+    const actionReasonSummary = {
+      code: actionReason.code,
+      userTitleKo: actionReason.userTitleKo,
+      userMessageKo: actionReason.userMessageKo,
+      actionHintKo: actionReason.actionHintKo,
+      primaryActionKey: actionReason.primaryActionKey,
+      primaryActionLabelKo: actionReason.primaryActionLabelKo,
+      primaryIntent: actionReason.primaryIntent,
+    };
     const response: InfographicExtractSourceTextResponseBody = {
       ok: sourceResolved.sourceExtractionStatus === 'usable',
       rawText: sourceResolved.rawText,
@@ -119,6 +134,7 @@ export async function POST(req: Request) {
         sourceExtractionQuality: sourceResolved.sourceExtractionQuality,
         sourceExtractionStatus: sourceResolved.sourceExtractionStatus,
         sourceQualityReason: sourceResolved.sourceQualityReason,
+        actionReason: actionReasonSummary,
         extractedTextLength: sourceResolved.cleanedTextLength,
         rawExtractedTextLength: sourceResolved.rawExtractedTextLength,
         cleanedTextLength: sourceResolved.cleanedTextLength,

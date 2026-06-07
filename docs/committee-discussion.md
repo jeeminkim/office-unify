@@ -1,5 +1,10 @@
 # 투자위원회 턴제 토론 (committee-discussion)
 
+## EVO-061-2 Central recovery reasons
+
+- Committee warnings such as `structured_output_parse_failed`, `structured_output_partial`, `partial_recovery`, and `manual_review_required` should use `actionReasonContract` for user-facing labels and next actions.
+- Six-section/report UI remains the primary display. Raw JSON and snake_case artifacts are debug/secondary only; partial recovery, copy, save-to-inbox, and navigation actions must be explicit and badge-labeled.
+
 ## EVO-051 Investment Meeting Report Contract
 
 - Committee primary output is always a six-section meeting report: conclusion, opportunity conditions, risk conditions, conditional observation criteria, checks, and do-not-do items.
@@ -211,3 +216,9 @@ followup lifecycle 안에서 재분석은 상태 자동 변경이 아니라, 작
 - parser fallback은 raw JSON 기본 노출 금지를 유지하며, 가능한 필드만 부분 추출한다.
 - “이 발언으로 교체”는 client-only 동작이다.
 - no SQL, no automatic trading/order/rebalancing.
+# EVO-061 Central Reason & Action Contract
+
+- Committee default UI should not expose raw JSON or snake_case/internal artifacts.
+- Known artifacts such as `hindsight_bias`, `causal_fallacy`, `emotional_trading_tendency`, `lack_of_predefined_exit_criteria`, `structured_output_parse_failed`, `partial_recovery`, and `manual_review_required` are humanized before display.
+- Partial recovery and regenerate controls are local/preview actions unless the user explicitly saves an Action Inbox item.
+- Committee output remains observation and decision-support copy only; no buy/sell/order/rebalance directive is created.
