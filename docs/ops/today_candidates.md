@@ -8,6 +8,19 @@ DDL 적용 순서: `docs/sql/APPLY_ORDER.md`
 
 # Today Candidates (아침 관찰 후보)
 
+## EVO-062 Copilot no-dead-end Today flow
+
+- Today Candidate must always show three display slots where possible: real candidates, low-confidence candidates, risk-review slots, data-check slots, US diagnostics, or read-only US discovery.
+- If US price data is unavailable, the user should still see a useful US observation candidate plus one primary next action to check quote/provider state.
+- US Discovery is not added to `primaryCandidateDeck`; it is display/quality metadata only and remains `isTradeCandidate: false`.
+
+## EVO-055 Contract-Based US Discovery fallback
+
+- When the primary deck cannot fill a price-ready US candidate, the composer may show one read-only US discovery slot before falling back to a generic US diagnostic.
+- Discovery candidates are local theme seeds such as AI data center power/cooling, semiconductor equipment, grid equipment, robotics, and AI software infrastructure.
+- A discovery slot is always `isTradeCandidate: false`, does not auto-register a watchlist row, and tells the user to verify quote/provider status before price judgment.
+- `deckContractStatus: degraded_with_discovery` means the KR 2 + US 1 contract is still degraded, but the UI has a useful US observation card instead of an empty or invented candidate.
+
 ## EVO-061-3 Screen contract cleanup
 
 - Dashboard rendering should prefer `displaySlots` over the raw candidate deck when slot diagnostics are present.

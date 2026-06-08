@@ -13,8 +13,8 @@ describe('todayCandidateUiCopy', () => {
   });
 
   it('keeps required disclaimers intact', () => {
-    for (const d of TODAY_CANDIDATE_UI_DISCLAIMERS) {
-      expect(normalizeObservationCopy(d)).toBe(d);
+    for (const disclaimer of TODAY_CANDIDATE_UI_DISCLAIMERS) {
+      expect(normalizeObservationCopy(disclaimer)).toBe(disclaimer);
     }
   });
 
@@ -24,10 +24,10 @@ describe('todayCandidateUiCopy', () => {
   });
 
   it('risk review headline uses verification tone, not buy recommendation', () => {
-    const h = riskReviewCardHeadline({
+    const headline = riskReviewCardHeadline({
       corporateActionRisk: { active: true },
     } as Parameters<typeof riskReviewCardHeadline>[0]);
-    expect(h).toMatch(/확인 후 판단/);
-    expect(h).not.toMatch(/매수 추천|강력|확실/i);
+    expect(headline).toContain('확인 후 판단');
+    expect(headline).not.toMatch(/매수 추천|강력|확정/i);
   });
 });

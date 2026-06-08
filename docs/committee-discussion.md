@@ -1,5 +1,11 @@
 # 투자위원회 턴제 토론 (committee-discussion)
 
+## EVO-062 Committee Copilot report UX
+
+- The primary Committee surface remains the six-section report: conclusion, opportunity conditions, risk conditions, conditional observation criteria, checks, and do-not-do items.
+- Partial or repaired output should show a small companion note, then the readable report. Raw/debug/structured fields stay collapsed.
+- Follow-up actions should be explicit: view missed opportunity signals, inspect next-time signals, save an Action Item, or continue in Research. No buy/sell directive or automatic portfolio action is allowed.
+
 ## EVO-061-3 Primary report and recovery cleanup
 
 - The six-section committee report remains the primary reading surface.

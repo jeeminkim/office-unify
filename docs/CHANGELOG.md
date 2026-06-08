@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### 2026-06-08 EVO-062 AI Copilot Flow Reset
+
+- **Copilot status model:** added a shared no-dead-end status card model with one primary next action, companion copy, and explicit no-trade guardrails.
+- **Dashboard Copilot Strip:** Dashboard now surfaces the current flow state above Command Center and can route the user to quote recovery, data readiness, Today Brief refresh, or read-only follow-up screens.
+- **Portfolio quote Copilot:** Portfolio quote recovery now uses the shared status model to pick one primary next action before the detailed quote/ticker tables.
+- **Today no-dead-end UX:** Today Candidate copy now explains partial US data, read-only US discovery, and concrete next checks without forcing primary deck candidates.
+- **Infographic no-dead-end UX:** the card-first display model remains the default fallback when chart/source structure is incomplete.
+- **Trend long report UX:** normal long reports expose 핵심만 보기, 전체 보기, PB handoff, Committee handoff, and a disabled Action Item reason without replacing the report with a warning card.
+- **Guardrails:** no GET write, no auto Sheets repair/write, no auto watchlist registration, no forced candidate, no auto trading/order/rebalancing, and no buy/sell directive.
+
+### 2026-06-08 EVO-055 Contract-Based Usability Reset
+
+- **US Discovery Candidate:** added a read-only US discovery fallback that is independent of watchlist registration and Google Finance mapping. It can surface a theme-based US observation card when the US slot has no price-ready candidate.
+- **Today 3-slot display:** the KR 2 + US 1 screen contract can now report `degraded_with_discovery` and render a US discovery slot with `isTradeCandidate: false` instead of a forced candidate.
+- **Infographic mobile layout:** replaced the responsive preview with a card-first mobile fallback, overflow-safe text, and a visible card summary when quantitative chart data is unavailable.
+- **Verification:** targeted tests, `npm.cmd run typecheck --workspace=apps/web`, and `git diff --check` are the intended scope.
+- **Guardrails:** no SQL/schema change, no GET write, no Sheets repair/write, no auto watchlist registration, no forced trade candidate, no trade/order/rebalance, no buy/sell directive, and no commit for this prompt.
+
 ### 2026-06-08 EVO-061-3 Screen Contract Regression and Legacy Copy Cleanup
 
 - **Screen contract cleanup:** cleaned central reason copy and high-risk screen labels so typed reason/view-model output wins over legacy local copy.

@@ -357,6 +357,7 @@ export type {
   ResearchReportHistoryMeta,
   SectorRadarSnapshotMeta,
   TodayCandidateExposureDiagnostics,
+  UsDiscoveryCandidate,
   UsCandidateDiagnostics,
   UsCandidateDiagnosticsStatus,
   UsCandidateSetupDiagnosis,

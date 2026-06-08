@@ -91,7 +91,7 @@ describe("composeTodayBriefCandidates", () => {
     expect(contract.deckContractStatus).toBe("partial");
     expect(contract.usDiagnosticSlotPresent).toBe(true);
     expect(contract.usSlotFallbackReason).toBe("us_signal_mapping_empty");
-    expect(contract.actionHint).toContain("강제로 만들지 않고");
+    expect(contract.actionHint).toContain("US candidates were not forced");
   });
 
   it("marks KR slot shortage as partial/degraded with reason", () => {
@@ -104,6 +104,33 @@ describe("composeTodayBriefCandidates", () => {
     expect(contract.krSlotFallbackReason).toBe("insufficient_kr_candidates");
     expect(contract.usSlotFallbackReason).toBe("insufficient_us_candidates");
     expect(contract.deckContractStatus).toBe("degraded");
+  });
+
+  it("adds a read-only US discovery slot when the US deck slot is empty", () => {
+    const out = composeTodayBriefCandidates({
+      userContextCandidates: [
+        {
+          ...interest("kr-ai", 80),
+          sector: "AI data center power",
+          reasonSummary: "AI data center power and cooling theme",
+          positiveSignals: ["power", "data center"],
+        },
+      ],
+      sectorRadarSummary: null,
+      usMarketSummary: usSum(false),
+      usMarketKrCandidates: [],
+      usDirectCandidates: [],
+      userUsWatchlistCount: 0,
+    });
+
+    expect(out.qualityMeta.usDiscoveryCandidateCount).toBe(1);
+    expect(out.qualityMeta.deckContract.deckContractStatus).toBe("degraded_with_discovery");
+    const usSlot = out.qualityMeta.displaySlots.find((slot) => slot.slotId.startsWith("us-discovery-"));
+    expect(usSlot).toBeTruthy();
+    expect(usSlot?.targetMarket).toBe("US");
+    expect(usSlot?.isTradeCandidate).toBe(false);
+    expect(usSlot?.primaryAction).toBe("quote_status_check");
+    expect(JSON.stringify(usSlot)).not.toMatch(/매수|매도|buy|sell|order|rebalance/i);
   });
 
   it("surfaces provider-not-configured as the US slot fallback reason", () => {

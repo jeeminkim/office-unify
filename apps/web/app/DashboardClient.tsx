@@ -48,12 +48,14 @@ import {
 import { TodayCandidateRiskReviewPanel } from "@/app/components/TodayCandidateRiskReviewPanel";
 import { ActionItemsSummarySection } from "@/app/components/dashboard/ActionItemsSummarySection";
 import { CommandCenterSection } from "@/app/components/dashboard/CommandCenterSection";
+import { CopilotStatusStrip } from "@/app/components/dashboard/CopilotStatusStrip";
 import { DataReadinessSection } from "@/app/components/dashboard/DataReadinessSection";
 import { JudgmentReviewSummarySection } from "@/app/components/dashboard/JudgmentReviewSummarySection";
 import { TodayBriefSection } from "@/app/components/dashboard/TodayBriefSection";
 import { TodayCandidatesSection } from "@/app/components/dashboard/TodayCandidatesSection";
 import { WatchlistRecommendationSection } from "@/app/components/dashboard/WatchlistRecommendationSection";
 import { buildCommandCenterPlan, type CommandCenterOpenActionItem } from "@/lib/commandCenterPolicy";
+import { buildDashboardCopilotStatus, type CopilotPrimaryAction } from "@/lib/copilotStatusModel";
 import { UsDiagnosticsCard } from "@/app/components/UsDiagnosticsCard";
 import { SaveToActionInboxButton } from "@/components/SaveToActionInboxButton";
 import { buildActionItemDetailFromTodayCandidate, buildGenericActionItemDetail } from "@/lib/actionItemDetailBuilders";
@@ -1188,6 +1190,49 @@ export function DashboardClient() {
     [statusSections, weeklySqlReadiness, todayBrief, openActionItems, opsOpenErrorCount, watchRecs.length],
   );
 
+  const copilotStatus = useMemo(
+    () =>
+      buildDashboardCopilotStatus({
+        todayBrief,
+        quoteRecovery,
+        opsRunbookPlan,
+        busy: reloading || quoteRecoveryBusy != null || opsRunbookBusy != null,
+        errorMessage: quoteRecoveryError ?? opsRunbookError ?? error,
+        openActionItemCount: openActionItems.length,
+      }),
+    [
+      todayBrief,
+      quoteRecovery,
+      opsRunbookPlan,
+      reloading,
+      quoteRecoveryBusy,
+      opsRunbookBusy,
+      quoteRecoveryError,
+      opsRunbookError,
+      error,
+      openActionItems.length,
+    ],
+  );
+
+  const handleCopilotPrimaryAction = useCallback(
+    (action: CopilotPrimaryAction) => {
+      switch (action) {
+        case "run_quote_recovery":
+          void executeQuoteRecovery("dashboard");
+          return;
+        case "run_data_readiness":
+          void executeOpsRunbook("us_data_readiness");
+          return;
+        case "rerun_today_brief":
+          void loadOverview();
+          return;
+        default:
+          return;
+      }
+    },
+    [executeOpsRunbook, executeQuoteRecovery, loadOverview],
+  );
+
   return (
     <div className="mx-auto max-w-6xl p-6 text-slate-900">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -1228,6 +1273,11 @@ export function DashboardClient() {
       </div>
 
       {error ? <div className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div> : null}
+      <CopilotStatusStrip
+        status={copilotStatus}
+        busy={reloading || quoteRecoveryBusy != null || opsRunbookBusy != null}
+        onPrimaryAction={handleCopilotPrimaryAction}
+      />
       <CommandCenterSection
         dataBlocker={commandCenter.dataBlocker}
         todayItems={commandCenter.todayItems}

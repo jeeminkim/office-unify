@@ -1,5 +1,18 @@
 # 로드맵 백로그 (scratchpad)
 
+## EVO-062 AI Copilot Flow Reset
+
+- Shipped a shared Copilot status card model and Dashboard strip for no-dead-end flow guidance.
+- Follow-up backlog: extend the same model to Portfolio quote sections, Committee primary report controls, and Trend/Research long-report surfaces.
+- Keep the layer additive: no new automatic writes, no forced candidates, no trading/order/rebalancing, and no buy/sell directive.
+
+## EVO-055 Contract-Based Usability Reset
+
+- Shipped local read-only US Discovery Candidate fallback for the Today KR 2 + US 1 display contract.
+- Shipped `degraded_with_discovery` as an additive state so users see a useful US observation card while quote/provider readiness remains explicit.
+- Shipped mobile-safe infographic responsive preview with card-first layout and no-chart fallback.
+- Follow-up backlog: broaden the local US seed registry only through reviewed theme seeds or an explicit read-only provider; do not auto-register watchlist rows or imply trades.
+
 ## EVO-061-2 Central Reason Contract Wide Adoption
 
 - Shipped central reason view-model helpers for primary actions, diagnostic slots, action steps, legacy-string normalization, hrefs, intent badges, and after-click expectations.

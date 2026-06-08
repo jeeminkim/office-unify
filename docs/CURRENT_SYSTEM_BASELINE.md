@@ -1,5 +1,20 @@
 # Current System Baseline
 
+## EVO-062 AI Copilot Flow Reset
+
+- Every major dashboard state should resolve to a Copilot status card with one primary next action.
+- Portfolio quote states also resolve through the Copilot status model before showing detailed tables: missing ticker first, then quote row/read-back checks.
+- The Copilot layer summarizes status; it does not replace typed reason/action contracts. If a central reason exists, that reason remains authoritative for detailed CTA copy.
+- Degraded states must remain usable: US quote gaps may show read-only US Discovery, source gaps may show paste/edit/copy fallback, committee partial output should still show a six-section report, and chart gaps should show card summaries.
+- Manual write boundaries remain: no GET write, no automatic Sheets repair/write, no automatic watchlist registration, no automatic trading/order/rebalancing, and no buy/sell directive.
+
+## EVO-055 Contract-Based Usability Reset
+
+- Today Candidate may add `qualityMeta.todayCandidates.usDiscoveryCandidates` and `usDiscoverySlotPresent` when the US slot has no price-ready candidate.
+- US Discovery Candidate is read-only and theme-seeded. It is not watchlist registration, not Google Finance repair, not a trade candidate, and never creates orders or buy/sell guidance.
+- Dashboard can show `degraded_with_discovery` as a visible fallback state: price-based US candidates are limited, but a US observation candidate can still help the user inspect the relevant theme.
+- Infographic responsive preview is card-first on mobile. If chart data is empty or invalid, it keeps a readable card summary instead of leaving a blank chart area.
+
 ## EVO-061-3 Screen Contract Regression and Legacy Copy Cleanup
 
 - EVO-061-3 is a stabilization pass, not a new feature pass. It restores readable screen copy and contract-level regressions after central reason wide adoption.
@@ -57,6 +72,7 @@
 - Smart Ticker Resolve is a first-class read-only registration proposal layer. It may fill local form state, but watchlist persistence remains the explicit existing POST path.
 - Today Candidate can use a read-only Discovery Universe based on user interest themes. It is not watchlist registration and reports generated/resolved/unresolved counts.
 - Trend Analysis defaults to long report mode: 6,000-8,000 character body, 2,000 character preview, explicit full-report expand, and separate summary/full-copy actions.
+- Trend long reports expose compact/full toggles plus PB, Committee, and Action Item intent boundaries from the result surface.
 - Quote readiness is explicit about provider capability: Google Sheets `GOOGLEFINANCE` is formula read-back, not a real-time quote provider. Anchor OK does not guarantee actual portfolio or candidate quote usability.
 - Quote remediation must choose the visible next action by root cause. Google Finance setup is primary only for missing anchors/formulas; otherwise the UI should point to quote status, US market feed, ticker/sector mapping, theme registry, or formula read-back wait.
 - Today Candidate must show the KR 2 + US 1 deck contract summary. If a US slot cannot be filled, a diagnostic fallback reason is visible and no candidate is forced.

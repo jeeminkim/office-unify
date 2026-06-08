@@ -363,7 +363,8 @@ export interface TodayBriefWithCandidatesResponse {
           | 'risk_queue_dominates'
           | 'repeat_suppression';
         krSlotFallbackReason?: 'insufficient_kr_candidates';
-        deckContractStatus: 'ok' | 'partial' | 'degraded';
+        usDiscoverySlotPresent?: boolean;
+        deckContractStatus: 'ok' | 'partial' | 'degraded' | 'degraded_with_discovery';
         actionHint: string;
       };
       /** Additive: 미국 시세·매핑 커버리지(조용한 실패 방지). */

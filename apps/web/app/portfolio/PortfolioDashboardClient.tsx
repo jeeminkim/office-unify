@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { QuoteRecoveryRunbookResponse } from "@office-unify/shared-types";
+import { CopilotStatusStrip } from "@/app/components/dashboard/CopilotStatusStrip";
 import { OpsFeedbackButton } from "@/components/OpsFeedbackButton";
 import { PortfolioRoleBanner } from "@/components/PortfolioRoleBanner";
 import { buildReasonViewModel, resolveReasonCodeFromLegacyString } from "@/lib/actionReasonContract";
+import { buildPortfolioQuoteCopilotStatus, type CopilotPrimaryAction } from "@/lib/copilotStatusModel";
 
 type SummaryResponse = {
   ok: boolean;
@@ -620,6 +622,37 @@ export function PortfolioDashboardClient() {
     );
     return { tickerSavedButMissingRow };
   }, [quoteStatus]);
+  const portfolioQuoteCopilotStatus = useMemo(
+    () =>
+      buildPortfolioQuoteCopilotStatus({
+        missingTickerCount: missingTickerSymbols.length,
+        autoApplicableTickerCount: autoApplicableItems.length,
+        quoteUsabilityStatus: quoteStatus?.summary?.quoteUsabilityStatus ?? quoteStatus?.quoteDiagnostics?.quoteUsabilityStatus,
+        tickerSavedButMissingRow: quoteRowDiagnostic.tickerSavedButMissingRow,
+        busy: checkingQuoteStatus || refreshingQuote || tickerResolverBusy || tickerResolverStatusBusy,
+        errorMessage: error,
+      }),
+    [
+      missingTickerSymbols.length,
+      autoApplicableItems.length,
+      quoteStatus?.summary?.quoteUsabilityStatus,
+      quoteStatus?.quoteDiagnostics?.quoteUsabilityStatus,
+      quoteRowDiagnostic.tickerSavedButMissingRow,
+      checkingQuoteStatus,
+      refreshingQuote,
+      tickerResolverBusy,
+      tickerResolverStatusBusy,
+      error,
+    ],
+  );
+  const handlePortfolioQuoteCopilotAction = (action: CopilotPrimaryAction) => {
+    if (action !== "run_quote_recovery") return;
+    if (missingTickerSymbols.length > 0) {
+      void requestTickerCandidateRefresh();
+      return;
+    }
+    void requestQuoteRefresh();
+  };
   const summaryNeedsQuoteCheck = Boolean(
     summary?.dataQuality.summaryDegradedReason && summary.dataQuality.summaryDegradedReason !== "none",
   );
@@ -683,6 +716,11 @@ export function PortfolioDashboardClient() {
 
       {error ? <div className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div> : null}
       {info ? <div className="mb-4 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">{info}</div> : null}
+      <CopilotStatusStrip
+        status={portfolioQuoteCopilotStatus}
+        busy={checkingQuoteStatus || refreshingQuote || tickerResolverBusy || tickerResolverStatusBusy}
+        onPrimaryAction={handlePortfolioQuoteCopilotAction}
+      />
       <section className="mb-4 rounded border border-violet-200 bg-violet-50/40 p-3 text-xs">
         <p className="font-semibold text-violet-950">시세 연동 복구 패널</p>
         <p className="mt-1 text-violet-900">

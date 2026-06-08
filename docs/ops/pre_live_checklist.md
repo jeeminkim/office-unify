@@ -2,6 +2,25 @@
 
 배포·실사용 전에 아래를 순서에 맞게 확인합니다. 이 앱은 **관찰·복기·데이터 점검**용이며 **자동매매·자동 주문·자동 리밸런싱**은 없습니다.
 
+## EVO-062 AI Copilot Flow Reset
+
+- [ ] Dashboard shows a Copilot status strip with one primary next action and no raw-code dead end.
+- [ ] Portfolio quote section shows a Copilot status strip that picks missing ticker, quote row, or read-back next action before detailed tables.
+- [ ] Quote/US data actions reuse existing runbooks and require explicit user click for confirmed execution.
+- [ ] Today Candidate still shows three slots and read-only US Discovery when US quote data is incomplete.
+- [ ] Infographic source/chart failures produce paste/edit/copy/research fallback instead of blank output.
+- [ ] Committee partial output keeps six-section report primary and raw/debug collapsed.
+- [ ] Trend long_report shows 핵심만 보기, 전체 보기, PB handoff, Committee handoff, and disabled Action Item reason without an amber protective card.
+- [ ] No GET write, auto Sheets repair/write, auto watchlist registration, auto trading/order/rebalancing, or buy/sell directive.
+
+## EVO-055 Contract-Based Usability Reset
+
+- [ ] Today Candidate shows a read-only US discovery slot when the US price-ready slot is empty and a theme seed is available.
+- [ ] The US discovery slot is visibly `isTradeCandidate: false` and does not imply watchlist registration, buy/sell, order, rebalance, or forced candidate creation.
+- [ ] `deckContractStatus` may be `degraded_with_discovery`; this is still a degraded data state, not quote readiness.
+- [ ] Infographic mobile preview keeps card content readable when chart data is missing or invalid.
+- [ ] Only targeted tests, `npm.cmd run typecheck --workspace=apps/web`, and `git diff --check` are required for this rescue prompt.
+
 ## EVO-061-3 Screen Contract Regression and Legacy Copy Cleanup
 
 - [ ] Central reason copy renders readable user-facing Korean for quote, Today, infographic, committee, and smart resolve reasons.

@@ -1,5 +1,17 @@
 # Infographic Generator (MVP)
 
+## EVO-062 Infographic no-dead-end UX
+
+- Source extraction, draft generation, and chart rendering should never end in raw errors or a blank preview.
+- When source text is insufficient, show what was read and provide one primary action to paste/edit source text; copy summary and Research handoff remain explicit secondary actions.
+- Mobile preview stays card-first. Diagram/export previews are supporting views and should not be the mobile default.
+
+## EVO-055 Contract-Based mobile layout fallback
+
+- Responsive preview is card-first on mobile and uses overflow-safe text containers so long labels, notes, and flow copy do not overlap.
+- Chart sections are supporting evidence. If `bar`, `pie`, and `line` values are empty or invalid, the preview shows a readable card fallback instead of a blank chart area.
+- The fallback remains read-only preview UI: no automatic save/write, no SQL, no buy/sell directive, and no automatic trading/order/rebalancing.
+
 ## EVO-061-3 Insufficient-source UX cleanup
 
 - The primary insufficient-source UI should show central `sourceMeta.actionReason` copy before route-local failure text.

@@ -2,6 +2,22 @@
 
 export type UsCandidateDiagnosticsStatus = 'ok' | 'degraded' | 'empty' | 'disabled' | 'unknown';
 
+export type UsDiscoveryCandidate = {
+  symbol: string;
+  name: string;
+  market: 'US';
+  exchange?: string;
+  theme: string;
+  reasonKo: string;
+  evidenceKo: string[];
+  riskKo: string[];
+  confidence: 'low' | 'medium' | 'high';
+  discoverySource: 'theme_seed' | 'market_momentum' | 'news_theme' | 'fallback_registry';
+  isWatchlist: false;
+  isTradeCandidate: false;
+  actionHintKo: string;
+};
+
 export type QuoteRootCauseCode =
   | 'provider_not_configured'
   | 'google_finance_anchor_missing'

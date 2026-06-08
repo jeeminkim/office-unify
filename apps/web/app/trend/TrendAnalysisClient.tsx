@@ -524,6 +524,46 @@ export function TrendAnalysisClient() {
             </div>
           </div>
 
+          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
+            <p className="font-medium text-slate-900">보고서 다음 행동</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setShowFullReport(false)}
+                className="rounded border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-50"
+              >
+                핵심만 보기
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowFullReport(true)}
+                disabled={reportDisplay.markdown.length <= previewChars}
+                className="rounded border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                전체 보기
+              </button>
+              <Link href="/private-banker" className="rounded border border-violet-200 bg-violet-50 px-3 py-1.5 font-medium text-violet-900">
+                PB에게 보내기
+              </Link>
+              <Link href="/committee-discussion" className="rounded border border-indigo-200 bg-indigo-50 px-3 py-1.5 font-medium text-indigo-900">
+                위원회 토론으로 보내기
+              </Link>
+              <button
+                type="button"
+                disabled
+                className="rounded border border-slate-200 bg-slate-50 px-3 py-1.5 font-medium text-slate-400"
+              >
+                Action Item 저장
+              </button>
+            </div>
+            <p className="mt-1 text-[11px] text-slate-500">
+              Action Item 저장은 보호 fallback 카드나 후속 항목 추출 결과에서 명시적으로 제공합니다.
+            </p>
+            {reportDisplay.markdown.length <= previewChars ? (
+              <p className="mt-1 text-[11px] text-slate-500">전체 본문이 이미 preview 안에 들어와 있어 전체 보기 버튼은 비활성화됩니다.</p>
+            ) : null}
+          </div>
+
           {result.qualityMeta?.finalizer?.degraded ? (
             <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950">
               <p className="font-medium">최종 정리: Gemini provider degraded (finalizer)</p>

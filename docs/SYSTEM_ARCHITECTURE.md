@@ -1,5 +1,19 @@
 # System Architecture (Personal Investment Console)
 
+## EVO-062 AI Copilot Flow Reset
+
+- `apps/web/lib/copilotStatusModel.ts` is the shared view-model layer for no-dead-end status cards. It maps screen state to status level, companion copy, one primary next action, secondary navigation, and guardrails.
+- Dashboard consumes the model through `CopilotStatusStrip`, reusing existing Quote Recovery and Data Readiness runbooks instead of adding new write paths.
+- Portfolio quote recovery consumes the same model before its detailed ticker/quote tables so missing ticker, pending quote rows, and partial read-back each resolve to one primary next action.
+- The model is additive and UI-facing. It must not delete response fields, mutate primary decks, perform SQL, or trigger confirmed writes without a user click.
+
+## EVO-055 Contract-Based Usability Reset
+
+- `apps/web/lib/server/usDiscoveryCandidates.ts` owns the local read-only US discovery seed registry and theme ranking. It performs no network, SQL, Sheets, or watchlist writes.
+- `todayBriefCandidateComposer` may convert one US shortage into a `us_diagnostic` display slot backed by a `UsDiscoveryCandidate`; this is additive quality metadata and does not mutate `primaryCandidateDeck`.
+- `CandidateDisplaySlot.isTradeCandidate` remains `false` for discovery and diagnostic slots. The next action is quote/provider status checking, not trading.
+- `ResponsiveInfographicView` renders the generated spec as mobile-safe cards first, with chart data treated as optional supporting evidence.
+
 ## EVO-053 Quote Recovery Runbook
 
 - `apps/web/lib/server/quoteRecoveryRunbook.ts` owns quote recovery plan/execution. It uses server helpers instead of internal fetches and keeps GET read-only.
@@ -22,6 +36,7 @@
 - Discovery Universe adds interest-based KR/US observation candidates before Today Brief deck composition without mutating watchlist data.
 - Trend Analysis separates long report body display from compact handoff summaries. Normal reports are not reduced to long-response fallback.
 - Trend `reportDisplay.mode` separates `long_report` from `protective_fallback`; full report text remains available unless a protective degradation path is explicitly active.
+- Trend long-report UI exposes compact/full toggles plus PB, Committee, and Action Item intent boundaries; disabled actions must explain why.
 - Quote provider reality is additive: Google Sheets `GOOGLEFINANCE` is represented as a delayed formula read-back capability, while actual quote usability remains separate diagnostics.
 - Today Candidate composition exposes the KR 2 + US 1 deck contract in `qualityMeta.todayCandidates.deckContract` and in the Dashboard UI; missing slots are diagnostic fallbacks, not forced candidates.
 - Infographic source extraction treats Naver title/source-only output as insufficient and uses Naver-specific URL/body extraction before summary-first fallback.

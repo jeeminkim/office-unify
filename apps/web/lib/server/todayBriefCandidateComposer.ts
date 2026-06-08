@@ -3,7 +3,7 @@ import type {
   SectorRadarSummaryResponse,
   SectorRadarSummarySector,
 } from '@/lib/sectorRadarContract';
-import type { CandidateDisplaySlot, QuoteRootCauseCode } from '@office-unify/shared-types';
+import type { CandidateDisplaySlot, QuoteRootCauseCode, UsDiscoveryCandidate } from '@office-unify/shared-types';
 import { getActionReasonContract, resolveActionReasonFromUsDiagnostics } from '@/lib/actionReasonContract';
 import type { TodayStockCandidate, UsMarketMorningSummary } from '@/lib/todayCandidatesContract';
 import { buildTodayCandidateDisplayMetrics } from '@/lib/server/todayBriefCandidateDisplay';
@@ -14,6 +14,7 @@ import {
   applyQueuePolicyToCandidate,
   classifyTodayCandidateQueue,
 } from '@/lib/server/todayCandidateQueuePolicy';
+import { buildUsDiscoveryCandidates } from '@/lib/server/usDiscoveryCandidates';
 
 function anchorQuoteAcceptable(a: SectorRadarSummaryAnchor): boolean {
   const q = a.etfQuoteQualityStatus;
@@ -235,6 +236,8 @@ export function composeTodayBriefCandidates(input: {
     riskReviewIncluded?: boolean;
     usMarketCheckDiagnosticCount?: number;
     usMarketSummaryStatus?: string;
+    usDiscoveryCandidateCount?: number;
+    usDiscoveryCandidates?: UsDiscoveryCandidate[];
     deckContract: CandidateDeckContractDiagnostics;
     displaySlots: CandidateDisplaySlot[];
   };
@@ -338,10 +341,38 @@ export function composeTodayBriefCandidates(input: {
     usPoolCount: input.usDirectCandidates?.length ?? 0,
     usSignalCandidateCount: input.usMarketKrCandidates.length,
   });
+  const usDiscoveryCandidates =
+    usAttach.primaryDeck.some((candidate) => candidate.country === 'US' || candidate.briefDeckSlot === 'us_market_check')
+      ? []
+      : buildUsDiscoveryCandidates({
+          preferredThemes: collectUsDiscoveryThemes({
+            userContextCandidates: input.userContextCandidates,
+            sectorRadarSummary: input.sectorRadarSummary,
+          }),
+          excludeSymbols: [
+            ...usAttach.primaryDeck,
+            ...usAttach.diagnosticCandidateCards,
+            ...(input.usDirectCandidates ?? []),
+          ].flatMap((candidate) => [candidate.symbol, candidate.stockCode, candidate.quoteSymbol].filter(Boolean) as string[]),
+          limit: 1,
+        });
+  const deckContractWithDiscovery: CandidateDeckContractDiagnostics = {
+    ...deckContract,
+    usDiscoverySlotPresent: usDiscoveryCandidates.length > 0,
+    deckContractStatus:
+      deckContract.deckContractStatus === 'degraded' && usDiscoveryCandidates.length > 0
+        ? 'degraded_with_discovery'
+        : deckContract.deckContractStatus,
+    actionHint:
+      deckContract.deckContractStatus === 'degraded' && usDiscoveryCandidates.length > 0
+        ? 'US price candidates are unavailable; a theme-based US discovery candidate is shown read-only.'
+        : deckContract.actionHint,
+  };
   const displaySlots = buildCandidateDisplaySlots({
     primaryDeck: usAttach.primaryDeck,
     diagnosticCandidateCards: [...repeatedMonitoringCandidates, ...usAttach.diagnosticCandidateCards],
-    deckContract,
+    deckContract: deckContractWithDiscovery,
+    usDiscoveryCandidates,
   });
 
   return {
@@ -366,10 +397,33 @@ export function composeTodayBriefCandidates(input: {
       maxUsSignalMapped: 1,
       riskReviewIncluded: Boolean(riskSlot),
       usMarketCheckDiagnosticCount: usAttach.diagnosticCandidateCards.length,
-      deckContract,
+      usDiscoveryCandidateCount: usDiscoveryCandidates.length,
+      usDiscoveryCandidates,
+      deckContract: deckContractWithDiscovery,
       displaySlots,
     },
   };
+}
+
+function collectUsDiscoveryThemes(input: {
+  userContextCandidates: TodayStockCandidate[];
+  sectorRadarSummary: SectorRadarSummaryResponse | null;
+}): string[] {
+  const themes = [
+    ...input.userContextCandidates.flatMap((candidate) => [
+      candidate.sector,
+      candidate.reasonSummary,
+      ...(candidate.positiveSignals ?? []),
+      ...(candidate.reasonDetails ?? []),
+    ]),
+    ...(input.sectorRadarSummary?.sectors ?? []).flatMap((sector) => [
+      sector.name,
+      sector.narrativeHint,
+      sector.scoreExplanation?.summary,
+      sector.scoreExplanation?.interpretation,
+    ]),
+  ];
+  return themes.filter((theme): theme is string => typeof theme === 'string' && theme.trim().length > 0).slice(0, 12);
 }
 
 export type CandidateDeckContractDiagnostics = {
@@ -391,7 +445,8 @@ export type CandidateDeckContractDiagnostics = {
     | 'risk_queue_dominates'
     | 'repeat_suppression';
   krSlotFallbackReason?: 'insufficient_kr_candidates';
-  deckContractStatus: 'ok' | 'partial' | 'degraded';
+  usDiscoverySlotPresent?: boolean;
+  deckContractStatus: 'ok' | 'partial' | 'degraded' | 'degraded_with_discovery';
   actionHint: string;
 };
 
@@ -474,6 +529,7 @@ function buildCandidateDisplaySlots(input: {
   primaryDeck: TodayStockCandidate[];
   diagnosticCandidateCards: TodayStockCandidate[];
   deckContract: CandidateDeckContractDiagnostics;
+  usDiscoveryCandidates?: UsDiscoveryCandidate[];
 }): CandidateDisplaySlot[] {
   const slots: CandidateDisplaySlot[] = input.primaryDeck.slice(0, 3).map((c, index) => ({
     slotId: `candidate-${c.candidateId}`,
@@ -483,12 +539,39 @@ function buildCandidateDisplaySlots(input: {
     title: c.name,
     subtitle: c.reasonSummary,
     reasonCode: c.dataQuality?.quoteReady === false ? 'quote_rows_missing' : 'unknown',
-    reasonLabelKo: c.briefDeckSlot === 'risk_review' ? 'Risk review' : 'Observation candidate',
-    actionHintKo: c.isBuyRecommendation === false ? 'Observation only. No buy/sell/order action is created.' : 'Observation only.',
+    reasonLabelKo: c.briefDeckSlot === 'risk_review' ? '리스크 점검' : '관찰 후보',
+    actionHintKo:
+      c.isBuyRecommendation === false
+        ? '관찰 전용입니다. 매수·매도·주문 행동을 만들지 않습니다.'
+        : '관찰 전용입니다.',
     primaryAction: 'none',
-    primaryActionLabelKo: 'Review card',
+    primaryActionLabelKo: '카드 확인',
     isTradeCandidate: false,
   }));
+
+  if (
+    input.deckContract.filledUsSlots < input.deckContract.targetUsSlots &&
+    (input.usDiscoveryCandidates?.length ?? 0) > 0 &&
+    slots.length < 3
+  ) {
+    const candidate = input.usDiscoveryCandidates?.[0];
+    if (candidate) {
+      slots.push({
+        slotId: `us-discovery-${candidate.symbol}`,
+        slotIndex: slots.length + 1,
+        targetMarket: 'US',
+        kind: 'us_diagnostic',
+      title: `미국 관찰 후보 · ${candidate.name} (${candidate.symbol})`,
+        subtitle: `${candidate.reasonKo} 시세 확인 전에는 가격 판단이나 거래 행동에 사용하지 않습니다. 최근 1주일 상승률, 거래량 변화, 관련 뉴스, 한국장 연결 테마를 확인한 뒤 재평가하세요.`,
+        reasonCode: 'us_market_feed_missing',
+        reasonLabelKo: '미국 관찰 후보',
+        actionHintKo: candidate.actionHintKo,
+        primaryAction: 'quote_status_check',
+        primaryActionLabelKo: '시세 상태 확인',
+        isTradeCandidate: false,
+      });
+    }
+  }
 
   if (input.deckContract.filledUsSlots < input.deckContract.targetUsSlots && slots.length < 3) {
     const code = reasonCodeFromUsFallback(input.deckContract.usSlotFallbackReason);
@@ -498,8 +581,8 @@ function buildCandidateDisplaySlots(input: {
       slotIndex: slots.length + 1,
       targetMarket: 'US',
       kind: 'us_diagnostic',
-      title: 'US candidate diagnostic',
-      subtitle: 'US slot is shown as a typed diagnostic instead of a forced candidate.',
+      title: '미국 후보 진단 카드',
+      subtitle: '미국 슬롯은 강제 후보 대신 원인과 다음 행동이 있는 진단 카드로 표시됩니다.',
       reasonCode: code,
       ...copy,
       isTradeCandidate: false,
@@ -513,8 +596,8 @@ function buildCandidateDisplaySlots(input: {
       slotIndex: slots.length + 1,
       targetMarket: 'KR',
       kind: 'insufficient_candidate',
-      title: 'KR candidate diagnostic',
-      subtitle: 'KR observation slot is short; no synthetic candidate was created.',
+      title: '국내 후보 진단 카드',
+      subtitle: '국내 관찰 슬롯이 부족합니다. 임의 후보를 만들지 않고 데이터 점검으로 이어갑니다.',
       reasonCode: 'insufficient_candidates',
       ...copy,
       isTradeCandidate: false,
@@ -596,10 +679,10 @@ export function buildCandidateDeckContractDiagnostics(input: {
   const deckContractStatus = krSatisfied && filledUsSlots >= 1 ? 'ok' : usSatisfied || krSatisfied ? 'partial' : 'degraded';
   const actionHint =
     deckContractStatus === 'ok'
-      ? '국내 2 + 미국 1 관찰 큐 원칙을 충족했습니다.'
+      ? 'KR 2 + US 1 observation slots are filled.'
       : usSatisfied
-        ? '미국 후보를 강제로 만들지 않고 진단 슬롯으로 대체했습니다.'
-        : '후보 풀이 부족해 국내 2 + 미국 1 원칙을 부분 충족했습니다.';
+        ? 'US candidates were not forced; a diagnostic slot is shown instead.'
+        : 'Candidate data is short, so the KR 2 + US 1 slot contract is only partially filled.';
   return {
     targetKrSlots: 2,
     filledKrSlots,
