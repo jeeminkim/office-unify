@@ -1,5 +1,22 @@
 # Current System Baseline
 
+## EVO-066 Daily Conversation Loop
+
+- Home is organized around a KST daily investment conversation loop: daily conversation, compact memory/junior/summary row, useful Today content, then collapsed operations.
+- `GET /api/dashboard/persona-briefs` is read-only and composes daily conversation state, Junior Analyst morning/post-PB output, activity summary, and System Analyst evidence coverage.
+- Junior Analyst may compare morning observations with post-PB conversation changes, but it does not override PB or provide trade instructions.
+- PB remains the final structure for judgment, risk checks, deferred actions, and next checkpoints.
+- System Analyst reports data sources and limitations separately from investment memory and does not make investment judgments.
+
+## EVO-065 Home UX Rebalance + Analyst Personas
+
+- Dashboard first screen priority is PB conversation entry, recent personalization memory, and Junior Analyst memo.
+- Copilot Flow, Command Center, data readiness, Runbook, and Quote Recovery are support surfaces. They should render compact or collapsed by default on home.
+- PB screen must provide concrete input examples, focused action buttons, and a placeholder that asks for concerned symbol/sector, intended action, and anxiety.
+- System Analyst is an operations/UX quality persona only. It must cite source types such as `web_ops_events`, `qualityMeta`, SQL readiness, runbook results, user feedback, and screen-flow signals.
+- Junior Analyst is a PB subordinate: it offers fresh questions, today summary, and risk escalation to PB. It must not issue buy/sell directives or automated execution language.
+- Home primary CTA remains PB conversation. Runbook execution CTAs remain lower-priority and explicit-click only.
+
 ## EVO-064 PB Memory Promotion & Personalization Injection
 
 - PB daily summaries can promote only filtered memory candidates into `user_investment_memory`.

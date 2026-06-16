@@ -21,6 +21,7 @@ type Props = {
   } | null;
   dataBlocker: CommandCenterItem | null;
   statusTone: (status: DataReadinessStatusSection["status"]) => string;
+  defaultOpen?: boolean;
 };
 
 export function DataReadinessSection({
@@ -30,12 +31,24 @@ export function DataReadinessSection({
   weeklySqlReadiness,
   dataBlocker,
   statusTone,
+  defaultOpen = false,
 }: Props) {
   const sqlHints = weeklySqlReadiness?.actionHints ?? [];
 
   return (
-    <section className="mb-5 rounded-xl border border-sky-200 bg-sky-50/40 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
+    <details open={defaultOpen} className="mb-5 rounded-xl border border-sky-200 bg-sky-50/40 p-3">
+      <summary className="cursor-pointer list-none">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold text-sky-950">데이터 준비 / Runbook / Quote Recovery</h2>
+            <p className="mt-0.5 text-xs text-sky-900/90">
+              운영 점검: error {statusSummary.errors} · warn {statusSummary.warns} · not configured {statusSummary.notConfigured}
+            </p>
+          </div>
+          <span className="rounded border border-sky-300 bg-white px-2 py-1 text-[11px] text-sky-950">펼치기</span>
+        </div>
+      </summary>
+      <div className="mt-3 flex flex-wrap items-start justify-between gap-2">
         <div>
           <h2 className="text-sm font-semibold text-sky-950">데이터 파이프라인 준비 상태</h2>
           <p className="mt-0.5 text-[11px] text-sky-900/90">
@@ -103,6 +116,6 @@ export function DataReadinessSection({
           ))}
         </div>
       </div>
-    </section>
+    </details>
   );
 }

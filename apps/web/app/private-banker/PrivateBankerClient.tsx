@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import type {
   LongResponseFallback,
   PbActionCategory,
@@ -17,20 +18,18 @@ import { PERSONA_CHAT_USER_MESSAGE_MAX_CHARS } from "@office-unify/shared-types"
 import Link from "next/link";
 import { PersonaAssistantFeedbackRow } from "@/components/PersonaAssistantFeedbackRow";
 import { OpsFeedbackButton } from "@/components/OpsFeedbackButton";
+import { PB_INPUT_PLACEHOLDER, PB_START_ACTION_LABELS, PB_START_GUIDE_EXAMPLES } from "@/lib/pbStartGuide";
 
 const jsonHeaders: HeadersInit = {
   "Content-Type": "application/json",
 };
 
 const ACTION_OPTIONS: Array<{ id: string; key: PbActionCategory; label: string; template: PbConversationTemplateType }> = [
-  { id: "buy", key: "buy", label: "매수", template: "buy_check" },
-  { id: "add_buy", key: "add_buy", label: "추가매수", template: "buy_check" },
-  { id: "sell", key: "sell", label: "매도", template: "sell_check" },
-  { id: "trim", key: "trim", label: "비중축소", template: "sell_check" },
-  { id: "hold", key: "hold", label: "관망", template: "anxiety_check" },
-  { id: "research", key: "research", label: "리서치", template: "research_check" },
-  { id: "compare", key: "compare", label: "비교", template: "compare_check" },
-  { id: "review", key: "review", label: "판단 정리", template: "daily_checkin" },
+  { id: "anxiety", key: "hold", label: PB_START_ACTION_LABELS[0], template: "anxiety_check" },
+  { id: "add_buy", key: "add_buy", label: PB_START_ACTION_LABELS[1], template: "buy_check" },
+  { id: "compare", key: "compare", label: PB_START_ACTION_LABELS[2], template: "compare_check" },
+  { id: "research", key: "research", label: PB_START_ACTION_LABELS[3], template: "research_check" },
+  { id: "review", key: "review", label: PB_START_ACTION_LABELS[4], template: "daily_checkin" },
 ];
 
 const TEMPLATE_LABELS: Record<PbConversationTemplateType, string> = {
@@ -62,6 +61,7 @@ const DAILY_CHECKIN_TEXT = `오늘의 3문항 체크인
 3. 그 행동을 하고 싶은 이유와 가장 불안한 점은?`;
 
 export function PrivateBankerClient() {
+  const searchParams = useSearchParams();
   const [sessionDateKst, setSessionDateKst] = useState<string | null>(null);
   const [longTerm, setLongTerm] = useState<string | null>(null);
   const [prevHint, setPrevHint] = useState<string | null>(null);
@@ -88,6 +88,14 @@ export function PrivateBankerClient() {
     summary: PbDailyConversationSummary;
     promotedMemoryCount?: number;
     promotionWarnings?: string[];
+    progress?: {
+      phase: "pb_checkin_completed";
+      conversationId?: string;
+      saved: boolean;
+      memoryCandidateCount: number;
+      promotedMemoryCount: number;
+      nextActions: Array<{ key: "home_summary" | "junior_followup" | "research"; label: string; href: string }>;
+    };
   } | null>(null);
 
   const sendInFlightRef = useRef(false);
@@ -119,6 +127,23 @@ export function PrivateBankerClient() {
   useEffect(() => {
     void loadSession();
   }, [loadSession]);
+
+  useEffect(() => {
+    const mode = searchParams.get("mode");
+    const showMemory = searchParams.get("showMemory");
+    if (mode === "daily_checkin") {
+      setSelectedTemplate("daily_checkin");
+      setSelectedAction("review");
+      setInput((prev) => (prev.trim() ? prev : DAILY_CHECKIN_TEXT));
+    } else if (mode === "freeform") {
+      setSelectedTemplate("freeform");
+      setSelectedAction("no_action");
+      setInput((prev) => prev);
+    }
+    if (showMemory === "1") {
+      setInfo("오른쪽 장기 기억 요약을 먼저 확인한 뒤, 오늘의 종목·행동·불안한 점을 적어보세요.");
+    }
+  }, [searchParams]);
 
   const send = async () => {
     setError(null);
@@ -180,6 +205,14 @@ export function PrivateBankerClient() {
           promotedMemoryCount?: number;
           promotionWarnings?: string[];
         };
+        dailyConversationProgress?: {
+          phase: "pb_checkin_completed";
+          conversationId?: string;
+          saved: boolean;
+          memoryCandidateCount: number;
+          promotedMemoryCount: number;
+          nextActions: Array<{ key: "home_summary" | "junior_followup" | "research"; label: string; href: string }>;
+        };
         error?: string;
         code?: string;
       };
@@ -220,7 +253,7 @@ export function PrivateBankerClient() {
       setModelUsage(data.modelUsage ?? null);
       setLongResponseFallback(data.longResponseFallback ?? null);
       setOutputContract(data.qualityMeta?.privateBanker?.outputContract ?? null);
-      setLastDailyConversation(data.pbDailyConversation ?? null);
+      setLastDailyConversation(data.pbDailyConversation ? { ...data.pbDailyConversation, progress: data.dailyConversationProgress } : null);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "전송 실패";
       const fb = buildLongResponseFallbackFromError(msg);
@@ -270,6 +303,17 @@ export function PrivateBankerClient() {
       <p className="text-sm text-slate-500">
         종목 추천기가 아니라 구조화된 투자 판단 보조입니다. 매수 4유형·체크리스트·원장 규칙은 서버 시스템 프롬프트에 반영되어 있습니다. 장기 기억은 각 답변 아래 평가로만 갱신됩니다.
       </p>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-4 text-sm shadow-sm">
+        <h2 className="text-base font-semibold text-slate-900">오늘은 이렇게 시작해보세요.</h2>
+        <div className="mt-3 grid gap-2 text-xs text-slate-700">
+          {PB_START_GUIDE_EXAMPLES.map((example, idx) => (
+            <p key={example} className="rounded border border-slate-100 bg-slate-50 p-2">
+              예시 {idx + 1}: {example}
+            </p>
+          ))}
+        </div>
+      </section>
 
       <section className="rounded-xl border border-violet-200 bg-white p-4 text-sm shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -406,6 +450,23 @@ export function PrivateBankerClient() {
             </p>
           ) : null}
           <div className="mt-2 space-y-2">
+            <div className="rounded border border-emerald-100 bg-white p-2">
+              <p className="font-semibold">오늘 대화 정리 완료</p>
+              {lastDailyConversation.saved ? (
+                <p className="mt-1">저장된 내용: 오늘 관심 종목/테마, 행동 의도, thesis와 리스크, 다음 확인 항목, 장기 기억 후보</p>
+              ) : (
+                <p className="mt-1 text-amber-900">PB 답변은 정상적으로 생성됐지만 오늘 요약 저장은 준비되지 않았습니다. 대화 내용은 화면에서 계속 확인할 수 있습니다.</p>
+              )}
+              {lastDailyConversation.progress?.nextActions?.length ? (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {lastDailyConversation.progress.nextActions.map((action) => (
+                    <Link key={action.key} href={action.href} className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-emerald-950">
+                      {action.label}
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
+            </div>
             <p>
               <span className="font-semibold">점검 흐름:</span> {TEMPLATE_LABELS[lastDailyConversation.summary.templateType]} ·{" "}
               <span className="font-semibold">행동 관점:</span> {ACTION_LABELS[lastDailyConversation.summary.actionCategory]}
@@ -475,7 +536,7 @@ export function PrivateBankerClient() {
                 value={input}
                 maxLength={PERSONA_CHAT_USER_MESSAGE_MAX_CHARS}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="매수·매도·관심 등 자연어로 입력…"
+                placeholder={PB_INPUT_PLACEHOLDER}
                 disabled={loadingSend}
               />
               <button

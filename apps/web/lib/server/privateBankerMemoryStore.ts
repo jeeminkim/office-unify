@@ -18,6 +18,12 @@ type SavePbDailyConversationInput = {
   summary: PbDailyConversationSummary;
 };
 
+export type PbDailyConversationRecord = {
+  id?: string;
+  createdAt?: string;
+  summary: PbDailyConversationSummary;
+};
+
 function isMissingTableOrColumn(error: { message?: string; code?: string } | null | undefined): boolean {
   const msg = `${error?.message ?? ''} ${error?.code ?? ''}`.toLowerCase();
   return msg.includes('does not exist') || msg.includes('schema cache') || msg.includes('column') || msg.includes('pb_daily_conversations') || msg.includes('user_investment_memory');
@@ -131,7 +137,7 @@ export function extractMemoryCandidates(summary: PbDailyConversationSummary): Pb
     .slice(0, 5);
 }
 
-async function listRecentPbSummaries(
+export async function listRecentPbSummaries(
   supabase: SupabaseClient,
   userKey: OfficeUserKey,
   limit = 30,
@@ -151,13 +157,40 @@ async function listRecentPbSummaries(
     .filter((v): v is PbDailyConversationSummary => Boolean(v && typeof v === 'object' && 'templateType' in v));
 }
 
-async function listExistingInvestmentMemories(
+export async function listRecentPbConversationRecords(
+  supabase: SupabaseClient,
+  userKey: OfficeUserKey,
+  limit = 30,
+): Promise<PbDailyConversationRecord[]> {
+  const { data, error } = await supabase
+    .from('pb_daily_conversations')
+    .select('id,summary_json,created_at')
+    .eq('user_key', userKey as string)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) {
+    if (isMissingTableOrColumn(error)) return [];
+    throw error;
+  }
+  return (Array.isArray(data) ? data : [])
+    .flatMap((row: Record<string, unknown>): PbDailyConversationRecord[] => {
+      const summary = row.summary_json;
+      if (!summary || typeof summary !== 'object' || !('templateType' in summary)) return [];
+      return [{
+        id: typeof row.id === 'string' ? row.id : undefined,
+        createdAt: typeof row.created_at === 'string' ? row.created_at : undefined,
+        summary: summary as PbDailyConversationSummary,
+      }];
+    });
+}
+
+export async function listExistingInvestmentMemories(
   supabase: SupabaseClient,
   userKey: OfficeUserKey,
 ): Promise<UserInvestmentMemoryForPromotion[]> {
   const { data, error } = await supabase
     .from('user_investment_memory')
-    .select('id,memory_type,memory_key,title,content,occurrence_count')
+    .select('id,memory_type,memory_key,title,content,occurrence_count,related_symbols,related_themes')
     .eq('user_key', userKey as string)
     .limit(200);
   if (error) {
@@ -171,6 +204,12 @@ async function listExistingInvestmentMemories(
     title: typeof row.title === 'string' ? row.title : undefined,
     content: typeof row.content === 'string' ? row.content : undefined,
     occurrenceCount: typeof row.occurrence_count === 'number' ? row.occurrence_count : undefined,
+    relatedSymbols: Array.isArray(row.related_symbols)
+      ? row.related_symbols.filter((value): value is string => typeof value === 'string')
+      : [],
+    relatedThemes: Array.isArray(row.related_themes)
+      ? row.related_themes.filter((value): value is string => typeof value === 'string')
+      : [],
   }));
 }
 

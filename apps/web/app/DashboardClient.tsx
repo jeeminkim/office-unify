@@ -49,9 +49,12 @@ import { TodayCandidateRiskReviewPanel } from "@/app/components/TodayCandidateRi
 import { ActionItemsSummarySection } from "@/app/components/dashboard/ActionItemsSummarySection";
 import { CommandCenterSection } from "@/app/components/dashboard/CommandCenterSection";
 import { CopilotStatusStrip } from "@/app/components/dashboard/CopilotStatusStrip";
+import { DailyConversationLoopSection } from "@/app/components/dashboard/DailyConversationLoopSection";
 import { DataReadinessSection } from "@/app/components/dashboard/DataReadinessSection";
 import { JudgmentReviewSummarySection } from "@/app/components/dashboard/JudgmentReviewSummarySection";
+import { SystemAnalystInsightSection } from "@/app/components/dashboard/SystemAnalystInsightSection";
 import { TodayBriefSection } from "@/app/components/dashboard/TodayBriefSection";
+import { TodayCoreSummarySection } from "@/app/components/dashboard/TodayCoreSummarySection";
 import { TodayCandidatesSection } from "@/app/components/dashboard/TodayCandidatesSection";
 import { WatchlistRecommendationSection } from "@/app/components/dashboard/WatchlistRecommendationSection";
 import { buildCommandCenterPlan, type CommandCenterOpenActionItem } from "@/lib/commandCenterPolicy";
@@ -61,6 +64,10 @@ import { SaveToActionInboxButton } from "@/components/SaveToActionInboxButton";
 import { buildActionItemDetailFromTodayCandidate, buildGenericActionItemDetail } from "@/lib/actionItemDetailBuilders";
 import { filterCandidatesByConfidence } from "@/lib/todayCandidateDataQuality";
 import { readLastTickerResolverRequestId } from "@/lib/lastTickerResolverRequestId";
+import type { DailyInvestmentConversationState } from "@/lib/dailyInvestmentConversationModel";
+import type { DailyInvestmentActivitySummary } from "@/lib/server/dailyInvestmentActivitySummary";
+import type { JuniorAnalystDailyBrief, JuniorAnalystPostPbFollowup } from "@/lib/server/juniorAnalystDailyBrief";
+import type { SystemAnalystDataCoverage, SystemAnalystInsight, SystemAnalystRecommendation } from "@/lib/server/systemAnalystInsights";
 
 function judgmentQualityLevelLabel(level: string | undefined): string {
   switch (level) {
@@ -404,6 +411,13 @@ export function DashboardClient() {
   const [watchRecHint, setWatchRecHint] = useState<string | null>(null);
   const [openActionItems, setOpenActionItems] = useState<CommandCenterOpenActionItem[]>([]);
   const [actionItemsLoading, setActionItemsLoading] = useState(false);
+  const [juniorAnalystBrief, setJuniorAnalystBrief] = useState<JuniorAnalystDailyBrief | null>(null);
+  const [juniorPostPbFollowup, setJuniorPostPbFollowup] = useState<JuniorAnalystPostPbFollowup | null>(null);
+  const [systemAnalystInsights, setSystemAnalystInsights] = useState<SystemAnalystInsight[]>([]);
+  const [systemAnalystDataCoverage, setSystemAnalystDataCoverage] = useState<SystemAnalystDataCoverage[]>([]);
+  const [systemAnalystRecommendations, setSystemAnalystRecommendations] = useState<SystemAnalystRecommendation[]>([]);
+  const [dailyConversation, setDailyConversation] = useState<DailyInvestmentConversationState | null>(null);
+  const [dailyActivitySummary, setDailyActivitySummary] = useState<DailyInvestmentActivitySummary | null>(null);
   const [opsRunbookPlan, setOpsRunbookPlan] = useState<OpsRunbookPlan | null>(null);
   const [opsRunbookResult, setOpsRunbookResult] = useState<OpsRunbookExecutionResponse | null>(null);
   const [opsRunbookBusy, setOpsRunbookBusy] = useState<"plan" | "execute" | null>(null);
@@ -423,7 +437,7 @@ export function DashboardClient() {
   const loadOverview = useCallback(async () => {
     setReloading(true);
     try {
-      const [statusRes, overviewRes, briefRes, profitGoalRes, patternRes, alertsRes, todayOpsRes] = await Promise.all([
+      const [statusRes, overviewRes, briefRes, profitGoalRes, patternRes, alertsRes, todayOpsRes, personaBriefsRes] = await Promise.all([
         fetch("/api/system/status", { credentials: "same-origin" }),
         fetch("/api/dashboard/overview", { credentials: "same-origin" }),
         fetch("/api/dashboard/today-brief", { credentials: "same-origin" }),
@@ -431,6 +445,7 @@ export function DashboardClient() {
         fetch("/api/trade-journal/pattern-analysis", { credentials: "same-origin" }),
         fetch("/api/portfolio/alerts", { credentials: "same-origin" }),
         fetch("/api/dashboard/today-candidates/ops-summary?range=7d", { credentials: "same-origin" }),
+        fetch("/api/dashboard/persona-briefs", { credentials: "same-origin" }),
       ]);
       const statusJson = await readDashboardJson<{ sections?: StatusSection[] }>(statusRes);
       const overviewJson = await readDashboardJson<DashboardResponse>(overviewRes);
@@ -439,6 +454,21 @@ export function DashboardClient() {
       const patternJson = await readDashboardJson<PatternAnalysisResponse>(patternRes);
       const alertsJson = await readDashboardJson<{ alerts?: Array<{ id: string; symbol: string; title: string; body: string; severity: string }> }>(alertsRes);
       const todayOpsJson = await readDashboardJson<TodayCandidatesOpsSummaryResponse>(todayOpsRes);
+      const personaBriefsJson = await readDashboardJson<{
+        juniorAnalyst?: {
+          morningBrief?: JuniorAnalystDailyBrief;
+          postPbFollowup?: JuniorAnalystPostPbFollowup;
+        };
+        systemAnalyst?: {
+          insights?: SystemAnalystInsight[];
+          dataCoverage?: SystemAnalystDataCoverage[];
+          recommendations?: SystemAnalystRecommendation[];
+        };
+        dailyConversation?: DailyInvestmentConversationState;
+        dailyActivitySummary?: DailyInvestmentActivitySummary;
+        legacyJuniorAnalyst?: JuniorAnalystDailyBrief;
+        legacySystemAnalyst?: SystemAnalystInsight[];
+      }>(personaBriefsRes);
       if (!statusRes.ok) throw new Error(statusJson.error ?? `HTTP ${statusRes.status}`);
       if (!overviewRes.ok) throw new Error(overviewJson.error ?? `HTTP ${overviewRes.status}`);
       const sectionErrors: string[] = [];
@@ -468,6 +498,24 @@ export function DashboardClient() {
       else {
         setTodayOpsSummary(null);
         sectionErrors.push(dashboardSectionError("Today Ops", todayOpsRes, todayOpsJson));
+      }
+      if (personaBriefsRes.ok) {
+        setJuniorAnalystBrief(personaBriefsJson.juniorAnalyst?.morningBrief ?? personaBriefsJson.legacyJuniorAnalyst ?? null);
+        setJuniorPostPbFollowup(personaBriefsJson.juniorAnalyst?.postPbFollowup ?? null);
+        setSystemAnalystInsights(personaBriefsJson.systemAnalyst?.insights ?? personaBriefsJson.legacySystemAnalyst ?? []);
+        setSystemAnalystDataCoverage(personaBriefsJson.systemAnalyst?.dataCoverage ?? []);
+        setSystemAnalystRecommendations(personaBriefsJson.systemAnalyst?.recommendations ?? []);
+        setDailyConversation(personaBriefsJson.dailyConversation ?? null);
+        setDailyActivitySummary(personaBriefsJson.dailyActivitySummary ?? null);
+      } else {
+        setJuniorAnalystBrief(null);
+        setJuniorPostPbFollowup(null);
+        setSystemAnalystInsights([]);
+        setSystemAnalystDataCoverage([]);
+        setSystemAnalystRecommendations([]);
+        setDailyConversation(null);
+        setDailyActivitySummary(null);
+        sectionErrors.push(dashboardSectionError("Persona Briefs", personaBriefsRes, personaBriefsJson));
       }
       setError(sectionErrors.length > 0 ? `일부 섹션을 불러오지 못했습니다. ${sectionErrors.join(" · ")}` : null);
       try {
@@ -1232,6 +1280,15 @@ export function DashboardClient() {
     },
     [executeOpsRunbook, executeQuoteRecovery, loadOverview],
   );
+  const personalizationSummary = commandCenter.personalization;
+  const repeatedPatternCount =
+    personalizationSummary?.repeatedPatternCount ?? personalizationSummary?.repeatedPatternsCount ?? 0;
+  const blockerCount = personalizationSummary?.dataBlockerCount ?? (commandCenter.dataBlocker ? 1 : 0);
+  const dataIssueCount =
+    statusSummary.errors + statusSummary.warns + statusSummary.notConfigured + (opsOpenErrorCount ?? 0);
+  const todayCoreLine = !todayBrief?.degraded
+    ? todayBrief?.lines.find((line) => line.severity === "positive" || line.severity === "info")
+    : undefined;
 
   return (
     <div className="mx-auto max-w-6xl p-6 text-slate-900">
@@ -1273,19 +1330,52 @@ export function DashboardClient() {
       </div>
 
       {error ? <div className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div> : null}
+      <DailyConversationLoopSection
+        state={dailyConversation}
+        morningBrief={juniorAnalystBrief}
+        postPbFollowup={juniorPostPbFollowup}
+        activitySummary={dailyActivitySummary}
+        memorySummary={personalizationSummary}
+      />
+      <TodayCoreSummarySection
+        title={todayCoreLine?.title}
+        summary={todayCoreLine?.body}
+        sourceLabel={todayCoreLine?.source.join(" · ")}
+      />
       <CopilotStatusStrip
         status={copilotStatus}
         busy={reloading || quoteRecoveryBusy != null || opsRunbookBusy != null}
         onPrimaryAction={handleCopilotPrimaryAction}
+        variant="compact"
+      />
+      <SystemAnalystInsightSection
+        dataIssueCount={dataIssueCount}
+        repeatedPatternCount={repeatedPatternCount}
+        blockerCount={blockerCount}
+        insights={systemAnalystInsights}
+        dataCoverage={systemAnalystDataCoverage}
+        recommendations={systemAnalystRecommendations}
       />
       <CommandCenterSection
         dataBlocker={commandCenter.dataBlocker}
         todayItems={commandCenter.todayItems}
-        personalization={commandCenter.personalization}
+        personalization={personalizationSummary}
         loading={reloading || actionItemsLoading}
+        defaultOpen={false}
       />
-      <section className="mb-5 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+      <details className="mb-5 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950">
+        <summary className="cursor-pointer list-none">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold">운영 점검</h2>
+              <p className="mt-1 text-xs text-sky-900">
+                오늘 일부 미국 데이터가 제한되면 국내/테마 중심으로 먼저 확인합니다. 필요한 경우만 Runbook을 펼칩니다.
+              </p>
+            </div>
+            <span className="rounded border border-sky-300 bg-white px-2 py-1 text-[11px] text-sky-950">펼치기</span>
+          </div>
+        </summary>
+        <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold">미국 데이터 준비 Runbook</h2>
             <p className="mt-1 text-xs text-sky-900">
@@ -1416,9 +1506,9 @@ export function DashboardClient() {
             Theme mapping
           </Link>
         </div>
-      </section>
+      </details>
       <ActionItemsSummarySection items={openActionItems} loading={actionItemsLoading} />
-      <section className="mb-5 rounded-xl border border-violet-200 bg-violet-50 p-4">
+      <section id="today-brief" className="mb-5 rounded-xl border border-violet-200 bg-violet-50 p-4">
         <TodayBriefSection
           todayBrief={todayBrief}
           showLowConfidenceCandidates={showLowConfidenceCandidates}

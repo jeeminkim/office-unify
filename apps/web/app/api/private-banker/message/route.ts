@@ -209,6 +209,18 @@ export async function POST(req: Request) {
         promotionWarnings: promotionResults.filter((r) => !r.ok).map((r) => r.warning).slice(0, 3),
         memoryExtractionPrompt: buildPbMemoryExtractionPrompt(dailySummary),
       },
+      dailyConversationProgress: {
+        phase: 'pb_checkin_completed',
+        conversationId: dailySave.ok ? dailySave.id : undefined,
+        saved: dailySave.ok,
+        memoryCandidateCount: dailySummary.memoryCandidates.length,
+        promotedMemoryCount: promotionResults.filter((r) => r.ok).length,
+        nextActions: [
+          { key: 'home_summary', label: '홈에서 오늘 요약 보기', href: '/' },
+          { key: 'junior_followup', label: '주니어 애널리스트 후속 의견 보기', href: '/#daily-conversation' },
+          { key: 'research', label: 'Research로 이어가기', href: '/research-center' },
+        ],
+      },
       deduplicated: result.deduplicated,
     });
   } catch (e: unknown) {

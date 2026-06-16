@@ -7,6 +7,8 @@ export type UserInvestmentMemoryForPromotion = {
   title?: string;
   content?: string;
   occurrenceCount?: number;
+  relatedSymbols?: string[];
+  relatedThemes?: string[];
 };
 
 export type MemoryPromotionDecision = {

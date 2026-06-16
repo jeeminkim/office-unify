@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### 2026-06-16 EVO-066 Daily Investment Conversation Loop
+
+- **Home loop:** connected PB start, Junior Analyst, personal memory, and Today summary into a single daily conversation flow instead of separate large cards.
+- **Daily state:** added a KST-based daily investment conversation model with phases from `not_started` through `daily_summary_ready`.
+- **Persona collaboration:** Junior Analyst now supports morning brief and post-PB follow-up, while PB remains the final judgment-structuring persona.
+- **Read-only API:** expanded `GET /api/dashboard/persona-briefs` with daily conversation state, activity summary, System Analyst coverage/limitations, and read-only quality metadata.
+- **Guardrails:** daily summaries remain activity/judgment/checkpoint summaries, not buy/sell instructions, auto orders, or automatic rebalancing.
+
+### 2026-06-11 EVO-065 Home UX Rebalance + Analyst Personas
+
+- **Home IA rebalance:** Dashboard now puts PB conversation entry, personalization memory summary, and Junior Analyst memo above Copilot/operations/runbook surfaces.
+- **PB entry:** added a top home card with three CTAs: PB 3-question check-in, freeform PB conversation, and recent memory start.
+- **Operations compacting:** Copilot status supports compact mode; Command Center and data readiness/runbook surfaces are collapsed by default and framed as optional operations checks.
+- **PB start guide:** Private Banker now shows three concrete start examples, focused action buttons, query-mode handling, and a clearer input placeholder.
+- **Analyst data connection:** added read-only `GET /api/dashboard/persona-briefs`, which combines recent PB summaries, investment memory, open action items, and operations errors for the home analyst cards.
+- **System Analyst persona:** added a transparent source-oriented insight builder and a collapsed home section that renders evidence, source types, cause hypotheses, and prioritized fixes.
+- **Junior Analyst persona:** added a guarded daily brief builder and expandable compact home memo. The role shows observations, fresh questions, PB risk escalation, and source transparency without trade directives.
+- **Guardrails:** no automatic trading, order, rebalancing, watchlist auto-registration, GET write, or API field removal was added.
+
 ### 2026-06-11 EVO-064 PB Memory Promotion & Personalization Injection
 
 - **Memory promotion policy:** added a pure `evaluateMemoryPromotionCandidate` policy that promotes only repeated, anchored, or explicit investment principles and keeps weak single-news reactions out of long-term memory.

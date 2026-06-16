@@ -1,5 +1,24 @@
 # System Architecture (Personal Investment Console)
 
+## EVO-066 Daily Investment Conversation Loop
+
+- `apps/web/lib/dailyInvestmentConversationModel.ts` defines KST date handling and daily conversation phases.
+- `apps/web/lib/server/juniorAnalystDailyBrief.ts` provides both morning brief and post-PB follow-up builders.
+- `apps/web/lib/server/dailyInvestmentActivitySummary.ts` summarizes the day as activities, thesis checks, deferred actions, and next checkpoints without trade instructions.
+- `apps/web/lib/server/systemAnalystInsights.ts` exposes System Analyst insights with explicit data coverage and limitation metadata.
+- `GET /api/dashboard/persona-briefs` remains read-only: it does not insert/update ops events, promote memory, or create Action Items.
+
+## EVO-065 Home UX Rebalance + Analyst Personas
+
+- `DashboardClient.tsx` places `PbConversationEntrySection`, `PersonalizationMemorySummarySection`, and `JuniorAnalystMemoSection` before operations surfaces.
+- `CopilotStatusStrip` supports `variant="compact"` for the home status line. `CommandCenterSection` and `DataReadinessSection` can render collapsed by default.
+- `PbConversationEntrySection` routes to `/private-banker?mode=daily_checkin`, `/private-banker?mode=freeform`, and `/private-banker?showMemory=1`.
+- `apps/web/lib/pbStartGuide.ts` owns PB screen start examples, action labels, and input placeholder copy.
+- `apps/web/lib/server/juniorAnalystDailyBrief.ts` is a pure guarded builder for Junior Analyst summary/fresh-question output.
+- `apps/web/lib/server/systemAnalystInsights.ts` is a pure source-transparent builder for system/UX/data readiness insights.
+- `GET /api/dashboard/persona-briefs` reads recent PB summaries, investment memory, open/in-progress action items, and open operations errors, then returns both analyst outputs without writing data.
+- System Analyst is never a portfolio decision-maker; Junior Analyst never bypasses PB. Both preserve no-trade/no-auto-order guardrails.
+
 ## EVO-064 PB Memory Promotion & Personalization Injection
 
 - `apps/web/lib/server/investmentMemoryPromotionPolicy.ts` owns pure promotion decisions for PB memory candidates. It has no SQL or LLM dependency.

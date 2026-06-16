@@ -11,6 +11,7 @@ type Props = {
   todayItems: CommandCenterItem[];
   personalization?: CommandCenterPersonalizationSummary;
   loading?: boolean;
+  defaultOpen?: boolean;
 };
 
 function severityClass(sev: CommandCenterItem["severity"]): string {
@@ -57,14 +58,26 @@ function ItemCard({ item, tag }: { item: CommandCenterItem; tag?: string }) {
   );
 }
 
-export function CommandCenterSection({ dataBlocker, todayItems, personalization, loading }: Props) {
+export function CommandCenterSection({ dataBlocker, todayItems, personalization, loading, defaultOpen = true }: Props) {
   const empty = !dataBlocker && todayItems.length === 0;
+  const repeated = personalization?.repeatedPatternCount ?? personalization?.repeatedPatternsCount ?? 0;
+  const blockers = personalization?.dataBlockerCount ?? (dataBlocker ? 1 : 0);
 
   return (
-    <section className="mb-5 rounded-xl border border-slate-300 bg-gradient-to-b from-slate-50 to-white p-4 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-2">
+    <details open={defaultOpen} className="mb-4 rounded-xl border border-slate-300 bg-white p-3 shadow-sm">
+      <summary className="cursor-pointer list-none">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-900">오늘의 운영 관제</h2>
+            <p className="mt-0.5 text-xs text-slate-600">
+              오늘 일부 데이터가 제한되면 국내/테마 중심으로 먼저 확인합니다. 데이터 이슈 {statusLabel(dataBlocker, todayItems)} · 반복 패턴 {repeated}건 · blocker {blockers}건
+            </p>
+          </div>
+          <span className="rounded border border-slate-300 bg-slate-50 px-2 py-1 text-[11px] text-slate-700">자세히 보기</span>
+        </div>
+      </summary>
+      <div className="mt-3 flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h2 className="text-sm font-semibold text-slate-900">오늘의 운영 관제</h2>
           <p className="mt-0.5 text-[11px] text-slate-600">
             매수 추천이 아니라 오늘 확인할 운영 작업입니다. 자동 주문은 실행되지 않습니다.
           </p>
@@ -112,6 +125,11 @@ export function CommandCenterSection({ dataBlocker, todayItems, personalization,
           ))}
         </ul>
       )}
-    </section>
+    </details>
   );
+}
+
+function statusLabel(dataBlocker: CommandCenterItem | null, todayItems: CommandCenterItem[]): string {
+  const count = (dataBlocker ? 1 : 0) + todayItems.filter((item) => item.severity !== 'info').length;
+  return `${count}건`;
 }

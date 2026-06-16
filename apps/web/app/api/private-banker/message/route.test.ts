@@ -78,6 +78,7 @@ describe('POST /api/private-banker/message', () => {
     const json = (await res.json()) as {
       assistantMessage?: { id?: string };
       deduplicated?: boolean;
+      dailyConversationProgress?: { phase?: string; saved?: boolean; nextActions?: Array<{ key: string }> };
       qualityMeta?: { privateBanker?: { outputContract?: { status?: string; unsafeDirectiveCount?: number } } };
     };
     expect(json.assistantMessage?.id).toBe('a1');
@@ -86,6 +87,11 @@ describe('POST /api/private-banker/message', () => {
       status: 'ok',
       unsafeDirectiveCount: 0,
     });
+    expect(json.dailyConversationProgress).toMatchObject({
+      phase: 'pb_checkin_completed',
+      saved: false,
+    });
+    expect(json.dailyConversationProgress?.nextActions?.map((action) => action.key)).toContain('home_summary');
   });
 
   it('reports unsafe PB language without blocking the response', async () => {
