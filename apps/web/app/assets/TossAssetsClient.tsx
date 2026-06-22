@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronRight, Eye, EyeOff, RefreshCw } from 'lucide-react';
-import { TossLedgerSyncCard } from './TossLedgerSyncCard';
 
 type CurrencyAmounts = { krw: string; usd?: string | null };
 
@@ -22,7 +21,7 @@ type HoldingItem = {
 type AssetResponse = {
   ok: boolean;
   generatedAt: string;
-  account: { label: string; maskedNumber: string; accountType: string; accountSeq?: number };
+  account: { label: string; maskedNumber: string; accountType: string };
   holdings: {
     totalPurchaseAmount: CurrencyAmounts;
     marketValue: { amount: CurrencyAmounts; amountAfterCost: CurrencyAmounts };
@@ -83,23 +82,8 @@ export function TossAssetsClient() {
     setError(null);
     try {
       const response = await fetch('/api/assets/toss', { cache: 'no-store', credentials: 'same-origin' });
-      const body = await response.json() as AssetResponse & {
-        error?: string;
-        operation?: string;
-        upstreamStatus?: number;
-        requestId?: string;
-        actionHint?: string;
-      };
-      if (!response.ok || !body.ok) {
-        const details = [
-          body.actionHint,
-          body.operation ? `실패 단계: ${body.operation}` : null,
-          body.upstreamStatus ? `토스 응답: HTTP ${body.upstreamStatus}` : null,
-          body.requestId ? `요청 ID: ${body.requestId}` : null,
-          body.error ? `오류 코드: ${body.error}` : null,
-        ].filter(Boolean).join('\n');
-        throw new Error(details || 'asset_fetch_failed');
-      }
+      const body = await response.json() as AssetResponse & { error?: string };
+      if (!response.ok || !body.ok) throw new Error(body.error ?? 'asset_fetch_failed');
       setData(body);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'asset_fetch_failed');
@@ -134,7 +118,7 @@ export function TossAssetsClient() {
       <div className="mx-auto flex min-h-[65vh] max-w-md flex-col items-center justify-center px-6 text-center">
         <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-xl">!</div>
         <h1 className="mt-5 text-xl font-bold text-slate-950">자산을 불러오지 못했어요</h1>
-        <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-500">{error ?? '토스증권 연결 상태를 확인한 뒤 다시 시도해 주세요.'}</p>
+        <p className="mt-2 text-sm leading-6 text-slate-500">{error === 'toss_api_not_configured' ? '토스 API 키 설정을 확인해 주세요.' : '토스증권 연결 상태를 확인한 뒤 다시 시도해 주세요.'}</p>
         <button type="button" onClick={() => void load()} className="mt-6 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white">다시 불러오기</button>
       </div>
     );
@@ -190,8 +174,6 @@ export function TossAssetsClient() {
           </div>
         </section>
 
-        <TossLedgerSyncCard />
-
         <section className="mt-11">
           <div className="flex items-end justify-between">
             <h2 className="text-xl font-bold tracking-tight">보유 종목 <span className="text-blue-500">{sortedItems.length}</span></h2>
@@ -225,7 +207,7 @@ export function TossAssetsClient() {
           )}
         </section>
 
-        <p className="mt-10 text-center text-[11px] leading-5 text-slate-400">토스증권 Open API v1 기준 · {new Date(data.generatedAt).toLocaleString('ko-KR')}<br />세금과 수수료 반영 전 금액이 포함될 수 있어요.</p>
+        <p className="mt-10 text-center text-[11px] leading-5 text-slate-400">토스증권 Open API 기준 · {new Date(data.generatedAt).toLocaleString('ko-KR')}<br />세금과 수수료 반영 전 금액이 포함될 수 있어요.</p>
       </div>
     </div>
   );
