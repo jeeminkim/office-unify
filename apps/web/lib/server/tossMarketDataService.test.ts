@@ -2,14 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   fetchTossMarketData,
   fetchTossAssetSnapshot,
+  getTossConfigStatus,
   isTossMarketDataConfigured,
   resetTossTokenCacheForTests,
 } from '@/lib/server/tossMarketDataService';
 
 describe('tossMarketDataService', () => {
   beforeEach(() => {
-    vi.stubEnv('TOSS_API_KEY', 'test-client-id');
-    vi.stubEnv('TOSS_API_SECRET_KEY', 'test-client-secret');
+    vi.stubEnv('TOSS_CLIENT_ID', 'test-client-id');
+    vi.stubEnv('TOSS_CLIENT_SECRET', 'test-client-secret');
     resetTossTokenCacheForTests();
   });
 
@@ -19,13 +20,26 @@ describe('tossMarketDataService', () => {
     resetTossTokenCacheForTests();
   });
 
-  it('detects server credentials without exposing their values', () => {
+  it('detects official credentials without exposing their values', () => {
     expect(isTossMarketDataConfigured()).toBe(true);
-    vi.stubEnv('TOSS_API_SECRET_KEY', '');
+    expect(getTossConfigStatus()).toMatchObject({
+      configured: true,
+      credentialSource: 'official',
+      apiBaseUrl: 'https://openapi.tossinvest.com',
+    });
+    vi.stubEnv('TOSS_CLIENT_SECRET', '');
     expect(isTossMarketDataConfigured()).toBe(false);
   });
 
-  it('issues one token and maps prices and the USD/KRW mid rate', async () => {
+  it('keeps backward compatibility with the first Toss env names', () => {
+    vi.stubEnv('TOSS_CLIENT_ID', '');
+    vi.stubEnv('TOSS_CLIENT_SECRET', '');
+    vi.stubEnv('TOSS_API_KEY', 'legacy-client-id');
+    vi.stubEnv('TOSS_API_SECRET_KEY', 'legacy-client-secret');
+    expect(getTossConfigStatus()).toMatchObject({ configured: true, credentialSource: 'legacy' });
+  });
+
+  it('issues one token and maps prices and the USD/KRW mid rate through /v1', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       const url = String(input);
       if (url.endsWith('/oauth2/token')) {
@@ -34,7 +48,7 @@ describe('tossMarketDataService', () => {
         return Response.json({ access_token: 'test-token', token_type: 'Bearer', expires_in: 86400 });
       }
       expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer test-token');
-      if (url.includes('/api/v1/prices')) {
+      if (url.includes('/v1/prices')) {
         return Response.json({
           result: [
             { symbol: '005930', timestamp: '2026-06-22T09:30:00+09:00', lastPrice: '72000', currency: 'KRW' },
@@ -42,7 +56,7 @@ describe('tossMarketDataService', () => {
           ],
         });
       }
-      if (url.includes('/api/v1/exchange-rate')) {
+      if (url.includes('/v1/exchange-rate')) {
         return Response.json({ result: { rate: '1380.5', midRate: '1375' } });
       }
       return new Response(null, { status: 404 });
@@ -56,8 +70,9 @@ describe('tossMarketDataService', () => {
     expect(first.usdKrwRate).toBe(1375);
     const priceUrls = fetchMock.mock.calls
       .map(([input]) => String(input))
-      .filter((url) => url.includes('/api/v1/prices'));
+      .filter((url) => url.includes('/v1/prices'));
     expect(priceUrls[0]).toContain('symbols=005930%2CAAPL');
+    expect(priceUrls.every((url) => !url.includes('/api/v1/'))).toBe(true);
     expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/oauth2/token'))).toHaveLength(1);
     expect(second.prices.get('AAPL')?.currency).toBe('USD');
   });
@@ -68,7 +83,7 @@ describe('tossMarketDataService', () => {
       if (url.endsWith('/oauth2/token')) {
         return Response.json({ access_token: 'test-token', token_type: 'Bearer', expires_in: 86400 });
       }
-      if (url.includes('/api/v1/prices')) {
+      if (url.includes('/v1/prices')) {
         return Response.json({ result: [{ symbol: 'MSFT', lastPrice: '450', currency: 'USD' }] });
       }
       return new Response(null, { status: 503 });
@@ -80,15 +95,16 @@ describe('tossMarketDataService', () => {
   });
 
   it('loads holdings with the selected Toss account header', async () => {
+    vi.stubEnv('TOSS_ACCOUNT_SEQ', '7');
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       const url = String(input);
       if (url.endsWith('/oauth2/token')) {
         return Response.json({ access_token: 'asset-token', token_type: 'Bearer', expires_in: 86400 });
       }
-      if (url.endsWith('/api/v1/accounts')) {
+      if (url.endsWith('/v1/accounts')) {
         return Response.json({ result: [{ accountNo: '12345678901', accountSeq: 7, accountType: 'BROKERAGE' }] });
       }
-      if (url.endsWith('/api/v1/holdings')) {
+      if (url.endsWith('/v1/holdings')) {
         expect(new Headers(init?.headers).get('X-Tossinvest-Account')).toBe('7');
         return Response.json({
           result: {
@@ -100,7 +116,7 @@ describe('tossMarketDataService', () => {
           },
         });
       }
-      if (url.includes('/api/v1/exchange-rate')) {
+      if (url.includes('/v1/exchange-rate')) {
         return Response.json({ result: { midRate: '1375' } });
       }
       return new Response(null, { status: 404 });
